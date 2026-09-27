@@ -20,3 +20,7 @@ No dependencies: `npm start` runs `server.js` on Node 18+.
 - `GET /healthz`
 
 Both PCs upload shared matches, so matches are merged by `match_guid`. The copy with a real result, boost stats and goal positions wins, and missing fields are filled from the other copy. MMR rows are kept per player, playlist and time.
+
+## Recorder updates
+
+`recorder/` holds the recorder and widget files both PCs run. Push a change there and Railway redeploys the site. The widget calls `GET /api/recorder/manifest` (with `X-Upload-Key`) when it starts, compares each file's `sha256` with its own copy, and downloads changed files from `GET /api/recorder/file/<name>`.

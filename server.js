@@ -18,6 +18,7 @@ const UPLOAD_KEY = process.env.UPLOAD_KEY || '';
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const PLAYERS = (process.env.PLAYERS || 'jay29ID,Kobra Kelvin').split(',').map(s => s.trim()).filter(Boolean);
 const STORE = path.join(DATA_DIR, 'store.json');
+const RECORDER = path.join(__dirname, 'recorder');
 const PUBLIC = path.join(__dirname, 'public');
 const COOKIE = 'rlv';
 const MAX_BODY = 20 * 1024 * 1024;
@@ -79,6 +80,19 @@ function addMmr(s) {
   return true;
 }
 
+// Files in recorder/ are what both PCs run. Pushing a change there to GitHub redeploys the site,
+// and each widget picks it up the next time it starts.
+function recorderManifest() {
+  let names = [];
+  try { names = fs.readdirSync(RECORDER).filter(n => !n.startsWith('.') && fs.statSync(path.join(RECORDER, n)).isFile()).sort(); } catch (e) { }
+  const files = names.map(name => {
+    const buf = fs.readFileSync(path.join(RECORDER, name));
+    return { name, size: buf.length, sha256: crypto.createHash('sha256').update(buf).digest('hex') };
+  });
+  const version = crypto.createHash('sha256').update(files.map(f => f.name + ':' + f.sha256).join('\n')).digest('hex').slice(0, 12);
+  return { version, files };
+}
+
 // ---------- http helpers ----------
 function send(res, code, body, type = 'application/json; charset=utf-8', extra = {}) {
   const buf = Buffer.isBuffer(body) ? body : Buffer.from(typeof body === 'string' ? body : JSON.stringify(body));
@@ -132,6 +146,16 @@ const server = http.createServer(async (req, res) => {
       if (!ok) return send(res, 400, { error: 'expected {kind:"match"|"mmr", data}' });
       save();
       return send(res, 200, { ok: true });
+    }
+
+    // Recorder self-update: the widget compares these hashes with its own files on start.
+    if (p === '/api/recorder/manifest' || p.startsWith('/api/recorder/file/')) {
+      if (!UPLOAD_KEY || !same(req.headers['x-upload-key'] || '', UPLOAD_KEY)) return send(res, 401, { error: 'bad upload key' });
+      const m = recorderManifest();
+      if (p === '/api/recorder/manifest') return send(res, 200, m);
+      const name = decodeURIComponent(p.slice('/api/recorder/file/'.length));
+      if (!m.files.some(f => f.name === name)) return send(res, 404, { error: 'not found' });
+      return send(res, 200, fs.readFileSync(path.join(RECORDER, name)), 'application/octet-stream');
     }
 
     if (p.startsWith('/s/')) {
