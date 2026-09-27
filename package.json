@@ -1,0 +1,13 @@
+{
+  "name": "rocketdash",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Rocket League duo stats dashboard fed by the RL stats recorder",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

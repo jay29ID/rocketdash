@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Jay &amp; Kobra Stats</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{
+  --bg:#eef1f5; --surface:#ffffff; --surface-2:#f6f8fb;
+  --ink:#0e1420; --ink-2:#465164; --muted:#768194;
+  --line:#dbe0e8; --grid:#e9edf2;
+  --p1:#2a78d6; --p2:#eb6834; --p1-soft:#2a78d61f; --p2-soft:#eb68341f;
+  --win:#1b8f4c; --loss:#cf3b36; --win-soft:#1b8f4c1a; --loss-soft:#cf3b361a;
+  --focus:#2a78d6; --heat:#e08a00; --opp:#6b7686; --pitch:#e6ebe4; --pitch-line:#c3ccc0;
+  --display:"Chakra Petch", "Rajdhani", "Segoe UI", system-ui, sans-serif;
+  --body:"IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono:"IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#0b1017; --surface:#131a24; --surface-2:#18212d;
+    --ink:#eef2f7; --ink-2:#aab4c3; --muted:#7c8899;
+    --line:#233042; --grid:#1b2533;
+    --p1:#3987e5; --p2:#d95926; --p1-soft:#3987e526; --p2-soft:#d9592626;
+    --win:#3fb872; --loss:#e5605a; --win-soft:#3fb87222; --loss-soft:#e5605a22;
+    --focus:#5fa0ee; --heat:#f0a62a; --opp:#9aa5b5; --pitch:#15201a; --pitch-line:#2e3d33;
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0b1017; --surface:#131a24; --surface-2:#18212d;
+  --ink:#eef2f7; --ink-2:#aab4c3; --muted:#7c8899;
+  --line:#233042; --grid:#1b2533;
+  --p1:#3987e5; --p2:#d95926; --p1-soft:#3987e526; --p2-soft:#d9592626;
+  --win:#3fb872; --loss:#e5605a; --win-soft:#3fb87222; --loss-soft:#e5605a22;
+  --focus:#5fa0ee; --heat:#f0a62a; --opp:#9aa5b5; --pitch:#15201a; --pitch-line:#2e3d33;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:14px;line-height:1.45;padding-inline:16px;padding-block:20px 48px}
+.wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance;letter-spacing:.01em}
+h1{font-size:28px;font-weight:700;line-height:1.1}
+h2{font-size:15px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-2)}
+.num{font-variant-numeric:tabular-nums}
+.mono{font-family:var(--mono)}
+.muted{color:var(--muted)}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+
+/* header */
+header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px 24px;padding-bottom:4px}
+.duo{display:flex;flex-direction:column;gap:6px}
+.duo .names{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.tag{display:inline-flex;align-items:center;gap:6px;font-family:var(--display);font-weight:600;font-size:13px;padding:3px 10px;border-radius:4px}
+.tag.p1{background:var(--p1-soft);color:var(--ink)} .tag.p2{background:var(--p2-soft);color:var(--ink)}
+.tag i{width:8px;height:8px;border-radius:2px;display:inline-block}
+.tag.p1 i{background:var(--p1)} .tag.p2 i{background:var(--p2)}
+.sample{font-size:12px;color:var(--ink-2);border:1px dashed var(--line);border-radius:4px;padding:2px 8px}
+.seg{display:inline-flex;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:3px;gap:2px}
+.seg button{border:0;background:transparent;padding:6px 12px;border-radius:4px;cursor:pointer;color:var(--ink-2);font-weight:500;font-size:13px}
+.seg button:hover{color:var(--ink)}
+.seg button[aria-pressed="true"]{background:var(--ink);color:var(--surface)}
+
+/* panels */
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.panel-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.grid{display:grid;gap:16px}
+.g-kpi{grid-template-columns:repeat(4,minmax(0,1fr))}
+.g-2{grid-template-columns:minmax(0,1.35fr) minmax(0,1fr)}
+.g-2b{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+@media (max-width:900px){.g-kpi{grid-template-columns:repeat(2,minmax(0,1fr))}.g-2,.g-2b{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:460px){.g-kpi{grid-template-columns:minmax(0,1fr)}}
+
+/* KPI */
+.kpi .label{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:500}
+.kpi .big{font-family:var(--display);font-size:34px;font-weight:700;line-height:1}
+.kpi .sub{color:var(--ink-2);font-size:13px}
+.kpi{gap:8px}
+.pill{display:inline-flex;align-items:center;gap:4px;font-family:var(--display);font-weight:700;font-size:12px;letter-spacing:.04em;padding:2px 8px;border-radius:4px}
+.pill.w{background:var(--win-soft);color:var(--win)} .pill.l{background:var(--loss-soft);color:var(--loss)}
+.big.w{color:var(--win)} .big.l{color:var(--loss)}
+.rankrow{display:grid;grid-template-columns:auto 1fr auto;gap:4px 10px;align-items:baseline}
+.rankrow .who{font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px}
+.rankrow .who i{width:8px;height:8px;border-radius:2px}
+.rankrow .rk{font-family:var(--display);font-weight:600;font-size:15px}
+.rankrow .mmr{font-family:var(--mono);font-size:13px;color:var(--ink-2);text-align:right}
+
+/* form strip */
+.strip{display:flex;align-items:center;gap:3px;height:96px;position:relative}
+.strip::before{content:"";position:absolute;left:0;right:0;top:50%;border-top:1px solid var(--line)}
+.pip{flex:1 1 0;min-width:4px;max-width:18px;height:100%;position:relative;cursor:default}
+.pip span{position:absolute;left:0;right:0;border-radius:2px}
+.pip.w span{bottom:50%;background:var(--win);border-bottom-left-radius:0;border-bottom-right-radius:0}
+.pip.l span{top:50%;background:var(--loss);border-top-left-radius:0;border-top-right-radius:0}
+.strip-legend{display:flex;justify-content:space-between;font-size:12px;color:var(--muted)}
+
+/* last session */
+.session-meta{display:flex;flex-wrap:wrap;gap:6px 16px;color:var(--ink-2);font-size:13px}
+.session-score{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.session-score .big{font-family:var(--display);font-size:30px;font-weight:700}
+.lines{width:100%;border-collapse:collapse}
+.lines th,.lines td{padding:7px 6px;text-align:right;border-bottom:1px solid var(--grid);white-space:nowrap}
+.lines th{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:500}
+.lines th:first-child,.lines td:first-child{text-align:left}
+.lines tr:last-child td{border-bottom:0}
+.scroll{overflow-x:auto}
+.callouts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+@media (max-width:560px){.callouts{grid-template-columns:minmax(0,1fr)}}
+.callout{background:var(--surface-2);border-radius:6px;padding:10px 12px;display:flex;flex-direction:column;gap:2px}
+.callout .k{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+.callout .v{font-weight:600}
+
+/* comparison */
+.cmp{display:flex;flex-direction:column}
+.cmp-row{display:grid;grid-template-columns:110px minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:center;padding:8px 0;border-bottom:1px solid var(--grid)}
+.cmp-row:last-child{border-bottom:0}
+.cmp-row.head{padding-top:0;font-size:12px;color:var(--muted)}
+.cmp-row .stat{font-weight:500}
+.bar{display:flex;align-items:center;gap:8px}
+.bar .track{flex:1;height:10px;border-radius:0 3px 3px 0;background:var(--grid);overflow:hidden}
+.bar .fill{height:100%;border-radius:0 3px 3px 0}
+.bar .val{font-family:var(--mono);font-size:13px;min-width:52px;text-align:right}
+.bar .val.lead{font-weight:600}
+@media (max-width:460px){.cmp-row{grid-template-columns:78px minmax(0,1fr) minmax(0,1fr);gap:8px}.bar .val{min-width:40px}}
+
+/* charts */
+.chart{position:relative;width:100%}
+.chart svg{display:block;width:100%;height:auto;overflow:visible}
+.chart text{font-family:var(--body);font-size:11px;fill:var(--muted)}
+.tip{position:absolute;pointer-events:none;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:8px 10px;font-size:12px;box-shadow:0 4px 16px #0000001f;min-width:140px;z-index:5}
+.tip .t{font-weight:600;margin-bottom:4px}
+.tip .r{display:flex;align-items:center;gap:6px;justify-content:space-between}
+.tip .r i{width:8px;height:8px;border-radius:2px;display:inline-block;margin-right:4px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;color:var(--ink-2)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:14px;height:3px;border-radius:2px;display:inline-block}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chips button{border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:4px 11px;cursor:pointer;font-size:12.5px;color:var(--ink-2)}
+.chips button[aria-pressed="true"]{border-color:var(--ink);color:var(--ink);font-weight:600}
+
+/* playstyle */
+.split{display:flex;flex-direction:column;gap:10px}
+.split-row{display:grid;grid-template-columns:60px minmax(0,1fr);gap:10px;align-items:center}
+.stack{display:flex;height:22px;gap:2px}
+.stack div{height:100%;display:flex;align-items:center;justify-content:center;font-size:11px;font-family:var(--mono);color:#fff;min-width:0;overflow:hidden}
+.stack div:first-child{border-radius:3px 0 0 3px}.stack div:last-child{border-radius:0 3px 3px 0}
+.play-kv{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:0 16px}
+.play-kv > div{padding:7px 0;border-bottom:1px solid var(--grid)}
+.play-kv .h{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+.play-kv .v{text-align:right;font-family:var(--mono)}
+.new{font-size:11px;color:var(--ink-2);border:1px solid var(--line);border-radius:4px;padding:1px 6px;font-weight:500}
+
+/* MMR form */
+form.log{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}
+form.log label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+form.log select,form.log input{background:var(--surface-2);border:1px solid var(--line);border-radius:6px;padding:7px 9px;min-width:0}
+form.log input{width:110px}
+form.log button{background:var(--ink);color:var(--surface);border:0;border-radius:6px;padding:8px 14px;font-weight:600;cursor:pointer}
+.note{font-size:12px;color:var(--muted)}
+
+/* goal maps */
+.maps{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);gap:20px;align-items:start}
+@media (max-width:760px){.maps{grid-template-columns:minmax(0,1fr)}}
+.map-col{display:flex;flex-direction:column;gap:8px;min-width:0}
+.map-col h3{font-size:13px;font-weight:600;color:var(--ink-2);letter-spacing:.04em}
+.map-col svg{display:block;width:100%;height:auto}
+.map-col svg text{font-family:var(--body);font-size:11px;fill:var(--muted)}
+.map-col svg .zone{font-family:var(--mono);font-size:15px;font-weight:500;fill:var(--ink)}
+.map-col svg .dot{cursor:default}
+.map-col svg .dot:hover{stroke-width:3}
+.heat-key{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+.heat-key .ramp{display:flex;gap:2px}
+.heat-key .ramp i{width:16px;height:10px;border-radius:2px;background:var(--heat)}
+.map-note{font-size:12px;color:var(--muted)}
+
+/* controls */
+.controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.pl{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+.pl select{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 8px;color:var(--ink);font-size:13px}
+.banner{background:var(--surface);border:1px dashed var(--line);border-radius:8px;padding:10px 14px;color:var(--ink-2);font-size:13px}
+
+/* match log */
+.log-table td .res{display:inline-block;width:22px;text-align:center}
+.log-table td.p1c{box-shadow:inset 3px 0 0 var(--p1-soft)}
+footer{font-size:12px;color:var(--muted);max-width:70ch}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <div class="duo">
+      <div class="names">
+        <h1>Jay &amp; Kobra</h1>
+        <span class="sample" id="dataBadge" hidden>Sample data</span>
+      </div>
+      <div class="names">
+        <span class="tag p1"><i></i>jay29ID</span>
+        <span class="tag p2"><i></i>Kobra Kelvin</span>
+        <span class="muted" id="rangeText"></span>
+      </div>
+    </div>
+    <div class="controls">
+    <label class="pl" for="playlist"><span>Playlist</span><select id="playlist"></select></label>
+    <div class="seg" role="group" aria-label="Time period" id="period">
+      <button type="button" data-p="last">Last session</button>
+      <button type="button" data-p="7">7 days</button>
+      <button type="button" data-p="30" aria-pressed="true">30 days</button>
+      <button type="button" data-p="all">All time</button>
+    </div>
+    </div>
+  </header>
+  <div class="banner" id="banner" hidden></div>
+
+  <section class="grid g-kpi" aria-label="Summary">
+    <div class="panel kpi">
+      <div class="label">Record</div>
+      <div class="big num" id="kRecord"></div>
+      <div class="sub" id="kRecordSub"></div>
+    </div>
+    <div class="panel kpi">
+      <div class="label">Current streak</div>
+      <div class="big num" id="kStreak"></div>
+      <div class="sub" id="kStreakSub"></div>
+    </div>
+    <div class="panel kpi">
+      <div class="label">Longest streaks</div>
+      <div style="display:flex;gap:18px;align-items:baseline">
+        <div><div class="big num w" id="kBestW"></div><div class="sub">wins</div></div>
+        <div><div class="big num l" id="kBestL"></div><div class="sub">losses</div></div>
+      </div>
+    </div>
+    <div class="panel kpi">
+      <div class="label" id="kRankLabel">Rank</div>
+      <div class="rankrow" id="kRanks"></div>
+      <div class="sub" id="kRankSub"></div>
+    </div>
+  </section>
+
+  <section class="grid g-2">
+    <div class="panel" aria-labelledby="lsTitle">
+      <div class="panel-head"><h2 id="lsTitle">Last session</h2><span class="muted num" id="lsWhen"></span></div>
+      <div class="session-score">
+        <span class="big num" id="lsRecord"></span>
+        <span class="session-meta" id="lsMeta"></span>
+      </div>
+      <div class="scroll">
+        <table class="lines num" id="lsTable"></table>
+      </div>
+      <div class="callouts" id="lsCallouts"></div>
+    </div>
+    <div class="panel" aria-labelledby="formTitle">
+      <div class="panel-head"><h2 id="formTitle">Form</h2><span class="muted">Last 40 matches, oldest to newest</span></div>
+      <div class="strip" id="strip" role="img"></div>
+      <div class="strip-legend"><span>Bar up = win, down = loss. Height = goal margin.</span></div>
+      <div class="callouts" id="formCallouts"></div>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="cmpTitle">
+    <div class="panel-head">
+      <h2 id="cmpTitle">Player stats</h2>
+      <div class="seg" role="group" aria-label="Totals or per game" id="mode">
+        <button type="button" data-m="avg" aria-pressed="true">Per game</button>
+        <button type="button" data-m="tot">Totals</button>
+      </div>
+    </div>
+    <div class="cmp" id="cmp"></div>
+  </section>
+
+  <section class="panel" aria-labelledby="trendTitle">
+    <div class="panel-head">
+      <h2 id="trendTitle">Trends by session</h2>
+      <div class="chips" id="metric" role="group" aria-label="Trend metric"></div>
+    </div>
+    <div class="legend" id="trendLegend"></div>
+    <div class="chart" id="trend"></div>
+  </section>
+
+  <section class="panel" aria-labelledby="mapTitle">
+    <div class="panel-head">
+      <h2 id="mapTitle">Goal map</h2>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <div class="seg" role="group" aria-label="Whose goals" id="mapSide">
+          <button type="button" data-s="us" aria-pressed="true">Our goals</button>
+          <button type="button" data-s="them">Goals against</button>
+        </div>
+        <div class="seg" role="group" aria-label="Scorer" id="mapWho">
+          <button type="button" data-w="all" aria-pressed="true">Both</button>
+          <button type="button" data-w="0">Jay</button>
+          <button type="button" data-w="1">Kobra</button>
+        </div>
+      </div>
+    </div>
+    <div class="maps">
+      <div class="map-col">
+        <h3 id="fieldTitle">Shot from</h3>
+        <div id="fieldMap"></div>
+        <div class="heat-key"><span>Fewer</span><span class="ramp"><i style="opacity:.15"></i><i style="opacity:.35"></i><i style="opacity:.55"></i><i style="opacity:.8"></i></span><span>More goals</span></div>
+      </div>
+      <div class="map-col">
+        <h3 id="netTitle">Where it hit the net</h3>
+        <div id="netMap"></div>
+        <div class="legend" id="mapLegend"></div>
+        <div class="map-note" id="mapNote"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="grid g-2b">
+    <div class="panel" aria-labelledby="mmrTitle">
+      <div class="panel-head"><h2 id="mmrTitle">MMR history</h2><span class="muted" id="mmrSub"></span></div>
+      <div class="legend">
+        <span><i style="background:var(--p1)"></i>jay29ID</span>
+        <span><i style="background:var(--p2)"></i>Kobra Kelvin</span>
+      </div>
+      <div class="chart" id="mmrChart"></div>
+      <form class="log" id="mmrForm">
+        <label for="mmrWho">Player
+          <select id="mmrWho"><option value="0">jay29ID</option><option value="1">Kobra Kelvin</option></select>
+        </label>
+        <label for="mmrVal">2v2 MMR
+          <input id="mmrVal" type="number" inputmode="numeric" min="0" max="3000" placeholder="e.g. 1012" required>
+        </label>
+        <button type="submit">Log MMR</button>
+      </form>
+      <div class="note" id="mmrNote">The recorder reads MMR from the game automatically. Use this to fill a gap.</div>
+    </div>
+    <div class="panel" aria-labelledby="playTitle">
+      <div class="panel-head"><h2 id="playTitle">Playstyle</h2><span class="new">From the expanded recorder</span></div>
+      <div class="split" id="split"></div>
+      <div class="play-kv num" id="playKv"></div>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="logTitle">
+    <div class="panel-head"><h2 id="logTitle">Match log</h2><span class="muted" id="logCount"></span></div>
+    <div class="scroll">
+      <table class="lines log-table num" id="matchLog"></table>
+    </div>
+  </section>
+
+  <section class="panel" aria-labelledby="impTitle">
+    <div class="panel-head"><h2 id="impTitle">Add older matches</h2></div>
+    <p class="note" style="margin:0;max-width:70ch">New matches arrive on their own while the recorder runs. To add matches recorded before uploads were switched on, choose <b>matches.jsonl</b> and <b>mmr.csv</b> from Documents\RLStats. Matches already here are merged, not doubled.</p>
+    <form class="log" id="importForm">
+      <label for="importFiles">Files<input id="importFiles" type="file" accept=".jsonl,.json,.csv,.txt" multiple style="width:auto"></label>
+      <button type="submit">Upload files</button>
+    </form>
+    <div class="note" id="importNote"></div>
+  </section>
+
+  <footer id="footer">Rank names use approximate MMR ranges for Ranked Doubles. Shot and net positions only exist for matches recorded with the latest recorder.</footer>
+</div>
+
+<script src="/app.js"></script>
+</body>
+</html>
