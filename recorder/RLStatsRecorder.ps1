@@ -106,6 +106,8 @@ $script:OpenMatches = @{}
 # Matches already saved. The game keeps sending events (podium, MatchDestroyed) after
 # MatchEnded, and those must not create a second record.
 $script:DoneMatches = New-Object 'System.Collections.Generic.HashSet[string]'
+# Saved records, so a ReplayCreated that arrives after MatchEnded can still be attached and re-uploaded.
+$script:SavedRecords = @{}
 
 function Get-Match([string]$Guid) {
   if (-not $script:OpenMatches.ContainsKey($Guid)) {
@@ -119,6 +121,10 @@ function Get-Match([string]$Guid) {
       Hits = @{}         # per-player ball hits and hardest hit
       Crossbars = @{}; BallTeam = @{}; LastSecond = $null
       LastHitBy = @{}; LastHit = $null   # where the ball was on each player's latest touch (shot origin for goals)
+      Loadouts = @{}     # per-player car and cosmetics, from UpdateState
+      Pickups = @{}      # per-player boost pad pickups (BoostPickup events)
+      Left = New-Object System.Collections.ArrayList   # players who quit before the end (PlayerLeft)
+      Replay = $null     # set when the game sends ReplayCreated
     }
   }
   return $script:OpenMatches[$Guid]
@@ -140,6 +146,8 @@ function Add-Sample($M, $Data) {
   if ($null -ne $ballTeam -and [int]$ballTeam -ge 0 -and [int]$ballTeam -le 1) { $M.BallTeam[[int]$ballTeam] = 1 + [int]$M.BallTeam[[int]$ballTeam] }
   foreach ($p in @(Get-Prop $Data 'Players' @())) {
     $name = [string](Get-Prop $p 'Name')
+    $loadout = Get-Prop $p 'Loadout'
+    if ($name -and $null -ne $loadout) { $M.Loadouts[$name] = $loadout }
     if (-not $name -or $null -eq (Get-Prop $p 'Boost')) { continue }
     if (-not $M.Agg.ContainsKey($name)) {
       $M.Agg[$name] = @{ N = 0; Boost = 0.0; Zero = 0; Full = 0; Boosting = 0; Super = 0; Ground = 0; Wall = 0; Air = 0
@@ -214,7 +222,9 @@ function Save-Match($M, [string]$Result, $WinnerTeamNum) {
       pct_supersonic = $null; pct_ground = $null; pct_wall = $null; pct_air = $null; pct_powerslide = $null
       avg_speed = $null; max_speed = $null; times_demolished = $null
       statfeed = $M.Feed[$name]; statfeed_against = $M.FeedAgainst[$name]
+      boost_pickups = $null; loadout = $M.Loadouts[$name]
     }
+    if ($M.Pickups.ContainsKey($name)) { $row.boost_pickups = [int]$M.Pickups[$name] }
     if ($hit) { $row.ball_hits = $hit.Count; if ($hit.Max -gt 0) { $row.hardest_hit = [math]::Round($hit.Max, 1) } }
     if ($a) { $row.times_demolished = $a.Demoed }
     if ($n -gt 0) {
@@ -248,6 +258,8 @@ function Save-Match($M, [string]$Result, $WinnerTeamNum) {
     mmr_at_queue = $null; mmr_party_size = $null
     goals = @($M.Goals)
     players = @($rows)
+    players_left = @($M.Left)
+    replay_created = $M.Replay
   }
 
   if ($null -ne $myTeam) { foreach ($g in $M.Goals) { if ($null -ne $g.team) { $g.ours = ([int]$g.team -eq [int]$myTeam) } } }
@@ -256,6 +268,7 @@ function Save-Match($M, [string]$Result, $WinnerTeamNum) {
   if ($q) { $record.mmr_at_queue = $q.mmr; $record.mmr_party_size = $q.party_size }
 
   if (-not (Test-Path $OutDir)) { [void](New-Item -ItemType Directory -Path $OutDir) }
+  $script:SavedRecords[$M.Guid] = $record
   $json = ConvertTo-Json -InputObject $record -Depth 8 -Compress
   [IO.File]::AppendAllText((Join-Path $OutDir 'matches.jsonl'), $json + "`r`n", $Utf8NoBom)
 
@@ -316,7 +329,14 @@ function Invoke-Message($Msg) {
   if ($data -is [string]) { $data = $data | ConvertFrom-Json }   # Data can arrive as a JSON string
   $guid = [string](Get-Prop $data 'MatchGuid' '')
   if (-not $guid) { return }   # freeplay, training and replays have no MatchGuid
-  if ($script:DoneMatches.Contains($guid)) { return }
+  if ($script:DoneMatches.Contains($guid)) {
+    # The replay can be created after the match was saved: mark it and re-send; the site merges by match id.
+    if ($evt -eq 'ReplayCreated' -and $script:SavedRecords.ContainsKey($guid) -and -not $script:SavedRecords[$guid].replay_created) {
+      $script:SavedRecords[$guid].replay_created = (Get-Date).ToUniversalTime().ToString('o')
+      try { Send-Upload 'match' $script:SavedRecords[$guid] } catch { }
+    }
+    return
+  }
 
   $m = Get-Match $guid
   if ($evt -ne 'UpdateState' -and $evt -ne 'ClockUpdatedSeconds') {
@@ -368,6 +388,20 @@ function Invoke-Message($Msg) {
       Add-Count $m.Feed ([string](Get-Prop (Get-Prop $data 'MainTarget') 'Name')) $kind
       Add-Count $m.FeedAgainst ([string](Get-Prop (Get-Prop $data 'SecondaryTarget') 'Name')) $kind
     }
+    'BoostPickup'   {
+      $name = [string](Get-Prop (Get-Prop $data 'Player') 'Name')
+      if (-not $name) { $name = [string](Get-Prop $data 'PlayerName') }
+      if ($name) { $m.Pickups[$name] = 1 + [int]$m.Pickups[$name] }
+    }
+    'PlayerLeft'    {
+      $pl = Get-Prop $data 'Player'; if ($null -eq $pl) { $pl = $data }
+      $name = [string](Get-Prop $pl 'Name')
+      if ($name) {
+        [void]$m.Left.Add([ordered]@{ name = $name; team = Get-Prop $pl 'TeamNum'
+          clock = Get-Prop (Get-Prop $m.State 'Game') 'TimeSeconds'; at = (Get-Date).ToUniversalTime().ToString('o') })
+      }
+    }
+    'ReplayCreated' { $m.Replay = (Get-Date).ToUniversalTime().ToString('o') }
     'MatchEnded'    { Save-Match $m 'Finished' (Get-Prop $data 'WinnerTeamNum'); $script:OpenMatches.Remove($guid) }
     'MatchDestroyed' {
       # Left before the end (or the game closed). Keep it, flagged, so nothing is lost.

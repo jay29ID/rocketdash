@@ -13,6 +13,13 @@ const num=v=>v==null||v===''||isNaN(+v)?null:+v;
 const co=(o,k)=>o==null?null:num(o[k]!=null?o[k]:o[k.toLowerCase()]);
 
 const ARENA_NAMES={stadium_p:'DFH Stadium',stadium_day_p:'DFH Stadium (Day)',stadium_foggy_p:'DFH Stadium (Stormy)',stadium_winter_p:'DFH Stadium (Snowy)',eurostadium_p:'Mannfield',eurostadium_night_p:'Mannfield (Night)',eurostadium_rainy_p:'Mannfield (Stormy)',eurostadium_snownight_p:'Mannfield (Snowy)',cs_p:'Champions Field',cs_day_p:'Champions Field (Day)',trainstation_p:'Urban Central',trainstation_night_p:'Urban Central (Night)',trainstation_dawn_p:'Urban Central (Dawn)',park_p:'Beckwith Park',park_night_p:'Beckwith Park (Midnight)',park_rainy_p:'Beckwith Park (Stormy)',utopiastadium_p:'Utopia Coliseum',utopiastadium_dusk_p:'Utopia Coliseum (Dusk)',utopiastadium_snow_p:'Utopia Coliseum (Snowy)',neotokyo_standard_p:'Neo Tokyo',underwater_p:'AquaDome',beach_p:'Salty Shores',beach_night_p:'Salty Shores (Night)',farm_p:'Farmstead',farm_night_p:'Farmstead (Night)',wasteland_s_p:'Wasteland',wasteland_night_s_p:'Wasteland (Night)',chn_stadium_p:'Forbidden Temple',chn_stadium_day_p:'Forbidden Temple (Day)',outlaw_p:'Deadeye Canyon',arc_standard_p:'Starbase ARC',street_p:'Sovereign Heights',music_p:'Neon Fields',hoopsstadium_p:'Dunk House',ff_dusk_p:'Estadio Vida',swoosh_p:'Champions Field (Nike FC)',cs_hw_p:'Rivals Arena',woods_p:'Drift Woods',woods_night_p:'Drift Woods (Night)',fni_stadium_p:'Futura Garden'};
+// Ball speeds from BallHit may arrive in game units per second; anything that high can't be km/h.
+function toKmh(v){return v==null?null:v>300?Math.round(v*0.036):v;}
+function carName(l){
+  if(!l||typeof l!=='object')return null;
+  const v=l.Car!=null?l.Car:l.Body!=null?l.Body:l.car;
+  return v==null||v===''?null:String(v);
+}
 function arenaName(a){if(!a)return 'Unknown arena';const k=String(a).toLowerCase();return ARENA_NAMES[k]||String(a).replace(/_P$/i,'').replace(/_/g,' ');}
 
 // Approximate Ranked Doubles ranges.
@@ -67,11 +74,13 @@ function makeSample(names){
         const air=+clamp(norm(p.air,1.8),1,20).toFixed(1),wall=+clamp(norm(p.wall,2.5),3,25).toFixed(1);
         return {name:names[j],team:my,tracked:true,goals:L.goals,assists:L.assists,shots,saves,demos,touches,
           score:100*L.goals+50*L.assists+50*saves+20*shots+15*demos+2*touches+Math.floor(rnd()*40),
-          car_touches:pois(p.bump),avg_boost:Math.round(clamp(norm(p.boost,5),20,70)),pct_supersonic:+clamp(norm(p.ss,3),3,35).toFixed(1),
+          car_touches:pois(p.bump),boost_pickups:Math.round(clamp(norm(j?34:29,6),8,70)),loadout:{Car:j?'Fennec':'Octane'},avg_boost:Math.round(clamp(norm(p.boost,5),20,70)),pct_supersonic:+clamp(norm(p.ss,3),3,35).toFixed(1),
           pct_air:air,pct_wall:wall,pct_ground:+(100-air-wall).toFixed(1),hardest_hit:Math.round(clamp(norm(p.gs+25,15),60,160))};
       });
       matches.push({match_guid:'sample-'+si+'-'+k,started_at:new Date(t).toISOString(),duration_seconds:dur,playlist:'Ranked Doubles',arena:pick(arenas),
-        overtime:ot,my_team:my,result:win?'Win':'Loss',team_score:us,opponent_score:them,goals,players});
+        overtime:ot,my_team:my,result:win?'Win':'Loss',team_score:us,opponent_score:them,goals,players,
+        replay_created:rnd()<.2?new Date(t+dur*1000).toISOString():null,
+        players_left:rnd()<.08?[{name:'Opponent',team:1-my}]:[]});
       t+=(dur+60+Math.floor(rnd()*90))*1000;
     }
     rating=rating.map((v,j)=>Math.round(v+w*(8.5+j)+norm(0,6)));
@@ -93,7 +102,8 @@ function toMatch(r){
     const row=rows.find(x=>x&&x.name===p.name);if(!row)return null;
     return {score:num(row.score)||0,goals:num(row.goals)||0,assists:num(row.assists)||0,shots:num(row.shots)||0,saves:num(row.saves)||0,
       demos:num(row.demos)||0,touches:num(row.touches)||0,bumps:num(row.car_touches),boost:num(row.avg_boost),ss:num(row.pct_supersonic),
-      air:num(row.pct_air),wall:num(row.pct_wall),ground:num(row.pct_ground),hardest:num(row.hardest_hit),
+      air:num(row.pct_air),wall:num(row.pct_wall),ground:num(row.pct_ground),hardest:toKmh(num(row.hardest_hit)),
+      pickups:num(row.boost_pickups),car:carName(row.loadout),
       goalSpeeds:(r.goals||[]).filter(g=>g&&g.scorer===p.name&&num(g.speed)!=null).map(g=>+g.speed)};
   });
   const myTeam=num(r.my_team);
@@ -106,9 +116,11 @@ function toMatch(r){
       ix:co(i,'X')!=null?f*co(i,'X'):null,iz:co(i,'Z')};
   });
   const dur=num(r.duration_seconds)||300;
+  const left=(r.players_left||[]).filter(Boolean).map(x=>({name:x.name,ours:myTeam!=null&&num(x.team)===myTeam}));
   return {guid:r.match_guid,when:new Date(r.started_at),win:r.result==='Win',us:num(r.team_score)||0,them:num(r.opponent_score)||0,
     ot:!!r.overtime,dur,arena:arenaName(r.arena),playlist:r.playlist||'Unknown playlist',lines,
-    ourGoals:goals.filter(g=>g.ours),theirGoals:goals.filter(g=>!g.ours)};
+    ourGoals:goals.filter(g=>g.ours),theirGoals:goals.filter(g=>!g.ours),
+    replay:!!r.replay_created,left};
 }
 
 function build(){
@@ -152,7 +164,9 @@ function agg(list){
     const t={games:L.length,mvp:0,both:0};
     ['score','goals','assists','shots','saves','demos','touches'].forEach(k=>t[k]=L.reduce((s,l)=>s+l[k],0));
     const avg=k=>{const v=L.map(l=>l[k]).filter(v=>v!=null);return v.length?v.reduce((a,b)=>a+b,0)/v.length:null;};
-    ['boost','ss','air','wall','ground','bumps'].forEach(k=>t[k]=avg(k));
+    ['boost','ss','air','wall','ground','bumps','pickups'].forEach(k=>t[k]=avg(k));
+    const cars={};L.forEach(l=>{if(l.car)cars[l.car]=(cars[l.car]||0)+1;});
+    t.car=Object.keys(cars).sort((a,b)=>cars[b]-cars[a])[0]||null;
     t.shotpct=t.shots?100*t.goals/t.shots:null;
     const sp=L.flatMap(l=>l.goalSpeeds);
     t.gsAvg=sp.length?sp.reduce((a,b)=>a+b,0)/sp.length:null;t.gsMax=sp.length?Math.max(...sp):null;
@@ -368,7 +382,7 @@ function renderPlay(list){
     PLAYERS.map((p,j)=>{const a=A[j];if(a.ground==null)return `<div class="split-row"><span class="tag p${j+1}" style="padding:1px 8px"><i></i>${esc(p.short)}</span><span class="note">No movement data yet</span></div>`;
       return `<div class="split-row"><span class="tag p${j+1}" style="padding:1px 8px"><i></i>${esc(p.short)}</span><div class="stack" title="Ground ${f(a.ground)}%, wall ${f(a.wall)}%, air ${f(a.air)}%">
       <div style="width:${a.ground}%;background:var(--ink-2)">${f(a.ground)}%</div><div style="width:${a.wall}%;background:var(--muted)">${f(a.wall)}%</div><div style="width:${a.air}%;background:${p.color}">${f(a.air)}%</div></div></div>`;}).join('');
-  const rows=[['Avg boost held',a=>f(a.boost)],['Time supersonic',a=>f(a.ss,1,'%')],['Avg goal speed',a=>f(a.gsAvg,0,' km/h')],['Hardest goal',a=>f(a.gsMax,0,' km/h')],['Hardest hit',a=>f(a.hardest,0,' km/h')],['Bumps / game',a=>f(a.bumps,1)]];
+  const rows=[['Avg boost held',a=>f(a.boost)],['Time supersonic',a=>f(a.ss,1,'%')],['Avg goal speed',a=>f(a.gsAvg,0,' km/h')],['Hardest goal',a=>f(a.gsMax,0,' km/h')],['Hardest hit',a=>f(a.hardest,0,' km/h')],['Bumps / game',a=>f(a.bumps,1)],['Boost pads / game',a=>f(a.pickups,1)],['Main car',a=>a.car?esc(a.car):'–']];
   $('playKv').innerHTML=`<div class="h">Stat</div><div class="h v">${esc(PLAYERS[0].short)}</div><div class="h v">${esc(PLAYERS[1].short)}</div>`+rows.map(r=>`<div>${r[0]}</div><div class="v">${r[1](A[0])}</div><div class="v">${r[1](A[1])}</div>`).join('');
 }
 
@@ -377,9 +391,18 @@ function renderLog(list){
   const rows=[...list].reverse().slice(0,15);
   $('logCount').textContent=list.length?'Latest '+rows.length+' of '+list.length:'';
   const line=L=>L?`${L.goals}·${L.assists}·${L.saves}`:'–';
-  $('matchLog').innerHTML=`<thead><tr><th>When</th><th>Result</th><th>Score</th><th>Arena</th><th>${esc(PLAYERS[0].short)} G·A·Sv</th><th>${esc(PLAYERS[1].short)} G·A·Sv</th><th>Top score</th></tr></thead><tbody>`+
+  $('matchLog').innerHTML=`<thead><tr><th>When</th><th>Result</th><th>Score</th><th>Arena</th><th>${esc(PLAYERS[0].short)} G·A·Sv</th><th>${esc(PLAYERS[1].short)} G·A·Sv</th><th>Top score</th><th>Notes</th></tr></thead><tbody>`+
     rows.map(m=>{const L=m.lines;const top=L[0]&&L[1]?(L[0].score>=L[1].score?0:1):L[0]?0:L[1]?1:-1;
-      return `<tr><td>${fmtDate(m.when)} ${fmtTime(m.when)}</td><td><span class="pill ${m.win?'w':'l'}">${m.win?'W':'L'}</span></td><td>${m.us}–${m.them}${m.ot?' <span class="muted">OT</span>':''}</td><td>${esc(m.arena)}</td><td>${line(L[0])}</td><td>${line(L[1])}</td><td>${top<0?'–':`<span class="tag p${top+1}" style="padding:0 7px"><i></i>${esc(PLAYERS[top].short)} ${L[top].score}</span>`}</td></tr>`;}).join('')+'</tbody>';
+      return `<tr><td>${fmtDate(m.when)} ${fmtTime(m.when)}</td><td><span class="pill ${m.win?'w':'l'}">${m.win?'W':'L'}</span></td><td>${m.us}–${m.them}${m.ot?' <span class="muted">OT</span>':''}</td><td>${esc(m.arena)}</td><td>${line(L[0])}</td><td>${line(L[1])}</td><td>${top<0?'–':`<span class="tag p${top+1}" style="padding:0 7px"><i></i>${esc(PLAYERS[top].short)} ${L[top].score}</span>`}</td><td class="notes">${notes(m)}</td></tr>`;}).join('')+'</tbody>';
+}
+
+function notes(m){
+  const out=[];
+  if(m.replay)out.push('<span class="chip">Replay</span>');
+  const us=m.left.filter(x=>x.ours).length,them=m.left.length-us;
+  if(them)out.push(`<span class="chip" title="${esc(m.left.filter(x=>!x.ours).map(x=>x.name).join(', '))}">Opponent quit</span>`);
+  if(us)out.push(`<span class="chip" title="${esc(m.left.filter(x=>x.ours).map(x=>x.name).join(', '))}">Teammate quit</span>`);
+  return out.join(' ')||'<span class="muted">–</span>';
 }
 
 // ---------- wiring ----------
