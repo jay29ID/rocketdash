@@ -20,6 +20,12 @@ Windows may say "Windows protected your PC" the first time you open a .bat file.
 
 Run either the widget or `Start RL Recorder.bat` (the plain console version), not both, or every match gets saved twice.
 
+## Updates
+If `Documents\RLStats\upload.json` exists (it comes with the install zip), the widget checks the dashboard site each time it starts. It downloads any newer files and restarts itself. If the site can't be reached, it just starts as normal.
+
+## Updates
+Once uploads are set up (`Set Up Uploads.bat`), the widget checks the dashboard site for a newer version every time it starts, installs it and restarts itself. You don't need to download anything again.
+
 ## MMR
 You don't have to do anything. Every time you queue, the game writes your MMR to its own log file, and the recorder reads it from there. When you queue as a party, the game logs the party leader's number, and those rows are marked with a party size of 2. `Type MMR` in the widget, or `Log MMR.bat`, is only needed to fill gaps.
 

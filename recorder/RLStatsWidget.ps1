@@ -6,7 +6,7 @@
 
   Start it with "RL Stats Widget.bat". Closing the window stops recording.
 #>
-param([string[]]$TrackedPlayers = @('jay29ID', 'Kobra Kelvin'))
+param([string[]]$TrackedPlayers = @('jay29ID', 'Kobra Kelvin'), [switch]$NoUpdate)
 
 Add-Type -AssemblyName System.Windows.Forms, System.Drawing
 [System.Windows.Forms.Application]::EnableVisualStyles()
@@ -18,6 +18,18 @@ $script:here = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 function Show-Fatal([string]$Text) {
   [void][System.Windows.Forms.MessageBox]::Show($Text, 'RL Stats', 'OK', 'Error')
+}
+
+# Self-update: check the dashboard site for newer files, swap them in, and restart once.
+# This runs before the mutex below is taken, so the relaunched copy can take it.
+$script:updater = Join-Path $script:here 'RLStatsUpdater.ps1'
+if (-not $NoUpdate -and (Test-Path $script:updater)) {
+  . $script:updater
+  if (Update-RLStats -InstallDir $script:here) {
+    Start-Process powershell.exe -WindowStyle Hidden -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-STA',
+      '-WindowStyle', 'Hidden', '-File', ('"' + $MyInvocation.MyCommand.Path + '"'), '-NoUpdate')
+    return
+  }
 }
 
 # Only one copy at a time, otherwise every match would be saved twice.

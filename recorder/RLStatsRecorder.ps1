@@ -19,6 +19,7 @@ param(
   [int]$Port = 49123,
   [string]$OutDir = (Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'RLStats'),
   [string]$GameLogDir = (Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'My Games\Rocket League\TAGame\Logs'),
+  [switch]$NoUpdate,  # set when relaunching after a self-update
   [switch]$NoLoop   # used by the widget, which drives Step-Connection from a timer
 )
 
@@ -602,6 +603,15 @@ function Step-Connection {
 
 if ($NoLoop) { return }
 
+# Self-update (console mode only; the widget runs its own check before loading this file).
+$updater = Join-Path $PSScriptRoot 'RLStatsUpdater.ps1'
+if (-not $NoUpdate -and (Test-Path $updater)) {
+  . $updater
+  if (Update-RLStats -InstallDir $PSScriptRoot -OutDir $OutDir -Log { param($t) Write-Log $t 'Cyan' }) {
+    Start-Process powershell.exe -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ('"' + $PSCommandPath + '"'), '-NoUpdate')
+    return
+  }
+}
 Write-Log "Recording matches for: $($TrackedPlayers -join ', ')" 'Cyan'
 Write-Log "Saving to $OutDir"
 Test-StatsApiConfig
