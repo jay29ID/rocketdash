@@ -490,4 +490,7 @@ async function load(){
   renderAll();
 }
 load();
+// New matches arrive from the recorder a few seconds after each game; pick them up without a reload.
+setInterval(()=>{if(document.visibilityState==='visible')load();},60000);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')load();});
 })();
