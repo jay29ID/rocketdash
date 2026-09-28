@@ -84,6 +84,36 @@ function addMmr(s) {
   return true;
 }
 
+// ---- goal GIFs ----
+const GIF_QUERY = process.env.GIF_QUERY || 'tim robinson';
+let gifCache = { at: 0, list: [] }; const gifRecent = [];
+async function randomGif() {
+  const key = process.env.GIPHY_KEY;
+  if (!key) return null;
+  if (Date.now() - gifCache.at > 6 * 3600e3 || !gifCache.list.length) {
+    const list = [];
+    for (const offset of [0, 50, 100]) {
+      try {
+        const u = `https://api.giphy.com/v1/gifs/search?api_key=${encodeURIComponent(key)}&q=${encodeURIComponent(GIF_QUERY)}&limit=50&offset=${offset}&rating=r`;
+        const r = await fetch(u); if (!r.ok) break;
+        const j = await r.json();
+        for (const g of j.data || []) {
+          const im = (g.images && (g.images.fixed_height || g.images.downsized)) || null;
+          if (im && im.url) list.push({ id: g.id, url: im.url, width: +im.width || null, height: +im.height || null, title: g.title || '' });
+        }
+        if ((j.data || []).length < 50) break;
+      } catch (e) { break; }
+    }
+    if (list.length) gifCache = { at: Date.now(), list };
+  }
+  const pool = gifCache.list.filter(g => !gifRecent.includes(g.id));
+  const from = pool.length ? pool : gifCache.list;
+  if (!from.length) return null;
+  const g = from[Math.floor(Math.random() * from.length)];
+  gifRecent.push(g.id); if (gifRecent.length > Math.min(30, Math.floor(gifCache.list.length / 2))) gifRecent.shift();
+  return { ...g, source: 'GIPHY' };
+}
+
 // Files in recorder/ are what both PCs run. Pushing a change there to GitHub redeploys the site,
 // and each widget picks it up the next time it starts.
 function recorderManifest() {
@@ -167,6 +197,13 @@ const server = http.createServer(async (req, res) => {
       if (!UPLOAD_KEY || !same(req.headers['x-upload-key'] || '', UPLOAD_KEY)) return send(res, 401, { error: 'bad upload key' });
       const proto = String(req.headers['x-forwarded-proto'] || 'https').split(',')[0];
       return send(res, 200, { url: `${proto}://${req.headers.host}/s/${encodeURIComponent(VIEW_KEY)}` });
+    }
+
+    // A random GIF for the widget's goal pop-up. Needs GIPHY_KEY (free at developers.giphy.com).
+    if (p === '/api/gif') {
+      if (!UPLOAD_KEY || !same(req.headers['x-upload-key'] || '', UPLOAD_KEY)) return send(res, 401, { error: 'bad upload key' });
+      const pick = await randomGif();
+      return pick ? send(res, 200, pick) : send(res, 404, { error: 'no GIFs available (is GIPHY_KEY set?)' });
     }
 
     if (p.startsWith('/s/')) {

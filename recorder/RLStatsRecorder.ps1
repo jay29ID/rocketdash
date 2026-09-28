@@ -36,7 +36,7 @@ $Playlists = @{
 
 # Hooks the widget sets: $script:LogHook (text, color), $script:OnState (UpdateState data),
 # $script:OnMatchSaved (match record).
-$script:LogHook = $null; $script:OnState = $null; $script:OnMatchSaved = $null; $script:MatchExtras = $null
+$script:LogHook = $null; $script:OnState = $null; $script:OnMatchSaved = $null; $script:MatchExtras = $null; $script:OnGoal = $null
 
 function Write-Log([string]$Text, [string]$Color = 'Gray') {
   if ($script:LogHook) { & $script:LogHook $Text $Color; return }
@@ -371,6 +371,7 @@ function Invoke-Message($Msg) {
         shot_from = $shot.location; shot_from_player = $shot.player; shot_speed = $shot.speed
         ours = $null
       })
+      if ($script:OnGoal) { try { & $script:OnGoal $m.Goals[$m.Goals.Count - 1] } catch { } }
     }
     'BallHit'       {
       foreach ($p in @(Get-Prop $data 'Players' @())) {

@@ -489,6 +489,87 @@ function Show-TypeMmr {
   Update-Mmr
 }
 
+# ---- goal GIFs ---------------------------------------------------------------------------------
+# Every goal pops up a random GIF next to the widget for a few seconds. The dashboard site picks
+# one from GIPHY; if it can't, a random file from Documents\RLStats\gifs is used instead.
+# Set GoalGifs to false in Documents\RLStats\widget.json to switch it off.
+$script:GoalGifs = $true
+$script:gifJob = $null
+$script:gifPopup = $null
+function Start-GoalGif($Goal) {
+  if (-not $script:GoalGifs -or $script:gifJob) { return }
+  $ps = [powershell]::Create()
+  [void]$ps.AddScript({
+    param($CfgPath, $GifDir)
+    $ErrorActionPreference = 'Stop'
+    try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch { }
+    try {
+      $cfg = Get-Content $CfgPath -Raw | ConvertFrom-Json
+      $base = ([Uri]$cfg.url).GetLeftPart([UriPartial]::Authority)
+      $r = Invoke-RestMethod -Uri "$base/api/gif" -Headers @{ 'X-Upload-Key' = [string]$cfg.key } -TimeoutSec 5 -UseBasicParsing
+      if ($r.url) {
+        $file = Join-Path ([IO.Path]::GetTempPath()) ('rlstats-goal-' + [guid]::NewGuid().ToString('N').Substring(0, 8) + '.gif')
+        Invoke-WebRequest -Uri ([string]$r.url) -OutFile $file -TimeoutSec 8 -UseBasicParsing
+        return @{ Path = $file; Temp = $true; Credit = 'GIPHY' }
+      }
+    } catch { }
+    if (Test-Path $GifDir) {
+      $f = Get-ChildItem $GifDir -Filter '*.gif' -File | Get-Random
+      if ($f) { return @{ Path = $f.FullName; Temp = $false; Credit = '' } }
+    }
+    return $null
+  }).AddArgument((Join-Path $OutDir 'upload.json')).AddArgument((Join-Path $OutDir 'gifs'))
+  $who = [string]$Goal.scorer
+  $script:gifJob = @{ PS = $ps; Handle = $ps.BeginInvoke(); Who = $who; Ours = ($TrackedPlayers -contains $who) }
+}
+function Step-GoalGif {
+  $j = $script:gifJob
+  if (-not $j -or -not $j.Handle.IsCompleted) { return }
+  $script:gifJob = $null
+  $res = $null
+  try { $res = @($j.PS.EndInvoke($j.Handle)) | Where-Object { $_ } | Select-Object -Last 1 } catch { }
+  $j.PS.Dispose()
+  if ($res -and $res.Path -and (Test-Path $res.Path)) { Show-GoalGif $res $j.Who $j.Ours }
+}
+function Close-GoalGif {
+  $p = $script:gifPopup; if (-not $p) { return }
+  $script:gifPopup = $null
+  try { $p.Timer.Stop(); $p.Form.Close(); $p.Image.Dispose(); $p.Form.Dispose() } catch { }
+  if ($p.Temp) { try { Remove-Item $p.Path -Force } catch { } }
+}
+function Show-GoalGif($Res, [string]$Who, [bool]$Ours) {
+  Close-GoalGif
+  try { $img = [System.Drawing.Image]::FromFile($Res.Path) } catch { return }
+  $w = 300; $h = [int][math]::Round($w * $img.Height / [math]::Max(1, $img.Width)); $h = [math]::Max(120, [math]::Min(320, $h))
+  $f = New-Object System.Windows.Forms.Form
+  $f.FormBorderStyle = 'None'; $f.StartPosition = 'Manual'; $f.ShowInTaskbar = $false; $f.TopMost = $true
+  $f.BackColor = $script:C.Bg; $f.ClientSize = New-Object System.Drawing.Size($w, ($h + 26))
+  $pb = New-Object System.Windows.Forms.PictureBox
+  $pb.SizeMode = 'Zoom'; $pb.Location = New-Object System.Drawing.Point(0, 0); $pb.Size = New-Object System.Drawing.Size($w, $h); $pb.Image = $img
+  $text = 'GOAL'; if ($Who) { $text = "GOAL: $Who" }
+  $col = $script:C.Loss; if ($Ours) { $col = $script:C.Win }
+  $cap = New-Label $text 8 ($h + 3) 200 20 $script:F.Bold $col
+  $credit = New-Label '' 200 ($h + 3) 92 20 $script:F.Small $script:C.Muted 'MiddleRight'
+  if ($Res.Credit) { $credit.Text = 'via ' + $Res.Credit }
+  $f.Controls.AddRange(@($pb, $cap, $credit))
+  # Above the widget, or below it when the widget sits near the top of the screen.
+  $wa = [System.Windows.Forms.Screen]::FromControl($script:form).WorkingArea
+  $x = [math]::Min($wa.Right - $w - 4, [math]::Max($wa.Left + 4, $script:form.Left + $script:form.Width - $w))
+  $y = $script:form.Top - $f.Height - 8
+  if (-not $script:form.Visible -or $y -lt $wa.Top) { $y = [math]::Min($wa.Bottom - $f.Height - 4, $script:form.Bottom + 8) }
+  if (-not $script:form.Visible) { $x = $wa.Right - $w - 20; $y = $wa.Bottom - $f.Height - 20 }
+  $f.Location = New-Object System.Drawing.Point($x, $y)
+  $t = New-Object System.Windows.Forms.Timer; $t.Interval = 5000
+  $t.add_Tick({ Close-GoalGif })
+  foreach ($c in $f, $pb, $cap, $credit) { $c.add_Click({ Close-GoalGif }) }
+  $script:gifPopup = @{ Form = $f; Timer = $t; Image = $img; Path = $Res.Path; Temp = [bool]$Res.Temp }
+  $f.Show(); $t.Start()
+}
+$script:OnGoal = { param($Goal) Start-GoalGif $Goal }
+$script:gifPoll = New-Object System.Windows.Forms.Timer
+$script:gifPoll.Interval = 250
+$script:gifPoll.add_Tick({ try { Step-GoalGif } catch { } })
+
 # ---- hooks from the recorder ------------------------------------------------------------------
 $script:InMatch = $false
 $script:LogHook = {
@@ -551,6 +632,7 @@ try {
     $pt = New-Object System.Drawing.Point([int]$prefs.x, [int]$prefs.y)
     if ([System.Windows.Forms.Screen]::AllScreens | Where-Object { $_.WorkingArea.Contains($pt) }) { $script:form.Location = $pt }
     Set-Pin ([bool]$prefs.pinned)
+    if ($null -ne $prefs.GoalGifs) { $script:GoalGifs = [bool]$prefs.GoalGifs }
     # Watchers and drinks carry over a restart, but not to the next night.
     $fresh = $false
     try { $fresh = ((Get-Date) - [datetime]::Parse([string]$prefs.saved_at)).TotalHours -lt 8 } catch { }
@@ -631,15 +713,15 @@ $script:form.add_Shown({
   $script:form.Refresh()
   Stop-Splash
   $script:form.Opacity = 1
-  $script:timer.Start(); $script:slow.Start(); $script:updTimer.Start(); $script:updPoll.Start()
+  $script:timer.Start(); $script:slow.Start(); $script:updTimer.Start(); $script:updPoll.Start(); $script:gifPoll.Start()
 })
 
 $script:form.add_FormClosing({
-  $script:timer.Stop(); $script:slow.Stop(); $script:updTimer.Stop(); $script:updPoll.Stop()
+  $script:timer.Stop(); $script:slow.Stop(); $script:updTimer.Stop(); $script:updPoll.Stop(); $script:gifPoll.Stop(); Close-GoalGif
   try {
     if (-not (Test-Path $OutDir)) { [void](New-Item -ItemType Directory -Path $OutDir) }
     $json = ConvertTo-Json -InputObject @{ x = $script:form.Left; y = $script:form.Top; pinned = $script:form.TopMost
-      watching = @($script:Watching); drinks = $script:Drinks; saved_at = (Get-Date).ToString('o') } -Compress
+      watching = @($script:Watching); drinks = $script:Drinks; saved_at = (Get-Date).ToString('o'); GoalGifs = $script:GoalGifs } -Compress
     [IO.File]::WriteAllText($script:prefsFile, $json, $Utf8NoBom)
   } catch { }
   try { Reset-Connection $null } catch { }
