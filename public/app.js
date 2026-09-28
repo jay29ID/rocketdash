@@ -20,6 +20,8 @@ function carName(l){
   const v=l.Car!=null?l.Car:l.Body!=null?l.Body:l.car;
   return v==null||v===''?null:String(v);
 }
+const WARM='Casual Doubles', RANKED='Ranked Doubles';
+const plName=p=>p===WARM?'Warm-Ups':p;
 function arenaName(a){if(!a)return 'Unknown arena';const k=String(a).toLowerCase();return ARENA_NAMES[k]||String(a).replace(/_P$/i,'').replace(/_/g,' ');}
 
 // Approximate Ranked Doubles ranges.
@@ -56,8 +58,10 @@ function makeSample(names){
     const start=new Date(end.getTime()-ago*DAY);start.setHours(19+Math.floor(rnd()*2),Math.floor(rnd()*50),0,0);
     const n=4+Math.floor(rnd()*8), form=norm(0,.09)+(si>=days.length-2?.16:si>12?.04:0);
     let t=start.getTime(),w=0;
-    for(let k=0;k<n;k++){
-      const win=rnd()<clamp(.52+form,.25,.8);w+=win?1:-1;
+    const wn=rnd()<.8?2+Math.floor(rnd()*3):0;   // casual doubles warm-ups first, most nights
+    for(let k=0;k<wn+n;k++){
+      const warm=k<wn;
+      const win=rnd()<clamp((warm?.55:.52)+form*(warm?1.4:1),.2,.85);if(!warm)w+=win?1:-1;
       let us,them;
       if(win){us=1+pois(1.7);them=Math.min(us-1,pois(1.3));}else{them=1+pois(1.8);us=Math.min(them-1,pois(1.3));}
       const ot=Math.abs(us-them)===1&&rnd()<.3, dur=300+(ot?30+Math.floor(rnd()*150):0);
@@ -77,7 +81,7 @@ function makeSample(names){
           car_touches:pois(p.bump),boost_pickups:Math.round(clamp(norm(j?34:29,6),8,70)),loadout:{Car:j?'Fennec':'Octane'},avg_boost:Math.round(clamp(norm(p.boost,5),20,70)),pct_supersonic:+clamp(norm(p.ss,3),3,35).toFixed(1),
           pct_air:air,pct_wall:wall,pct_ground:+(100-air-wall).toFixed(1),hardest_hit:Math.round(clamp(norm(p.gs+25,15),60,160))};
       });
-      matches.push({match_guid:'sample-'+si+'-'+k,started_at:new Date(t).toISOString(),duration_seconds:dur,playlist:'Ranked Doubles',arena:pick(arenas),
+      matches.push({match_guid:'sample-'+si+'-'+k,started_at:new Date(t).toISOString(),duration_seconds:dur,playlist:warm?'Casual Doubles':'Ranked Doubles',arena:pick(arenas),
         overtime:ot,my_team:my,result:win?'Win':'Loss',team_score:us,opponent_score:them,goals,players,
         replay_created:rnd()<.2?new Date(t+dur*1000).toISOString():null,
         players_left:rnd()<.08?[{name:'Opponent',team:1-my}]:[]});
@@ -91,7 +95,7 @@ function makeSample(names){
 
 // ---------- model ----------
 let PLAYERS=[], RAW={matches:[],mmr:[]}, SAMPLE=false;
-let ALL=[], sessions=[], NOW=Date.now();
+let ALL=[], DONE=[], sessions=[], NOW=Date.now();
 let period='30', mode='avg', metric='winpct', playlist=null, mapSide='us', mapWho='all';
 try{const s=JSON.parse(localStorage.getItem('rl-duo-ui')||'{}');if(s.period)period=s.period;if(s.mode)mode=s.mode;if(s.metric)metric=s.metric;if(s.playlist)playlist=s.playlist;}catch(e){}
 const saveUi=()=>{try{localStorage.setItem('rl-duo-ui',JSON.stringify({period,mode,metric,playlist}))}catch(e){}};
@@ -129,8 +133,9 @@ function build(){
   const counts={};done.forEach(m=>counts[m.playlist]=(counts[m.playlist]||0)+1);
   const lists=Object.keys(counts).sort((a,b)=>counts[b]-counts[a]);
   if(playlist!=='All'&&!counts[playlist])playlist=counts['Ranked Doubles']?'Ranked Doubles':'All';
-  $('playlist').innerHTML=`<option value="All">All playlists (${done.length})</option>`+lists.map(l=>`<option value="${esc(l)}">${esc(l)} (${counts[l]})</option>`).join('');
+  $('playlist').innerHTML=`<option value="All">All playlists (${done.length})</option>`+lists.map(l=>`<option value="${esc(l)}">${esc(plName(l))} (${counts[l]})</option>`).join('');
   $('playlist').value=playlist;
+  DONE=done;
   ALL=playlist==='All'?done:done.filter(m=>m.playlist===playlist);
   sessions=[];
   ALL.forEach(m=>{const s=sessions[sessions.length-1];
@@ -420,10 +425,47 @@ function syncButtons(){
   document.querySelectorAll('#metric button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.k===metric));
 }
 function renderPeriod(){const list=inPeriod();renderSummary(list);renderCmp(list);renderMaps(list);renderPlay(list);renderLog(list);syncButtons();}
+// ---------- warm-ups ----------
+// A night is every match with gaps under 90 minutes. Its warm-ups are the Casual Doubles games
+// played before the first Ranked Doubles game; the ranked games that night are what follows.
+function nights(){
+  const out=[];
+  DONE.forEach(m=>{const n=out[out.length-1];
+    if(n&&m.when-n.end<90*6e4){n.matches.push(m);n.end=new Date(m.when.getTime()+m.dur*1000);}
+    else out.push({start:m.when,end:new Date(m.when.getTime()+m.dur*1000),matches:[m]});});
+  return out.map(n=>{
+    const first=n.matches.findIndex(m=>m.playlist===RANKED);
+    return {...n,warm:n.matches.filter((m,i)=>m.playlist===WARM&&(first<0||i<first)),ranked:n.matches.filter(m=>m.playlist===RANKED)};
+  });
+}
+function renderWarmups(){
+  const N=nights().filter(n=>n.ranked.length);
+  const wl=l=>{const w=l.filter(m=>m.win).length;return {w,l:l.length-w,n:l.length};};
+  const groups=[
+    {k:'won',label:'Won the warm-ups',test:r=>r.n&&r.w>r.l},
+    {k:'even',label:'Split the warm-ups',test:r=>r.n&&r.w===r.l},
+    {k:'lost',label:'Lost the warm-ups',test:r=>r.n&&r.w<r.l},
+    {k:'none',label:'No warm-up',test:r=>!r.n}
+  ].map(g=>{const ns=N.filter(n=>g.test(wl(n.warm)));const r=wl(ns.flatMap(n=>n.ranked));return {...g,nights:ns.length,...r,pct:r.n?100*r.w/r.n:null};});
+  $('warmRows').innerHTML=groups.map(g=>`<div class="warm-row"><span class="warm-label">${g.label}<small>${g.nights} night${g.nights===1?'':'s'}</small></span>
+    <div class="bar"><div class="track"><div class="fill" style="width:${g.pct==null?0:g.pct.toFixed(1)}%;background:${g.pct==null?'transparent':g.pct>=50?'var(--win)':'var(--loss)'}"></div></div>
+    <span class="val">${g.pct==null?'–':Math.round(g.pct)+'%'}</span></div><span class="warm-rec num">${g.n?g.w+'–'+g.l:''}</span></div>`).join('');
+  const won=groups[0],lost=groups[2];
+  $('warmTake').textContent=won.nights>=3&&lost.nights>=3
+    ?`After winning the warm-ups you win ${Math.round(won.pct)}% of ranked games that night, and ${Math.round(lost.pct)}% after losing them.`
+    :`Not enough nights yet to compare. This fills in after at least three nights of won and three of lost warm-ups (${won.nights} and ${lost.nights} so far).`;
+  const recent=N.filter(n=>n.warm.length).slice(-8).reverse();
+  $('warmLog').innerHTML='<thead><tr><th>Night</th><th>Warm-ups</th><th>Ranked after</th><th>MMR</th></tr></thead><tbody>'+
+    (recent.length?recent.map(n=>{const a=wl(n.warm),b=wl(n.ranked);
+      const d=PLAYERS.map((p,j)=>{const x=mmrAt(j,n.start.getTime()),y=mmrAt(j,n.end.getTime()+30*6e4);return x!=null&&y!=null?p.short+' '+sign(y-x):null;}).filter(Boolean).join(', ');
+      return `<tr><td>${fmtDay(n.start)}</td><td><span class="pill ${a.w>a.l?'w':a.w<a.l?'l':''}">${a.w}–${a.l}</span></td><td><span class="pill ${b.w>b.l?'w':b.w<b.l?'l':''}">${b.w}–${b.l}</span></td><td>${esc(d||'–')}</td></tr>`;}).join('')
+    :'<tr><td colspan="4" class="muted">No nights with warm-ups and ranked games yet.</td></tr>')+'</tbody>';
+}
+
 function renderAll(){
   build();
   if(!ALL.length){$('banner').hidden=false;$('banner').textContent='No finished matches for this playlist yet.';return;}
-  renderPeriod();renderLastSession();renderStrip();renderTrend();renderMMR();
+  renderPeriod();renderLastSession();renderStrip();renderTrend();renderMMR();renderWarmups();
 }
 $('period').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;period=b.dataset.p;saveUi();renderPeriod();});
 $('mode').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;mode=b.dataset.m;saveUi();renderCmp(inPeriod());syncButtons();});

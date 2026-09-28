@@ -180,6 +180,15 @@ form.log button{background:var(--ink);color:var(--surface);border:0;border-radiu
 .chip{display:inline-block;font-size:11px;font-weight:600;padding:1px 7px;border-radius:4px;border:1px solid var(--line);color:var(--ink-2);white-space:nowrap}
 td.notes{text-align:left}
 
+.warm{display:flex;flex-direction:column;gap:10px}
+.warm-row{display:grid;grid-template-columns:150px minmax(0,1fr) 48px;gap:12px;align-items:center}
+.warm-label{display:flex;flex-direction:column;font-weight:500}
+.warm-label small{font-size:12px;color:var(--muted);font-weight:400}
+.warm-rec{text-align:right;color:var(--ink-2);font-family:var(--mono);font-size:13px}
+.warm-take{margin:4px 0 0;color:var(--ink-2);max-width:60ch}
+#warmLog td:first-child{text-align:left}
+@media (max-width:460px){.warm-row{grid-template-columns:110px minmax(0,1fr) 40px;gap:8px}}
+
 /* controls */
 .controls{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .pl{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
@@ -283,6 +292,18 @@ footer{font-size:12px;color:var(--muted);max-width:70ch}
     </div>
     <div class="legend" id="trendLegend"></div>
     <div class="chart" id="trend"></div>
+  </section>
+
+  <section class="panel" aria-labelledby="warmTitle">
+    <div class="panel-head"><h2 id="warmTitle">Warm-ups</h2><span class="muted">Casual Doubles before ranked, all time</span></div>
+    <div class="grid g-2b">
+      <div class="warm">
+        <div class="note">Ranked Doubles win rate on the same night</div>
+        <div id="warmRows"></div>
+        <p class="warm-take" id="warmTake"></p>
+      </div>
+      <div class="scroll"><table class="lines num" id="warmLog"></table></div>
+    </div>
   </section>
 
   <section class="panel" aria-labelledby="mapTitle">
