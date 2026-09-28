@@ -154,6 +154,7 @@ function mmrAt(j,t){let v=null;for(const r of mmrRows(j)){if(r.at.getTime()<=t)v
 function inPeriod(){
   if(!ALL.length)return [];
   if(period==='all')return ALL;
+  if(period==='game')return ALL.slice(-1);
   if(period==='last')return sessions[sessions.length-1].matches;
   const cut=NOW-(+period)*DAY;
   return ALL.filter(m=>m.when.getTime()>=cut);
@@ -198,7 +199,7 @@ function renderSummary(list){
   $('kRanks').innerHTML=PLAYERS.map((p,j)=>{const v=mmrAt(j,Infinity);return `<span class="who"><i style="background:${p.color}"></i>${esc(p.short)}</span><span class="rk">${esc(rankOf(v))}</span><span class="mmr">${v==null?'':v}</span>`;}).join('');
   const d=PLAYERS.map((p,j)=>{const now=mmrAt(j,Infinity),then=mmrAt(j,NOW-30*DAY);return now!=null&&then!=null?now-then:null;});
   $('kRankSub').textContent=d.some(v=>v!=null)?'30-day change: '+PLAYERS.map((p,j)=>d[j]==null?null:p.short+' '+sign(d[j])).filter(Boolean).join(', '):'';
-  $('rangeText').textContent=list.length?`${fmtDate(list[0].when)} to ${fmtDate(list[list.length-1].when)} · ${list.length} matches`:'No matches in this period';
+  $('rangeText').textContent=list.length?(list.length===1?`${fmtDate(list[0].when)} ${fmtTime(list[0].when)} · 1 match`:`${fmtDate(list[0].when)} to ${fmtDate(list[list.length-1].when)} · ${list.length} matches`):'No matches in this period';
 }
 
 // ---------- last session ----------
