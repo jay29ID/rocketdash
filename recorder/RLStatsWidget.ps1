@@ -66,7 +66,12 @@ function Start-Splash {
     $state = @{ Angle = 0; Ticks = 0 }
     $blue = [System.Drawing.ColorTranslator]::FromHtml('#00E5FF'); $track = [System.Drawing.ColorTranslator]::FromHtml('#1B2A3A')
     $muted = [System.Drawing.ColorTranslator]::FromHtml('#6D7F96')
-    $font = New-Object System.Drawing.Font('Consolas', 10)
+    $font = New-Object System.Drawing.Font('Consolas', 10); $caption = 'BOOTING RL STATS...'
+    if ($p -and $p.theme -eq 'classic') {
+      $f.BackColor = [System.Drawing.ColorTranslator]::FromHtml('#12151C')
+      $blue = [System.Drawing.ColorTranslator]::FromHtml('#4DA3FF'); $track = [System.Drawing.ColorTranslator]::FromHtml('#262C3A')
+      $muted = [System.Drawing.ColorTranslator]::FromHtml('#8A93A6'); $font = New-Object System.Drawing.Font('Segoe UI', 11); $caption = 'Loading RL Stats...'
+    }
     $f.GetType().GetProperty('DoubleBuffered', [Reflection.BindingFlags]'NonPublic,Instance').SetValue($f, $true, $null)
     $f.add_Paint({
       param($s, $e)
@@ -77,7 +82,7 @@ function Start-Splash {
       $g.DrawArc($pen2, $r, $state.Angle, 90); $pen2.Dispose()
       $sf = New-Object System.Drawing.StringFormat; $sf.Alignment = 'Center'
       $b = New-Object System.Drawing.SolidBrush($muted)
-      $g.DrawString('BOOTING RL STATS...', $font, $b, (New-Object System.Drawing.RectangleF(0, 302, 450, 24)), $sf); $b.Dispose()
+      $g.DrawString($caption, $font, $b, (New-Object System.Drawing.RectangleF(0, 302, 450, 24)), $sf); $b.Dispose()
     })
     $t = New-Object System.Windows.Forms.Timer; $t.Interval = 30
     $t.add_Tick({
@@ -129,6 +134,14 @@ $ErrorActionPreference = 'Continue'
 
 # ---- look -------------------------------------------------------------------------------------
 function RGB([string]$Hex) { [System.Drawing.ColorTranslator]::FromHtml($Hex) }
+# Themes: 'cyber' (framed neon panels) or 'classic' (the original plain dark look). Picked from the
+# theme button in the title bar and saved in widget.json; switching restarts the widget.
+$script:Theme = 'cyber'
+try {
+  $tp = Join-Path $OutDir 'widget.json'
+  if (Test-Path $tp) { $t = (Get-Content $tp -Raw | ConvertFrom-Json).theme; if ($t -in 'cyber', 'classic') { $script:Theme = $t } }
+} catch { }
+$script:Themes = [ordered]@{ cyber = 'Cyber'; classic = 'Classic' }
 $script:C = @{
   # neon-on-black: cyan for structure, magenta for secondary accents
   Bg = RGB '#080C12'; Panel = RGB '#0E1520'; Line = RGB '#1B2A3A'; Text = RGB '#DDE8F5'; Muted = RGB '#6D7F96'
@@ -138,6 +151,13 @@ $script:C = @{
 # The layout below is drawn at 360 wide and then scaled up by UiScale; fonts are scaled to match.
 $script:UiScale = 1.25
 function UiFont([string]$Face, [double]$Pt) { New-Object System.Drawing.Font($Face, [single]($Pt * $script:UiScale)) }
+if ($script:Theme -eq 'classic') {
+  $script:C = @{
+    Bg = RGB '#12151C'; Panel = RGB '#1A1F2A'; Line = RGB '#262C3A'; Text = RGB '#E6E9EF'; Muted = RGB '#8A93A6'
+    Blue = RGB '#4DA3FF'; Orange = RGB '#FF9F43'; Win = RGB '#3DDC84'; Loss = RGB '#FF5C6C'; Amber = RGB '#F5C04E'
+    Cyan = RGB '#4DA3FF'; Magenta = RGB '#FF9F43'; Frame = RGB '#262C3A'
+  }
+}
 $script:F = @{
   Small = UiFont 'Bahnschrift' 8.25
   Body = UiFont 'Bahnschrift' 9
@@ -148,6 +168,13 @@ $script:F = @{
   Speed = UiFont 'Bahnschrift SemiBold' 15
   Score = UiFont 'Bahnschrift SemiBold' 24
   Dot = UiFont 'Segoe UI' 11
+}
+if ($script:Theme -eq 'classic') {
+  $script:F = @{
+    Small = UiFont 'Segoe UI' 8.25; Body = UiFont 'Segoe UI' 9; Bold = UiFont 'Segoe UI Semibold' 9
+    Head = UiFont 'Segoe UI' 7.5; Tiny = UiFont 'Segoe UI' 6.75; Tag = UiFont 'Segoe UI' 6.75
+    Speed = UiFont 'Segoe UI Semibold' 15; Score = UiFont 'Segoe UI Semibold' 22; Dot = UiFont 'Segoe UI' 11
+  }
 }
 $script:Bullet = [string][char]0x25CF
 $script:Dash = [string][char]0x2013
@@ -180,14 +207,16 @@ $script:header = New-Object System.Windows.Forms.Panel
 $script:header.Location = New-Object System.Drawing.Point(0, 0); $script:header.Size = New-Object System.Drawing.Size(360, 30); $script:header.BackColor = $script:C.Panel
 $script:form.Controls.Add($script:header)
 $script:dot = New-Label $script:Bullet 8 4 18 22 $script:F.Dot $script:C.Amber 'MiddleCenter'
-$script:status = New-Label 'Starting...' 28 5 228 20 $script:F.Small $script:C.Muted
-$script:updLink = New-Label 'Update' 190 5 66 20 $script:F.Bold $script:C.Win 'MiddleCenter'
+$script:status = New-Label 'Starting...' 28 5 206 20 $script:F.Small $script:C.Muted
+$script:updLink = New-Label 'Update' 168 5 66 20 $script:F.Bold $script:C.Win 'MiddleCenter'
 $script:updLink.Visible = $false
 $script:pin = New-Label 'Pin' 262 5 30 20 $script:F.Small $script:C.Text 'MiddleCenter'
 $script:min = New-Label '_' 296 3 28 22 $script:F.Bold $script:C.Muted 'MiddleCenter'
 $script:close = New-Label 'x' 326 3 28 22 $script:F.Bold $script:C.Muted 'MiddleCenter'
 foreach ($b in $script:pin, $script:min, $script:close, $script:updLink) { $b.Cursor = [System.Windows.Forms.Cursors]::Hand }
-$script:header.Controls.AddRange(@($script:dot, $script:status, $script:updLink, $script:pin, $script:min, $script:close))
+$script:themeBtn = New-Label ([string][char]0x25D0) 236 3 24 22 $script:F.Dot $script:C.Muted 'MiddleCenter'
+$script:themeBtn.Cursor = [System.Windows.Forms.Cursors]::Hand
+$script:header.Controls.AddRange(@($script:dot, $script:status, $script:updLink, $script:themeBtn, $script:pin, $script:min, $script:close))
 
 # score block
 $script:blueName = New-Label 'BLUE' 16 40 110 20 $script:F.Small $script:C.Blue 'MiddleLeft'
@@ -203,7 +232,7 @@ $script:tableTop = 112
 $script:colX = 112; $script:colW = 39
 $script:sep1 = New-Object System.Windows.Forms.Panel
 $script:sep1.Location = New-Object System.Drawing.Point(12, ($script:tableTop - 4)); $script:sep1.Size = New-Object System.Drawing.Size(336, 1); $script:sep1.BackColor = $script:C.Line
-$script:sep1.Visible = $false   # the panel frames replace the separators
+$script:sep1.Visible = ($script:Theme -eq 'classic')   # cyber frames replace the separators
 $script:form.Controls.Add($script:sep1)
 $script:form.Controls.Add((New-Label 'PLAYER' 16 ($script:tableTop + 16) 90 16 $script:F.Head $script:C.Muted))
 
@@ -277,7 +306,7 @@ $script:Live = @{}
 $script:PColor = @($script:C.Blue, $script:C.Orange, $script:C.Win)
 function New-Canvas([int]$X, [int]$Y, [int]$W, [int]$H) {
   $p = New-Object System.Windows.Forms.Panel
-  $p.Location = New-Object System.Drawing.Point($X, $Y); $p.Size = New-Object System.Drawing.Size($W, $H); $p.BackColor = $script:C.Panel
+  $p.Location = New-Object System.Drawing.Point($X, $Y); $p.Size = New-Object System.Drawing.Size($W, $H); $p.BackColor = $script:C.Panel; if ($script:Theme -eq 'classic') { $p.BackColor = $script:C.Bg }
   $p.GetType().GetProperty('DoubleBuffered', [Reflection.BindingFlags]'NonPublic,Instance').SetValue($p, $true, $null)
   return $p
 }
@@ -366,8 +395,8 @@ $script:gauge.add_Paint({
 $script:form.Controls.Add($script:gauge)
 
 $script:sep2 = New-Object System.Windows.Forms.Panel
-$script:sep2.Location = New-Object System.Drawing.Point(12, 276); $script:sep2.Size = New-Object System.Drawing.Size(336, 1); $script:sep2.BackColor = $script:C.Line
-$script:sep2.Visible = $false
+$script:sep2.Location = New-Object System.Drawing.Point(12, 300); $script:sep2.Size = New-Object System.Drawing.Size(336, 1); $script:sep2.BackColor = $script:C.Line
+$script:sep2.Visible = ($script:Theme -eq 'classic')
 $script:form.Controls.Add($script:sep2)
 
 $script:today = New-Label 'Session: no games yet' 16 308 214 20 $script:F.Body $script:C.Text
@@ -412,6 +441,7 @@ $script:Frames = @(
 )
 $script:form.add_Paint({
   param($s, $e)
+  if ($script:Theme -ne 'cyber') { return }
   $g = $e.Graphics; $g.SmoothingMode = 'AntiAlias'; $g.TextRenderingHint = 'ClearTypeGridFit'
   $k = [single]$script:UiScale
   $frame = New-Object System.Drawing.Pen($script:C.Frame, [single](1 * $k))
@@ -553,6 +583,24 @@ function Set-Pin([bool]$On) {
   if ($On) { $script:pin.ForeColor = $script:C.Blue } else { $script:pin.ForeColor = $script:C.Muted }
 }
 $script:pin.add_Click({ Set-Pin (-not $script:form.TopMost) })
+$script:themeMenu = New-Object System.Windows.Forms.ContextMenuStrip
+foreach ($key in $script:Themes.Keys) {
+  $it = New-Object System.Windows.Forms.ToolStripMenuItem($script:Themes[$key])
+  $it.Tag = $key; $it.Checked = ($key -eq $script:Theme)
+  $it.add_Click({ param($s, $e) Set-Theme ([string]$s.Tag) })
+  [void]$script:themeMenu.Items.Add($it)
+}
+$script:themeBtn.add_Click({ $script:themeMenu.Show($script:themeBtn, (New-Object System.Drawing.Point(0, $script:themeBtn.Height))) })
+function Set-Theme([string]$Name) {
+  if ($Name -eq $script:Theme) { return }
+  if ($script:InMatch) {
+    [void][System.Windows.Forms.MessageBox]::Show('Finish this match first, then switch themes (the widget restarts to apply it).', 'RL Stats', 'OK', 'Information')
+    return
+  }
+  $script:Theme = $Name            # saved to widget.json as the widget closes
+  $script:restartAfterClose = $true
+  $script:form.Close()
+}
 $script:min.add_Click({ $script:form.Hide(); $script:tray.ShowBalloonTip(2000, 'RL Stats', 'Still recording. Double-click the tray icon to bring it back.', 'Info') })
 $script:close.add_Click({ $script:form.Close() })
 $script:openLink.add_Click({ if (-not (Test-Path $OutDir)) { [void](New-Item -ItemType Directory -Path $OutDir) }; Start-Process explorer.exe $OutDir })
@@ -984,7 +1032,7 @@ function Step-UpdateCheck {
   $script:manualCheck = $null
   if ($manual -and $n -gt 0) { Set-Status $manual.Text $manual.Color }
   if ($n -gt 0) {
-    $script:status.Width = 160; $script:updLink.Visible = $true; $script:updLink.BringToFront()
+    $script:status.Width = [int](138 * $script:UiScale); $script:updLink.Visible = $true; $script:updLink.BringToFront()
     $script:tray.ShowBalloonTip(5000, 'RL Stats', 'An update is ready. Click Update in the widget to install it.', 'Info')
   }
 }
@@ -1030,7 +1078,7 @@ $script:form.add_FormClosing({
   try {
     if (-not (Test-Path $OutDir)) { [void](New-Item -ItemType Directory -Path $OutDir) }
     $json = ConvertTo-Json -InputObject @{ x = $script:form.Left; y = $script:form.Top; pinned = $script:form.TopMost
-      watching = @($script:Watching); drinks = $script:Drinks; saved_at = (Get-Date).ToString('o'); GoalGifs = $script:GoalGifs } -Compress
+      watching = @($script:Watching); drinks = $script:Drinks; saved_at = (Get-Date).ToString('o'); GoalGifs = $script:GoalGifs; theme = $script:Theme } -Compress
     [IO.File]::WriteAllText($script:prefsFile, $json, $Utf8NoBom)
   } catch { }
   try { Reset-Connection $null } catch { }
