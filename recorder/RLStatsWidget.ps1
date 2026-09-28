@@ -13,6 +13,27 @@ param([string[]]$TrackedPlayers = @('jay29ID', 'Kobra Kelvin'), [switch]$NoUpdat
 Add-Type -AssemblyName System.Windows.Forms, System.Drawing
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
+# Rounded window corners: Windows 11 draws them itself (smooth, with a shadow); on Windows 10 the
+# window is clipped to a rounded shape instead.
+$script:RoundCornersCode = {
+  param($Form, [int]$Radius = 10)
+  try {
+    if (-not ('RLWin.Dwm' -as [type])) {
+      Add-Type -Namespace RLWin -Name Dwm -MemberDefinition '[DllImport("dwmapi.dll")] public static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);'
+    }
+    $v = 2   # DWMWCP_ROUND
+    if ([RLWin.Dwm]::DwmSetWindowAttribute($Form.Handle, 33, [ref]$v, 4) -eq 0) { return }
+  } catch { }
+  try {
+    $w = $Form.Width; $h = $Form.Height; $d = 2 * $Radius
+    $path = New-Object System.Drawing.Drawing2D.GraphicsPath
+    $path.AddArc(0, 0, $d, $d, 180, 90); $path.AddArc($w - $d - 1, 0, $d, $d, 270, 90)
+    $path.AddArc($w - $d - 1, $h - $d - 1, $d, $d, 0, 90); $path.AddArc(0, $h - $d - 1, $d, $d, 90, 90); $path.CloseFigure()
+    $Form.Region = New-Object System.Drawing.Region($path)
+  } catch { }
+}
+function Set-RoundCorners($Form) { & $script:RoundCornersCode $Form }
+
 # Everything the window uses is kept in script scope ($script:...), because the recorder
 # calls the hooks from inside its own functions, whose local variables (score, rows, cols)
 # would otherwise shadow the widget's.
@@ -27,7 +48,7 @@ function Start-Splash {
   $rs = [runspacefactory]::CreateRunspace(); $rs.ApartmentState = 'STA'; $rs.ThreadOptions = 'ReuseThread'; $rs.Open()
   $ps = [powershell]::Create(); $ps.Runspace = $rs
   [void]$ps.AddScript({
-    param($Sync, $Prefs)
+    param($Sync, $Prefs, $RoundCode)
     Add-Type -AssemblyName System.Windows.Forms, System.Drawing
     $f = New-Object System.Windows.Forms.Form
     $f.FormBorderStyle = 'None'; $f.StartPosition = 'Manual'; $f.ShowInTaskbar = $false; $f.TopMost = $true
@@ -63,9 +84,9 @@ function Start-Splash {
       $state.Angle = ($state.Angle + 12) % 360; $state.Ticks++
       if ($Sync.Done -or $state.Ticks -gt 2000) { $t.Stop(); $f.Close() } else { $f.Invalidate() }
     })
-    $f.add_Shown({ $t.Start() })
+    $f.add_Shown({ try { & ([scriptblock]::Create($RoundCode)) $f } catch { }; $t.Start() })
     [System.Windows.Forms.Application]::Run($f)
-  }).AddArgument($sync).AddArgument((Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'RLStats\widget.json'))
+  }).AddArgument($sync).AddArgument((Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'RLStats\widget.json')).AddArgument($script:RoundCornersCode.ToString())
   $script:splash = @{ Sync = $sync; PS = $ps; Handle = $ps.BeginInvoke() }
 }
 function Stop-Splash {
@@ -748,6 +769,7 @@ function Show-GoalGif($Res, [string]$Who, [bool]$Ours) {
   $t.add_Tick({ Close-GoalGif })
   foreach ($c in $f, $pb, $cap, $credit) { $c.add_Click({ Close-GoalGif }) }
   $script:gifPopup = @{ Form = $f; Timer = $t; Image = $img; Path = $Res.Path; Temp = [bool]$Res.Temp }
+  Set-RoundCorners $f
   $f.Show(); $t.Start()
 }
 $script:OnGoal = { param($Goal) Start-GoalGif $Goal }
@@ -923,6 +945,7 @@ $script:updPoll.Interval = 2000
 $script:updPoll.add_Tick({ try { Step-UpdateCheck } catch { } })
 
 $script:form.add_Shown({
+  Set-RoundCorners $script:form
   try {
     Set-Status 'Waiting for Rocket League' $script:C.Amber
     Import-History; Update-Session
