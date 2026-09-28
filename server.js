@@ -265,6 +265,22 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
+  // Field check for tracked players' stats (no names or secrets): how often each optional stat is filled.
+  try {
+    const ms = Object.values(store.matches), c = { matches: ms.length, rows: 0 };
+    const keys = ['loadout', 'avg_boost', 'pct_zero_boost', 'pct_full_boost', 'boost_pickups', 'pct_supersonic'];
+    for (const m of ms) for (const p of m.players || []) if (p && p.tracked) {
+      c.rows++;
+      for (const k of keys) if (p[k] != null) c[k] = (c[k] || 0) + 1;
+      if (+p.pct_zero_boost > 0) c.zero_gt0 = (c.zero_gt0 || 0) + 1;
+      if (p.loadout != null) c.loadout_sample = JSON.stringify(p.loadout).slice(0, 300);
+      if (p.avg_boost != null) (c.avg_boost_vals = c.avg_boost_vals || []).push(p.avg_boost);
+      if (p.pct_full_boost != null) (c.full_vals = c.full_vals || []).push(p.pct_full_boost);
+    }
+    const ev = {}; for (const m of ms) for (const k of Object.keys(m)) ev[k] = 1;
+    c.match_keys = Object.keys(ev).join(',');
+    console.log('stat fields: ' + JSON.stringify(c));
+  } catch (e) { console.log('stat fields failed: ' + e.message); }
   console.log(`rocketdash listening on ${PORT}, data in ${DATA_DIR}`);
   if (process.env.GIPHY_KEY) randomGif().then(g => console.log(g ? `goal GIFs ready: ${gifCache.list.length} for "${GIF_QUERY}"` : 'goal GIFs: GIPHY returned nothing (check GIPHY_KEY)'));
 });
