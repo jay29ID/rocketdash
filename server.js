@@ -244,5 +244,8 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => console.log(`rocketdash listening on ${PORT}, data in ${DATA_DIR}`));
+server.listen(PORT, () => {
+  console.log(`rocketdash listening on ${PORT}, data in ${DATA_DIR}`);
+  if (process.env.GIPHY_KEY) randomGif().then(g => console.log(g ? `goal GIFs ready: ${gifCache.list.length} for "${GIF_QUERY}"` : 'goal GIFs: GIPHY returned nothing (check GIPHY_KEY)'));
+});
 module.exports = { mergeMatch, quality };
