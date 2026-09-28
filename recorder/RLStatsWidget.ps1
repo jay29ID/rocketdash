@@ -31,10 +31,10 @@ function Start-Splash {
     Add-Type -AssemblyName System.Windows.Forms, System.Drawing
     $f = New-Object System.Windows.Forms.Form
     $f.FormBorderStyle = 'None'; $f.StartPosition = 'Manual'; $f.ShowInTaskbar = $false; $f.TopMost = $true
-    $f.ClientSize = New-Object System.Drawing.Size(450, 403)
+    $f.ClientSize = New-Object System.Drawing.Size(450, 513)
     $f.BackColor = [System.Drawing.ColorTranslator]::FromHtml('#12151C')
     $wa = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
-    $f.Location = New-Object System.Drawing.Point(($wa.Right - 470), ($wa.Bottom - 431))
+    $f.Location = New-Object System.Drawing.Point(($wa.Right - 470), ($wa.Bottom - 541))
     try {
       if (Test-Path $Prefs) {
         $p = Get-Content $Prefs -Raw | ConvertFrom-Json
@@ -50,13 +50,13 @@ function Start-Splash {
     $f.add_Paint({
       param($s, $e)
       $g = $e.Graphics; $g.SmoothingMode = 'AntiAlias'
-      $r = New-Object System.Drawing.Rectangle(200, 160, 50, 50)
+      $r = New-Object System.Drawing.Rectangle(200, 215, 50, 50)
       $pen1 = New-Object System.Drawing.Pen($track, 5); $g.DrawEllipse($pen1, $r); $pen1.Dispose()
       $pen2 = New-Object System.Drawing.Pen($blue, 5); $pen2.StartCap = 'Round'; $pen2.EndCap = 'Round'
       $g.DrawArc($pen2, $r, $state.Angle, 90); $pen2.Dispose()
       $sf = New-Object System.Drawing.StringFormat; $sf.Alignment = 'Center'
       $b = New-Object System.Drawing.SolidBrush($muted)
-      $g.DrawString('Loading RL Stats...', $font, $b, (New-Object System.Drawing.RectangleF(0, 226, 450, 24)), $sf); $b.Dispose()
+      $g.DrawString('Loading RL Stats...', $font, $b, (New-Object System.Drawing.RectangleF(0, 281, 450, 24)), $sf); $b.Dispose()
     })
     $t = New-Object System.Windows.Forms.Timer; $t.Interval = 30
     $t.add_Tick({
@@ -120,6 +120,8 @@ $script:F = @{
   Body = UiFont 'Segoe UI' 9
   Bold = UiFont 'Segoe UI Semibold' 9
   Head = UiFont 'Segoe UI' 7.5
+  Tiny = UiFont 'Segoe UI' 6.75
+  Speed = UiFont 'Segoe UI Semibold' 15
   Score = UiFont 'Segoe UI Semibold' 22
   Dot = UiFont 'Segoe UI' 11
 }
@@ -139,7 +141,7 @@ $script:form = New-Object System.Windows.Forms.Form
 $script:form.Text = 'RL Stats'
 $script:form.FormBorderStyle = 'None'
 $script:form.StartPosition = 'Manual'
-$script:form.ClientSize = New-Object System.Drawing.Size(360, 322)
+$script:form.ClientSize = New-Object System.Drawing.Size(360, 410)
 $script:form.BackColor = $script:C.Bg
 $script:form.TopMost = $true
 $script:form.ShowInTaskbar = $true
@@ -171,9 +173,9 @@ $script:form.Controls.AddRange(@($script:blueName, $script:orangeName, $script:s
 
 # players table: an icon and the full stat name over each column
 $script:cols = @(@{ K = 'Goals'; T = 'Goals' }, @{ K = 'Assists'; T = 'Assists' }, @{ K = 'Shots'; T = 'Shots' }, @{ K = 'Saves'; T = 'Saves' },
-  @{ K = 'Demos'; T = 'Demos' }, @{ K = 'Boost'; T = 'Boost' })
+  @{ K = 'Demos'; T = 'Demos' })
 $script:tableTop = 102
-$script:colX = 112; $script:colW = 40
+$script:colX = 112; $script:colW = 46
 $script:sep1 = New-Object System.Windows.Forms.Panel
 $script:sep1.Location = New-Object System.Drawing.Point(12, ($script:tableTop - 4)); $script:sep1.Size = New-Object System.Drawing.Size(336, 1); $script:sep1.BackColor = $script:C.Line
 $script:form.Controls.Add($script:sep1)
@@ -239,55 +241,137 @@ for ($i = 0; $i -lt $script:cols.Count; $i++) {
   $script:form.Controls.Add((New-Label $script:cols[$i].T $x ($script:tableTop + 16) $script:colW 16 $script:F.Head $script:C.Muted 'MiddleCenter'))
 }
 $script:rows = @{}
+# Live boost and speed per tracked player, drawn by the boost meters and the speedometer.
+$script:Live = @{}
+$script:PColor = @($script:C.Blue, $script:C.Orange, $script:C.Win)
+function New-Canvas([int]$X, [int]$Y, [int]$W, [int]$H) {
+  $p = New-Object System.Windows.Forms.Panel
+  $p.Location = New-Object System.Drawing.Point($X, $Y); $p.Size = New-Object System.Drawing.Size($W, $H); $p.BackColor = $script:C.Bg
+  $p.GetType().GetProperty('DoubleBuffered', [Reflection.BindingFlags]'NonPublic,Instance').SetValue($p, $true, $null)
+  return $p
+}
 for ($r = 0; $r -lt $TrackedPlayers.Count -and $r -lt 3; $r++) {
-  $y = $script:tableTop + 36 + $r * 22
-  $cells = @{ Name = (New-Label $TrackedPlayers[$r] 16 $y 96 20 $script:F.Bold $script:C.Text) }
+  $y = $script:tableTop + 36 + $r * 30
+  $name = $TrackedPlayers[$r]
+  $cells = @{ Name = (New-Label $name 16 $y 96 20 $script:F.Bold $script:C.Text) }
   $script:form.Controls.Add($cells.Name)
   for ($i = 0; $i -lt $script:cols.Count; $i++) {
     $cells[$script:cols[$i].K] = New-Label '-' ($script:colX + $i * $script:colW) $y $script:colW 20 $script:F.Body $script:C.Text 'MiddleCenter'
     $script:form.Controls.Add($cells[$script:cols[$i].K])
   }
-  $script:rows[$TrackedPlayers[$r]] = $cells
+  # boost meter under the row
+  $meter = New-Canvas 16 ($y + 21) 328 8
+  $meter.Tag = @{ Name = $name; Color = $script:PColor[$r] }
+  $meter.add_Paint({
+    param($s, $e)
+    $g = $e.Graphics; $g.SmoothingMode = 'AntiAlias'
+    $t = $s.Tag; $w = $s.ClientSize.Width; $h = $s.ClientSize.Height
+    $lw = [int]($w * 0.12)                        # room for the number on the right
+    $bw = $w - $lw - 4
+    $track = New-Object System.Drawing.SolidBrush($script:C.Line); $g.FillRectangle($track, 0, [int]($h * 0.2), $bw, [int]($h * 0.6)); $track.Dispose()
+    $v = $null; if ($script:Live.ContainsKey($t.Name)) { $v = $script:Live[$t.Name].Boost }
+    if ($null -ne $v) {
+      $fillW = [int]($bw * [math]::Max(0, [math]::Min(100, $v)) / 100)
+      $c = $t.Color; if ($v -le 0) { $c = $script:C.Loss }
+      $fb = New-Object System.Drawing.SolidBrush($c); $g.FillRectangle($fb, 0, [int]($h * 0.2), $fillW, [int]($h * 0.6)); $fb.Dispose()
+      $tb = New-Object System.Drawing.SolidBrush($script:C.Muted)
+      $sf = New-Object System.Drawing.StringFormat; $sf.Alignment = 'Far'; $sf.LineAlignment = 'Center'
+      $g.DrawString(([string][int]$v), $script:F.Tiny, $tb, (New-Object System.Drawing.RectangleF(($w - $lw), -2, $lw, ($h + 4))), $sf); $tb.Dispose()
+    }
+  })
+  $script:form.Controls.Add($meter)
+  $cells.Meter = $meter
+  $script:rows[$name] = $cells
 }
 
+# Speedometer: one needle per player, 0 to 100 km/h, supersonic from 79 km/h (2200 uu/s).
+$script:gauge = New-Canvas 16 ($script:tableTop + 36 + 2 * 30 + 2) 328 72
+$script:gauge.add_Paint({
+  param($s, $e)
+  $g = $e.Graphics; $g.SmoothingMode = 'AntiAlias'; $g.TextRenderingHint = 'AntiAliasGridFit'
+  $w = $s.ClientSize.Width; $h = $s.ClientSize.Height; $k = $w / 328.0
+  $rad = [int](62 * $k); $cx = [int]($w / 2); $cy = $h - [int](6 * $k)
+  $box = New-Object System.Drawing.Rectangle(($cx - $rad), ($cy - $rad), (2 * $rad), (2 * $rad))
+  $pw = [single](7 * $k)
+  $p1 = New-Object System.Drawing.Pen($script:C.Line, $pw); $g.DrawArc($p1, $box, 180, 180); $p1.Dispose()
+  $p2 = New-Object System.Drawing.Pen($script:C.Loss, $pw); $g.DrawArc($p2, $box, (180 + 180 * 0.79), (180 * 0.21)); $p2.Dispose()
+  $tick = New-Object System.Drawing.Pen($script:C.Muted, [single](1.2 * $k))
+  $tb = New-Object System.Drawing.SolidBrush($script:C.Muted)
+  $sf = New-Object System.Drawing.StringFormat; $sf.Alignment = 'Center'; $sf.LineAlignment = 'Center'
+  foreach ($v in 0, 20, 40, 60, 80, 100) {
+    $a = [math]::PI * (1 + $v / 100)
+    $x1 = $cx + ($rad - 8 * $k) * [math]::Cos($a); $y1 = $cy + ($rad - 8 * $k) * [math]::Sin($a)
+    $x2 = $cx + ($rad - 13 * $k) * [math]::Cos($a); $y2 = $cy + ($rad - 13 * $k) * [math]::Sin($a)
+    $g.DrawLine($tick, [single]$x1, [single]$y1, [single]$x2, [single]$y2)
+    $xt = $cx + ($rad - 22 * $k) * [math]::Cos($a); $yt = $cy + ($rad - 22 * $k) * [math]::Sin($a)
+    $g.DrawString([string]$v, $script:F.Tiny, $tb, [single]$xt, [single]$yt, $sf)
+  }
+  $tick.Dispose()
+  $g.DrawString('km/h', $script:F.Tiny, $tb, [single]$cx, [single]($cy - 14 * $k), $sf)
+  # needles and the readouts either side
+  for ($r = 0; $r -lt $TrackedPlayers.Count -and $r -lt 2; $r++) {
+    $n = $TrackedPlayers[$r]; $col = $script:PColor[$r]
+    $v = $null; if ($script:Live.ContainsKey($n)) { $v = $script:Live[$n].Speed }
+    $short = ($n -split '\s+')[0] -replace '\d.*$', ''
+    if ($short) { $short = $short.Substring(0, 1).ToUpper() + $short.Substring(1) } else { $short = $n }
+    $nb = New-Object System.Drawing.SolidBrush($col)
+    $big = if ($null -eq $v) { '-' } else { [string][int]$v }
+    $rs = New-Object System.Drawing.StringFormat; $rs.LineAlignment = 'Center'
+    $rx = 0; if ($r -eq 1) { $rs.Alignment = 'Far'; $rx = $w - [int](90 * $k) }
+    $g.DrawString($short, $script:F.Small, $nb, (New-Object System.Drawing.RectangleF($rx, (8 * $k), (90 * $k), (18 * $k))), $rs)
+    $g.DrawString($big, $script:F.Speed, $nb, (New-Object System.Drawing.RectangleF($rx, (24 * $k), (90 * $k), (30 * $k))), $rs)
+    if ($null -ne $v) {
+      if ($script:Live[$n].Super) { $g.DrawString('SUPERSONIC', $script:F.Tiny, $nb, (New-Object System.Drawing.RectangleF($rx, (52 * $k), (90 * $k), (16 * $k))), $rs) }
+      $a = [math]::PI * (1 + [math]::Max(0, [math]::Min(100, $v)) / 100)
+      $np = New-Object System.Drawing.Pen($col, [single](3 * $k)); $np.EndCap = 'Round'; $np.StartCap = 'Round'
+      $g.DrawLine($np, [single]$cx, [single]$cy, [single]($cx + ($rad - 12 * $k) * [math]::Cos($a)), [single]($cy + ($rad - 12 * $k) * [math]::Sin($a)))
+      $np.Dispose()
+    }
+    $nb.Dispose()
+  }
+  $hub = New-Object System.Drawing.SolidBrush($script:C.Text); $g.FillEllipse($hub, [single]($cx - 4 * $k), [single]($cy - 4 * $k), [single](8 * $k), [single](8 * $k)); $hub.Dispose()
+  $tb.Dispose()
+})
+$script:form.Controls.Add($script:gauge)
+
 $script:sep2 = New-Object System.Windows.Forms.Panel
-$script:sep2.Location = New-Object System.Drawing.Point(12, 188); $script:sep2.Size = New-Object System.Drawing.Size(336, 1); $script:sep2.BackColor = $script:C.Line
+$script:sep2.Location = New-Object System.Drawing.Point(12, 276); $script:sep2.Size = New-Object System.Drawing.Size(336, 1); $script:sep2.BackColor = $script:C.Line
 $script:form.Controls.Add($script:sep2)
 
-$script:today = New-Label 'Session: no games yet' 16 194 328 20 $script:F.Body $script:C.Text
-$script:sessStats = New-Label '' 16 213 328 18 $script:F.Small $script:C.Text
-$script:streak = New-Label '' 16 232 328 18 $script:F.Small $script:C.Muted
-$script:mmrLabel = New-Label 'MMR: queue a ranked game to read it' 16 250 328 18 $script:F.Small $script:C.Muted
+$script:today = New-Label 'Session: no games yet' 16 282 328 20 $script:F.Body $script:C.Text
+$script:sessStats = New-Label '' 16 301 328 18 $script:F.Small $script:C.Text
+$script:streak = New-Label '' 16 320 328 18 $script:F.Small $script:C.Muted
+$script:mmrLabel = New-Label 'MMR: queue a ranked game to read it' 16 338 328 18 $script:F.Small $script:C.Muted
 $script:form.Controls.AddRange(@($script:today, $script:sessStats, $script:streak, $script:mmrLabel))
 
 # who's watching + drinks: stamped onto every match saved while they're set
 $script:Watching = New-Object System.Collections.Generic.List[string]
 $script:Drinks = 0
-$script:form.Controls.Add((New-Label 'Watching' 16 274 56 18 $script:F.Small $script:C.Muted))
+$script:form.Controls.Add((New-Label 'Watching' 16 362 56 18 $script:F.Small $script:C.Muted))
 $script:specLabels = @{}
 $x = 72
 foreach ($name in $Spectators) {
   $w = [math]::Max(44, 18 + 7 * $name.Length)
-  $l = New-Label '' $x 274 $w 18 $script:F.Small $script:C.Muted
+  $l = New-Label '' $x 362 $w 18 $script:F.Small $script:C.Muted
   $l.Cursor = [System.Windows.Forms.Cursors]::Hand; $l.Tag = $name
   $l.add_Click({ param($s, $e) Switch-Spectator ([string]$s.Tag) })
   $script:specLabels[$name] = $l; $script:form.Controls.Add($l)
   $x += $w + 2
 }
-$script:drinksLabel = New-Label 'Drinks' 250 274 40 18 $script:F.Small $script:C.Muted
-$script:drinksMinus = New-Label '-' 290 272 16 20 $script:F.Bold $script:C.Blue 'MiddleCenter'
-$script:drinksCount = New-Label '0' 306 274 22 18 $script:F.Bold $script:C.Text 'MiddleCenter'
-$script:drinksPlus = New-Label '+' 328 272 16 20 $script:F.Bold $script:C.Blue 'MiddleCenter'
+$script:drinksLabel = New-Label 'Drinks' 250 362 40 18 $script:F.Small $script:C.Muted
+$script:drinksMinus = New-Label '-' 290 360 16 20 $script:F.Bold $script:C.Blue 'MiddleCenter'
+$script:drinksCount = New-Label '0' 306 362 22 18 $script:F.Bold $script:C.Text 'MiddleCenter'
+$script:drinksPlus = New-Label '+' 328 360 16 20 $script:F.Bold $script:C.Blue 'MiddleCenter'
 foreach ($l in $script:drinksMinus, $script:drinksPlus) { $l.Cursor = [System.Windows.Forms.Cursors]::Hand }
 $script:drinksParts = @($script:drinksLabel, $script:drinksMinus, $script:drinksCount, $script:drinksPlus)
 foreach ($l in $script:drinksParts) { $l.Visible = $false }
 $script:form.Controls.AddRange($script:drinksParts)
 
 # footer links
-$script:openLink = New-Label 'Open data folder' 16 298 96 18 $script:F.Small $script:C.Blue
-$script:mmrLink = New-Label 'Type MMR' 114 298 62 18 $script:F.Small $script:C.Blue
-$script:dashLink = New-Label 'Open dashboard' 178 298 92 18 $script:F.Small $script:C.Blue
-$script:checkLink = New-Label 'Check updates' 270 298 86 18 $script:F.Small $script:C.Blue
+$script:openLink = New-Label 'Open data folder' 16 386 96 18 $script:F.Small $script:C.Blue
+$script:mmrLink = New-Label 'Type MMR' 114 386 62 18 $script:F.Small $script:C.Blue
+$script:dashLink = New-Label 'Open dashboard' 178 386 92 18 $script:F.Small $script:C.Blue
+$script:checkLink = New-Label 'Check updates' 270 386 86 18 $script:F.Small $script:C.Blue
 foreach ($l in $script:openLink, $script:mmrLink, $script:dashLink, $script:checkLink) { $l.Cursor = [System.Windows.Forms.Cursors]::Hand }
 $script:form.Controls.AddRange(@($script:openLink, $script:mmrLink, $script:dashLink, $script:checkLink))
 
@@ -439,6 +523,11 @@ function Set-PlayerRows($Players, [string]$Mode) {
       }
       if ($null -eq $v) { $cells[$col.K].Text = '-' } else { $cells[$col.K].Text = [string][math]::Round([double]$v) }
     }
+    if ($Mode -eq 'live' -and $p) {
+      $sp = Get-Field $p 'Speed'; if ($null -ne $sp) { $sp = [double]$sp; if ($sp -gt 300) { $sp = $sp * 0.036 } }   # uu/s to km/h
+      $script:Live[$name] = @{ Boost = (Get-Field $p 'Boost'); Speed = $sp; Super = [bool](Get-Field $p 'bSupersonic') }
+    } else { [void]$script:Live.Remove($name) }
+    $cells.Meter.Invalidate()
     $cells.Name.ForeColor = $script:C.Text
     if ($p) {
       $team = Get-Field $p 'TeamNum'; if ($null -eq $team) { $team = Get-Field $p 'team' }
@@ -697,6 +786,7 @@ $script:OnState = {
   $script:sub.Text = (@($pl, (Format-Clock (Get-Prop $game 'TimeSeconds') ([bool](Get-Prop $game 'bOvertime' $false)))) | Where-Object { $_ }) -join '   '
   $script:sub.ForeColor = $script:C.Muted
   Set-PlayerRows @(Get-Prop $Data 'Players' @()) 'live'
+  $script:gauge.Invalidate()
   if (-not $script:InMatch) { $script:InMatch = $true; Set-Status 'In a match' $script:C.Blue }
 }
 
@@ -710,6 +800,7 @@ $script:OnMatchSaved = {
   $script:sub.Text = ('{0}  {1}' -f $Record.result.ToUpper(), $Record.playlist)
   $script:sub.ForeColor = $color
   Set-PlayerRows @($Record.players) 'saved'
+  $script:gauge.Invalidate()
   Set-Status 'Match saved, waiting for the next one' $script:C.Win
   Update-Session
   Update-Mmr
