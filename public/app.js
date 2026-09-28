@@ -148,7 +148,8 @@ function toMatch(r){
   const goals=rawGoals.filter(g=>!timed||+g.goal_time>0).map(g=>{
     const team=num(g.team), f=team===1?-1:1, s=g.shot_from, i=g.impact;
     const ours=g.ours!=null?!!g.ours:(myTeam!=null&&team===myTeam);
-    const who=ours?PLAYERS.findIndex(p=>p.name===(g.shot_from_player||g.scorer)):-1;
+    // Credit the goal to whoever the game credits; the last hit can be an opponent's deflection.
+    const who=ours?PLAYERS.findIndex(p=>p.name===(PLAYERS.some(q=>q.name===g.scorer)?g.scorer:g.shot_from_player)):-1;
     return {ours,who,spd:num(g.speed)!=null?Math.round(+g.speed):null,
       x:co(s,'X')!=null?f*co(s,'X'):null,y:co(s,'Y')!=null?f*co(s,'Y'):null,
       ix:co(i,'X')!=null?f*co(i,'X'):null,iz:co(i,'Z')};
