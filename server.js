@@ -158,6 +158,13 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, fs.readFileSync(path.join(RECORDER, name)), 'application/octet-stream');
     }
 
+    // The widget's "Open dashboard" link: trades the upload key for the private share link.
+    if (p === '/api/view-link') {
+      if (!UPLOAD_KEY || !same(req.headers['x-upload-key'] || '', UPLOAD_KEY)) return send(res, 401, { error: 'bad upload key' });
+      const proto = String(req.headers['x-forwarded-proto'] || 'https').split(',')[0];
+      return send(res, 200, { url: `${proto}://${req.headers.host}/s/${encodeURIComponent(VIEW_KEY)}` });
+    }
+
     if (p.startsWith('/s/')) {
       if (!VIEW_KEY || !same(decodeURIComponent(p.slice(3)), VIEW_KEY)) return send(res, 403, LOCKED, 'text/html; charset=utf-8');
       return send(res, 302, '', 'text/plain', {

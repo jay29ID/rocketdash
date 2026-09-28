@@ -134,8 +134,28 @@ $script:form.Controls.AddRange(@($script:today, $script:streak, $script:mmrLabel
 # footer links
 $script:openLink = New-Label 'Open data folder' 16 238 110 18 $script:F.Small $script:C.Blue
 $script:mmrLink = New-Label 'Type MMR' 132 238 70 18 $script:F.Small $script:C.Blue
-foreach ($l in $script:openLink, $script:mmrLink) { $l.Cursor = [System.Windows.Forms.Cursors]::Hand }
-$script:form.Controls.AddRange(@($script:openLink, $script:mmrLink))
+$script:dashLink = New-Label 'Open dashboard' 214 238 110 18 $script:F.Small $script:C.Blue
+foreach ($l in $script:openLink, $script:mmrLink, $script:dashLink) { $l.Cursor = [System.Windows.Forms.Cursors]::Hand }
+$script:form.Controls.AddRange(@($script:openLink, $script:mmrLink, $script:dashLink))
+
+# Opens the online dashboard. The site hands back its private share link to anyone holding the
+# upload key, so the browser is signed in without the link being stored on this PC.
+function Open-Dashboard {
+  $cfgPath = Join-Path $OutDir 'upload.json'
+  if (-not (Test-Path $cfgPath)) {
+    [void][System.Windows.Forms.MessageBox]::Show('Uploads are not set up on this PC, so there is no dashboard to open. Run RLStats.exe once to set them up.', 'RL Stats', 'OK', 'Information')
+    return
+  }
+  $base = $null
+  try {
+    $cfg = Get-Content $cfgPath -Raw | ConvertFrom-Json
+    $base = ([Uri]$cfg.url).GetLeftPart([UriPartial]::Authority)
+    try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch { }
+    $r = Invoke-RestMethod -Uri "$base/api/view-link" -Headers @{ 'X-Upload-Key' = [string]$cfg.key } -TimeoutSec 6 -UseBasicParsing
+    if ($r.url) { Start-Process ([string]$r.url); return }
+  } catch { }
+  if ($base) { Start-Process $base }
+}
 
 # tray icon
 $script:tray = New-Object System.Windows.Forms.NotifyIcon
@@ -144,6 +164,7 @@ $script:tray.Text = 'RL Stats'
 $script:tray.Visible = $true
 $script:menu = New-Object System.Windows.Forms.ContextMenuStrip
 [void]$script:menu.Items.Add('Show', $null, { $script:form.Show(); $script:form.Activate() })
+[void]$script:menu.Items.Add('Open dashboard', $null, { Open-Dashboard })
 [void]$script:menu.Items.Add('Open data folder', $null, { Start-Process explorer.exe $OutDir })
 [void]$script:menu.Items.Add('Quit', $null, { $script:form.Close() })
 $script:tray.ContextMenuStrip = $script:menu
@@ -174,6 +195,7 @@ $script:pin.add_Click({ Set-Pin (-not $script:form.TopMost) })
 $script:min.add_Click({ $script:form.Hide(); $script:tray.ShowBalloonTip(2000, 'RL Stats', 'Still recording. Double-click the tray icon to bring it back.', 'Info') })
 $script:close.add_Click({ $script:form.Close() })
 $script:openLink.add_Click({ if (-not (Test-Path $OutDir)) { [void](New-Item -ItemType Directory -Path $OutDir) }; Start-Process explorer.exe $OutDir })
+$script:dashLink.add_Click({ Open-Dashboard })
 $script:mmrLink.add_Click({ Start-Process powershell.exe -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ('"' + (Join-Path $script:here 'LogMMR.ps1') + '"')) })
 
 function Set-Status([string]$Text, $Color) { $script:status.Text = $Text; $script:dot.ForeColor = $Color }
