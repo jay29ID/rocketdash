@@ -139,10 +139,13 @@ function toMatch(r){
       air:num(row.pct_air),wall:num(row.pct_wall),ground:num(row.pct_ground),hardest:toKmh(num(row.hardest_hit)),
       pickups:num(row.boost_pickups),car:carName(row.loadout),
       noBoost:row.zero_boost_fixed&&num(row.pct_zero_boost)!=null?num(row.pct_zero_boost)/100*(num(r.duration_seconds)||300):null,
-      goalSpeeds:(r.goals||[]).filter(g=>g&&g.scorer===p.name&&num(g.speed)!=null).map(g=>+g.speed)};
+      goalSpeeds:(r.goals||[]).filter(g=>g&&!(+g.goal_time<=0&&(r.goals||[]).some(x=>x&&+x.goal_time>0))&&g.scorer===p.name&&num(g.speed)!=null).map(g=>+g.speed)};
   });
   const myTeam=num(r.my_team);
-  const goals=(r.goals||[]).filter(Boolean).map(g=>{
+  // The game sends a second, empty GoalScored for most goals (no goal time, no scorer), so a match
+  // stored twice as many goals as were scored. Real goals always have a goal time.
+  const rawGoals=(r.goals||[]).filter(Boolean), timed=rawGoals.some(g=>+g.goal_time>0);
+  const goals=rawGoals.filter(g=>!timed||+g.goal_time>0).map(g=>{
     const team=num(g.team), f=team===1?-1:1, s=g.shot_from, i=g.impact;
     const ours=g.ours!=null?!!g.ours:(myTeam!=null&&team===myTeam);
     const who=ours?PLAYERS.findIndex(p=>p.name===(g.shot_from_player||g.scorer)):-1;

@@ -378,6 +378,9 @@ function Invoke-Message($Msg) {
     }
     'GoalScored'    {
       foreach ($ag in $m.Agg.Values) { $ag.LastBoost = $null }
+      # The game also sends an empty GoalScored (no goal time, no scorer) around most goals; skip it.
+      $gt = Get-Prop $data 'GoalTime'
+      if ($null -eq $gt -or [double]$gt -le 0) { break }
       $last = Get-Prop $data 'BallLastTouch'
       # Shot origin: where the ball was when the last toucher hit it (from BallHit events).
       $shot = $m.LastHitBy[[string](Get-Prop (Get-Prop $last 'Player') 'Name')]

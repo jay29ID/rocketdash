@@ -265,10 +265,6 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  try { // TEMP goal check
-    for (const m of Object.values(store.matches).sort((a, b) => String(a.started_at).localeCompare(String(b.started_at)))) console.log('goal check: ' + JSON.stringify({ at: m.started_at, pl: m.playlist, my: m.my_team, res: m.result, ts: m.team_score, os: m.opponent_score, b: m.blue_score, o: m.orange_score, copies: m.copies,
-      goals: (m.goals || []).map(g => [g.team, g.ours, PLAYERS.includes(g.scorer) ? g.scorer.slice(0, 3) : 'x', g.goal_time, g.impact ? Math.round(g.impact.X) : null]) }));
-  } catch (e) { console.log('goal check failed ' + e.message); }
   console.log(`rocketdash listening on ${PORT}, data in ${DATA_DIR}`);
   if (process.env.GIPHY_KEY) randomGif().then(g => console.log(g ? `goal GIFs ready: ${gifCache.list.length} for "${GIF_QUERY}"` : 'goal GIFs: GIPHY returned nothing (check GIPHY_KEY)'));
 });
