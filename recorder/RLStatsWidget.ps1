@@ -798,7 +798,8 @@ function Set-PlayerRows($Players, [string]$Mode) {
     }
     if ($Mode -eq 'live' -and $p) {
       $sp = Get-Field $p 'Speed'; if ($null -ne $sp) { $sp = [double]$sp; if ($sp -gt 300) { $sp = $sp * 0.036 } }   # uu/s to km/h
-      $script:Live[$name] = @{ Boost = (Get-Field $p 'Boost'); Speed = $sp; Super = [bool](Get-Field $p 'bSupersonic') }
+      $bst = Get-Field $p 'Boost'; if ($null -eq $bst -and $p -isnot [System.Collections.IDictionary]) { $bst = Get-Boost $p }
+      $script:Live[$name] = @{ Boost = $bst; Speed = $sp; Super = [bool](Get-Field $p 'bSupersonic') }
     } else { [void]$script:Live.Remove($name) }
     $cells.Meter.Invalidate()
     $cells.Name.ForeColor = $script:C.Text

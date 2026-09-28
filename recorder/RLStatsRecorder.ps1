@@ -52,6 +52,17 @@ function Get-Prop($Obj, [string]$Name, $Default = $null) {
 
 function Get-Int($Obj, [string]$Name) { [int](Get-Prop $Obj $Name 0) }
 
+# The Stats API leaves zero and false values out of UpdateState, so an empty boost tank arrives as
+# no Boost field at all. Your own team's players always carry some car fields; opponents never do.
+$script:OwnCarFields = 'Boost', 'Speed', 'bHasCar', 'bOnGround', 'bOnWall', 'bBoosting', 'bSupersonic', 'bPowersliding', 'bDemolished'
+function Get-Boost($P) {
+  if ($null -eq $P) { return $null }
+  $b = Get-Prop $P 'Boost'
+  if ($null -ne $b) { return [double]$b }
+  foreach ($k in $script:OwnCarFields) { if ($null -ne $P.PSObject.Properties[$k]) { return 0.0 } }
+  return $null
+}
+
 function Test-StatsApiConfig {
   $roots = @(
     "$env:ProgramFiles\Epic Games\rocketleague",
@@ -148,7 +159,8 @@ function Add-Sample($M, $Data) {
     $name = [string](Get-Prop $p 'Name')
     $loadout = Get-Prop $p 'Loadout'
     if ($name -and $null -ne $loadout) { $M.Loadouts[$name] = $loadout }
-    if (-not $name -or $null -eq (Get-Prop $p 'Boost')) { continue }
+    $boost = Get-Boost $p
+    if (-not $name -or $null -eq $boost) { continue }
     if (-not $M.Agg.ContainsKey($name)) {
       $M.Agg[$name] = @{ N = 0; Boost = 0.0; Zero = 0; Full = 0; Boosting = 0; Super = 0; Ground = 0; Wall = 0; Air = 0
         Slide = 0; Speed = 0.0; MaxSpeed = 0.0; DemoedNow = $false; Demoed = 0 }
@@ -158,11 +170,11 @@ function Add-Sample($M, $Data) {
     if ($demoed -and -not $a.DemoedNow) { $a.Demoed++ }
     $a.DemoedNow = $demoed
     if ($demoed -or -not [bool](Get-Prop $p 'bHasCar' $true)) { continue }
-    $boost = [double](Get-Prop $p 'Boost' 0); $speed = [double](Get-Prop $p 'Speed' 0)
+    $speed = [double](Get-Prop $p 'Speed' 0)
     $ground = [bool](Get-Prop $p 'bOnGround' $false); $wall = [bool](Get-Prop $p 'bOnWall' $false)
     $a.N++; $a.Boost += $boost; $a.Speed += $speed
     if ($speed -gt $a.MaxSpeed) { $a.MaxSpeed = $speed }
-    if ($boost -le 0) { $a.Zero++ }
+    if ($boost -lt 1) { $a.Zero++ }
     if ($boost -ge 100) { $a.Full++ }
     if ([bool](Get-Prop $p 'bBoosting' $false)) { $a.Boosting++ }
     if ([bool](Get-Prop $p 'bSupersonic' $false)) { $a.Super++ }
@@ -174,7 +186,7 @@ function Add-Sample($M, $Data) {
   if ($null -ne $sec -and $sec -ne $M.LastSecond) {
     $M.LastSecond = $sec
     $slim = foreach ($p in @(Get-Prop $Data 'Players' @())) {
-      [ordered]@{ n = Get-Prop $p 'Name'; b = Get-Prop $p 'Boost'; s = Get-Prop $p 'Speed'; sc = Get-Prop $p 'Score' }
+      [ordered]@{ n = Get-Prop $p 'Name'; b = Get-Boost $p; s = Get-Prop $p 'Speed'; sc = Get-Prop $p 'Score' }
     }
     $teamScores = foreach ($t in @(Get-Prop $game 'Teams' @())) { Get-Int $t 'Score' }
     [void]$M.Events.Add([ordered]@{ Event = 'Sample'; Clock = $sec; Overtime = Get-Prop $game 'bOvertime'; Elapsed = Get-Prop $game 'Elapsed'
@@ -229,6 +241,7 @@ function Save-Match($M, [string]$Result, $WinnerTeamNum) {
     if ($a) { $row.times_demolished = $a.Demoed }
     if ($n -gt 0) {
       $row.avg_boost = [math]::Round($a.Boost / $n, 1); $row.pct_zero_boost = Get-Pct $a.Zero $n
+      $row.zero_boost_fixed = $true   # older versions never counted an empty tank
       $row.pct_full_boost = Get-Pct $a.Full $n; $row.pct_boosting = Get-Pct $a.Boosting $n
       $row.pct_supersonic = Get-Pct $a.Super $n; $row.pct_ground = Get-Pct $a.Ground $n
       $row.pct_wall = Get-Pct $a.Wall $n; $row.pct_air = Get-Pct $a.Air $n; $row.pct_powerslide = Get-Pct $a.Slide $n
