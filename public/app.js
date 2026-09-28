@@ -478,7 +478,9 @@ async function load(){
   PLAYERS=names.map((n,j)=>({name:n,short:(s=>s?s[0].toUpperCase()+s.slice(1):n)(n.split(/\s+/)[0].replace(/\d+.*$/,'')),color:j?'var(--p2)':'var(--p1)'}));
   document.querySelectorAll('.tag.p1').forEach(el=>{if(el.closest('header'))el.innerHTML='<i></i>'+esc(PLAYERS[0].name);});
   document.querySelectorAll('.tag.p2').forEach(el=>{if(el.closest('header'))el.innerHTML='<i></i>'+esc(PLAYERS[1].name);});
+  const who=$('mmrWho').value;
   $('mmrWho').innerHTML=PLAYERS.map((p,j)=>`<option value="${j}">${esc(p.name)}</option>`).join('');
+  if(who)$('mmrWho').value=who;
   document.querySelectorAll('#mapWho button[data-w]').forEach(b=>{if(b.dataset.w!=='all')b.textContent=PLAYERS[+b.dataset.w].short;});
   const real=data&&data.matches&&data.matches.some(r=>r&&(r.result==='Win'||r.result==='Loss'));
   SAMPLE=!real;
