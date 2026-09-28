@@ -25,12 +25,33 @@ const plName=p=>p===WARM?'Warm-Ups':p;
 function arenaName(a){if(!a)return 'Unknown arena';const k=String(a).toLowerCase();return ARENA_NAMES[k]||String(a).replace(/_P$/i,'').replace(/_/g,' ');}
 
 // Approximate Ranked Doubles ranges.
-const RANKS=[['Gold III',655],['Platinum I',715],['Platinum II',775],['Platinum III',835],['Diamond I',895],['Diamond II',975],['Diamond III',1055],['Champion I',1175],['Champion II',1295],['Champion III',1415],['Grand Champion I',1575]];
+const RANKS=[['Bronze I',0],['Bronze II',235],['Bronze III',295],['Silver I',355],['Silver II',415],['Silver III',475],
+  ['Gold I',535],['Gold II',595],['Gold III',655],['Platinum I',715],['Platinum II',775],['Platinum III',835],
+  ['Diamond I',895],['Diamond II',975],['Diamond III',1055],['Champion I',1175],['Champion II',1295],['Champion III',1415],
+  ['Grand Champion I',1575],['Grand Champion II',1705],['Grand Champion III',1835],['Supersonic Legend',1875]];
+const rankIndex=v=>{let i=RANKS.length-1;while(i>0&&v<RANKS[i][1])i--;return i;};
+// Rank badges drawn for this page (not the game's artwork): shields for Bronze to Platinum, a gem
+// for Diamond, a crowned gem for Champion, a winged shield for Grand Champion and a winged star
+// for Supersonic Legend. The number of chevrons is the tier (I, II, III).
+const RANK_COL=['#B4733F','#AEB9C6','#E2AE2F','#3FC0D6','#3D7EF2','#9A5CF6','#E0404C','#C9D2DE'];
+function rankBadge(v,size=26){
+  if(v==null)return '';
+  const i=rankIndex(v),fam=Math.min(7,Math.floor(i/3)),n=i%3+1,col=RANK_COL[fam];
+  const cut='var(--surface)';
+  const chev=(y0,step,w)=>{let d='';for(let k=0;k<n;k++){const y=y0+k*step;d+=`<path d="M${12-w} ${y}L12 ${y+w*.6}L${12+w} ${y}" fill="none" stroke="${cut}" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>`;}return d;};
+  let g='';
+  if(fam<=3)g=`<path d="M12 1.8 20.5 4.8V11.5C20.5 16.8 16.8 20.5 12 22.2 7.2 20.5 3.5 16.8 3.5 11.5V4.8Z" fill="${col}"/>`+chev(7.5,3.6,4.2);
+  else if(fam===4)g=`<path d="M6.5 3.5H17.5L22 9 12 21.5 2 9Z" fill="${col}"/><path d="M2 9H22" stroke="${cut}" stroke-width="1" opacity=".6"/>`+chev(11,2.8,3.4);
+  else if(fam===5)g=`<path d="M4 7 7.5 9.5 12 3 16.5 9.5 20 7 18.5 12 12 22 5.5 12Z" fill="${col}"/>`+chev(11,2.8,3.4);
+  else if(fam===6)g=`<path d="M1 5C3 9 5.5 10.5 8 10.5L7 14C3.8 13.2 1.8 10 1 5ZM23 5C21 9 18.5 10.5 16 10.5L17 14C20.2 13.2 22.2 10 23 5Z" fill="${col}" opacity=".85"/><path d="M12 2.5 17.5 5V11.5C17.5 15.8 15.2 19 12 21 8.8 19 6.5 15.8 6.5 11.5V5Z" fill="${col}"/>`+chev(7.5,3.4,3.2);
+  else g=`<path d="M1 6C3 10 5.5 11.5 8 11.5L7 15C3.8 14.2 1.8 11 1 6ZM23 6C21 10 18.5 11.5 16 11.5L17 15C20.2 14.2 22.2 11 23 6Z" fill="${col}" stroke="var(--ink-2)" stroke-width=".6"/><path d="M12 2.5 14.6 8.6 21 9.1 16.1 13.3 17.6 19.8 12 16.4 6.4 19.8 7.9 13.3 3 9.1 9.4 8.6Z" fill="${col}" stroke="var(--ink-2)" stroke-width=".8" stroke-linejoin="round"/>`;
+  return `<svg class="rkb" viewBox="0 0 24 24" width="${size}" height="${size}" aria-hidden="true">${g}</svg>`;
+}
 function rankOf(v){
   if(v==null)return 'No MMR yet';
-  if(v<RANKS[0][1])return 'Below Gold III';
-  let i=RANKS.length-1; while(i>0&&v<RANKS[i][1])i--;
-  const lo=RANKS[i][1], hi=RANKS[i+1]?RANKS[i+1][1]:lo+160;
+  const i=rankIndex(v);
+  if(i===RANKS.length-1)return RANKS[i][0];
+  const lo=RANKS[i][1], hi=RANKS[i+1][1];
   const div=Math.min(4,Math.floor((v-lo)/((hi-lo)/4))+1);
   return RANKS[i][0]+' · Div '+['I','II','III','IV'][div-1];
 }
@@ -200,7 +221,7 @@ function renderSummary(list){
   $('kStreakSub').textContent=all.cur?all.cur+(all.curW?(all.cur>1?' wins':' win'):(all.cur>1?' losses':' loss'))+' in a row, across sessions':'';
   $('kBestW').textContent=st.bestW;$('kBestL').textContent=st.bestL;
   $('kRankLabel').textContent=mmrPlaylist()+' rank';
-  $('kRanks').innerHTML=PLAYERS.map((p,j)=>{const v=mmrAt(j,Infinity);return `<span class="who"><i style="background:${p.color}"></i>${esc(p.short)}</span><span class="rk">${esc(rankOf(v))}</span><span class="mmr">${v==null?'':v}</span>`;}).join('');
+  $('kRanks').innerHTML=PLAYERS.map((p,j)=>{const v=mmrAt(j,Infinity);return `<span class="who"><i style="background:${p.color}"></i>${esc(p.short)}</span><span class="rk">${rankBadge(v)}<span>${esc(rankOf(v))}</span></span><span class="mmr">${v==null?'':v}</span>`;}).join('');
   const d=PLAYERS.map((p,j)=>{const now=mmrAt(j,Infinity),then=mmrAt(j,NOW-30*DAY);return now!=null&&then!=null?now-then:null;});
   $('kRankSub').textContent=d.some(v=>v!=null)?'30-day change: '+PLAYERS.map((p,j)=>d[j]==null?null:p.short+' '+sign(d[j])).filter(Boolean).join(', '):'';
   $('rangeText').textContent=list.length?(list.length===1?`${fmtDate(list[0].when)} ${fmtTime(list[0].when)} · 1 match`:`${fmtDate(list[0].when)} to ${fmtDate(list[list.length-1].when)} · ${list.length} matches`):'No matches in this period';
