@@ -208,6 +208,7 @@ $script:header.Location = New-Object System.Drawing.Point(0, 0); $script:header.
 $script:form.Controls.Add($script:header)
 $script:dot = New-Label $script:Bullet 8 4 18 22 $script:F.Dot $script:C.Amber 'MiddleCenter'
 $script:status = New-Label 'Starting...' 28 5 206 20 $script:F.Small $script:C.Muted
+$script:status.AutoEllipsis = $true
 $script:updLink = New-Label 'Update' 168 5 66 20 $script:F.Bold $script:C.Win 'MiddleCenter'
 $script:updLink.Visible = $false
 $script:pin = New-Label 'Pin' 262 5 30 20 $script:F.Small $script:C.Text 'MiddleCenter'
@@ -229,7 +230,7 @@ $script:form.Controls.AddRange(@($script:blueName, $script:orangeName, $script:s
 $script:cols = @(@{ K = 'Goals'; T = 'Goals' }, @{ K = 'Assists'; T = 'Assists' }, @{ K = 'Shots'; T = 'Shots' }, @{ K = 'Saves'; T = 'Saves' },
   @{ K = 'Demos'; T = 'Demos' }, @{ K = 'CarTouches'; T = 'Bumps'; Saved = 'car_touches' })
 $script:tableTop = 112
-$script:colX = 112; $script:colW = 39
+$script:colX = 100; $script:colW = 41
 $script:sep1 = New-Object System.Windows.Forms.Panel
 $script:sep1.Location = New-Object System.Drawing.Point(12, ($script:tableTop - 4)); $script:sep1.Size = New-Object System.Drawing.Size(336, 1); $script:sep1.BackColor = $script:C.Line
 $script:sep1.Visible = ($script:Theme -eq 'classic')   # cyber frames replace the separators
@@ -298,7 +299,7 @@ for ($i = 0; $i -lt $script:cols.Count; $i++) {
   $pb.Location = New-Object System.Drawing.Point(($x + [int](($script:colW - 16) / 2)), $script:tableTop); $pb.Size = New-Object System.Drawing.Size(16, 16)
   try { $pb.Image = New-StatIcon $script:cols[$i].K } catch { }
   $script:form.Controls.Add($pb)
-  $script:form.Controls.Add((New-Label $script:cols[$i].T $x ($script:tableTop + 16) $script:colW 16 $script:F.Head $script:C.Muted 'MiddleCenter'))
+  $script:form.Controls.Add((New-Label $script:cols[$i].T ($x - 2) ($script:tableTop + 16) ($script:colW + 4) 16 $script:F.Tiny $script:C.Muted 'MiddleCenter'))
 }
 $script:rows = @{}
 # Live boost and speed per tracked player, drawn by the boost meters and the speedometer.
@@ -313,7 +314,8 @@ function New-Canvas([int]$X, [int]$Y, [int]$W, [int]$H) {
 for ($r = 0; $r -lt $TrackedPlayers.Count -and $r -lt 3; $r++) {
   $y = $script:tableTop + 36 + $r * 30
   $name = $TrackedPlayers[$r]
-  $cells = @{ Name = (New-Label $name 16 $y 96 20 $script:F.Bold $script:C.Text) }
+  $cells = @{ Name = (New-Label $name 16 $y 86 20 $script:F.Bold $script:C.Text) }
+  $cells.Name.AutoEllipsis = $true
   $script:form.Controls.Add($cells.Name)
   for ($i = 0; $i -lt $script:cols.Count; $i++) {
     $cells[$script:cols[$i].K] = New-Label '-' ($script:colX + $i * $script:colW) $y $script:colW 20 $script:F.Body $script:C.Text 'MiddleCenter'
@@ -399,8 +401,8 @@ $script:sep2.Location = New-Object System.Drawing.Point(12, 300); $script:sep2.S
 $script:sep2.Visible = ($script:Theme -eq 'classic')
 $script:form.Controls.Add($script:sep2)
 
-$script:today = New-Label 'Session: no games yet' 16 308 214 20 $script:F.Body $script:C.Text
-$script:sessWhen = New-Label '' 214 309 132 18 $script:F.Head $script:C.Muted 'MiddleRight'
+$script:today = New-Label 'Session: no games yet' 16 308 186 20 $script:F.Body $script:C.Text
+$script:sessWhen = New-Label '' 190 309 156 18 $script:F.Tiny $script:C.Muted 'MiddleRight'
 $script:sessStats = New-Label '' 16 327 328 18 $script:F.Small $script:C.Text
 $script:streak = New-Label '' 16 346 328 18 $script:F.Small $script:C.Muted
 $script:mmrLabel = New-Label 'MMR: queue a ranked game to read it' 16 364 328 18 $script:F.Small $script:C.Muted
