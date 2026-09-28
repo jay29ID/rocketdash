@@ -194,9 +194,9 @@ $script:form.Controls.AddRange(@($script:blueName, $script:orangeName, $script:s
 
 # players table: an icon and the full stat name over each column
 $script:cols = @(@{ K = 'Goals'; T = 'Goals' }, @{ K = 'Assists'; T = 'Assists' }, @{ K = 'Shots'; T = 'Shots' }, @{ K = 'Saves'; T = 'Saves' },
-  @{ K = 'Demos'; T = 'Demos' })
+  @{ K = 'Demos'; T = 'Demos' }, @{ K = 'CarTouches'; T = 'Bumps'; Saved = 'car_touches' })
 $script:tableTop = 102
-$script:colX = 112; $script:colW = 46
+$script:colX = 112; $script:colW = 39
 $script:sep1 = New-Object System.Windows.Forms.Panel
 $script:sep1.Location = New-Object System.Drawing.Point(12, ($script:tableTop - 4)); $script:sep1.Size = New-Object System.Drawing.Size(336, 1); $script:sep1.BackColor = $script:C.Line
 $script:form.Controls.Add($script:sep1)
@@ -241,6 +241,11 @@ function New-StatIcon([string]$Key) {
       }
       $g.DrawPolygon($pen, $pts.ToArray())
     }
+    'CarTouches' {   # two cars meeting
+      $g.DrawRectangle($pen, 2, 14, 10, 8); $g.DrawRectangle($pen, 20, 14, 10, 8)
+      $g.DrawLine($pen, 16, 6, 16, 11); $g.DrawLine($pen, 12, 8, 14, 11); $g.DrawLine($pen, 20, 8, 18, 11)
+      $g.FillEllipse($br, 3, 23, 4, 4); $g.FillEllipse($br, 25, 23, 4, 4)
+    }
     'Boost' {    # flame
       $path = New-Object System.Drawing.Drawing2D.GraphicsPath
       $path.AddBezier(16, 3, 19, 10, 26, 13, 25, 21); $path.AddBezier(25, 21, 24, 27, 20, 29, 16, 29)
@@ -256,7 +261,7 @@ for ($i = 0; $i -lt $script:cols.Count; $i++) {
   $x = $script:colX + $i * $script:colW
   $pb = New-Object System.Windows.Forms.PictureBox
   $pb.SizeMode = 'Zoom'; $pb.BackColor = [System.Drawing.Color]::Transparent
-  $pb.Location = New-Object System.Drawing.Point(($x + 12), $script:tableTop); $pb.Size = New-Object System.Drawing.Size(16, 16)
+  $pb.Location = New-Object System.Drawing.Point(($x + [int](($script:colW - 16) / 2)), $script:tableTop); $pb.Size = New-Object System.Drawing.Size(16, 16)
   try { $pb.Image = New-StatIcon $script:cols[$i].K } catch { }
   $script:form.Controls.Add($pb)
   $script:form.Controls.Add((New-Label $script:cols[$i].T $x ($script:tableTop + 16) $script:colW 16 $script:F.Head $script:C.Muted 'MiddleCenter'))
@@ -540,6 +545,7 @@ function Set-PlayerRows($Players, [string]$Mode) {
       if ($p) {
         if ($Mode -eq 'live') { $v = Get-Field $p $col.K }
         elseif ($col.K -eq 'Boost') { $v = Get-Field $p 'avg_boost' }
+        elseif ($col.Saved) { $v = Get-Field $p $col.Saved }
         else { $v = Get-Field $p $col.K.ToLower() }
       }
       if ($null -eq $v) { $cells[$col.K].Text = '-' } else { $cells[$col.K].Text = [string][math]::Round([double]$v) }
