@@ -344,22 +344,25 @@ function renderMaps(list){
   $('mapWho').style.visibility=mapSide==='us'?'visible':'hidden';
   const col=g=>g.who>=0?PLAYERS[g.who].color:'var(--opp)';
   const tip=g=>`${g.who>=0?PLAYERS[g.who].short:mapSide==='us'?'Us':'Opponent'}${g.spd!=null?' · '+g.spd+' km/h':''} · ${g.m.us}–${g.m.them} ${g.m.win?'win':'loss'}, ${fmtDate(g.m.when)}`;
-  const W=480,Y0=-1536,Y1=6000,H=Math.round(W*(Y1-Y0)/8192);
+  // Whole pitch, their goal at the top. Goal lines at Y=±5120, nets 880 deep, corners cut 1152.
+  const W=480,Y0=-6000,Y1=6000,H=Math.round(W*(Y1-Y0)/8192);
   const sx=x=>(x+4096)/8192*W,sy=y=>(Y1-y)/(Y1-Y0)*H,su=u=>u/8192*W;
   const cell=512,bins={};
-  shots.forEach(g=>{const c=Math.floor((g.x+4096)/cell),r=Math.floor((g.y-Y0)/cell);if(r<0||c<0||c>15)return;const k=c+','+r;bins[k]=(bins[k]||0)+1;});
-  const bmax=Math.max(1,...Object.values(bins));
-  let f=`<rect x="0" y="${sy(5120)}" width="${W}" height="${sy(Y0)-sy(5120)}" fill="var(--pitch)"/>`;
+  shots.forEach(g=>{const c=Math.floor((clamp(g.x,-4096,4095)+4096)/cell),r=Math.floor((clamp(g.y,-5120,5119)+5120)/cell);const k=c+','+r;bins[k]=(bins[k]||0)+1;});
+  const bmax=Math.max(1,...Object.values(bins)),ch=1152;
+  const ends=s=>{const g=5120*s,c=(5120-ch)*s,n=6000*s;return `L${sx(-4096)},${sy(c)} L${sx(-4096+ch)},${sy(g)} L${sx(-893)},${sy(g)} L${sx(-893)},${sy(n)} L${sx(893)},${sy(n)} L${sx(893)},${sy(g)} L${sx(4096-ch)},${sy(g)} L${sx(4096)},${sy(c)}`;};
+  const outline=`M${sx(-4096)},${sy(0)} ${ends(1)} L${sx(4096)},${sy(-(5120-ch))} L${sx(4096-ch)},${sy(-5120)} L${sx(893)},${sy(-5120)} L${sx(893)},${sy(-6000)} L${sx(-893)},${sy(-6000)} L${sx(-893)},${sy(-5120)} L${sx(-4096+ch)},${sy(-5120)} L${sx(-4096)},${sy(-(5120-ch))} Z`;
+  let f=`<path d="${outline}" fill="var(--pitch)"/>`;
   Object.entries(bins).forEach(([k,n])=>{const [c,r]=k.split(',').map(Number);
-    f+=`<rect x="${sx(c*cell-4096)+.5}" y="${sy(Y0+(r+1)*cell)+.5}" width="${su(cell)-1}" height="${su(cell)-1}" rx="2" fill="${heatColor(n/bmax)}" opacity=".85"><title>${n} goal${n>1?'s':''} from here</title></rect>`;});
-  const ln='stroke="var(--pitch-line)" stroke-width="1.5" fill="none"',ch=1152;
-  f+=`<path d="M${sx(-4096)},${sy(Y0)} L${sx(-4096)},${sy(5120-ch)} L${sx(-4096+ch)},${sy(5120)} L${sx(-893)},${sy(5120)} L${sx(-893)},${sy(6000)} L${sx(893)},${sy(6000)} L${sx(893)},${sy(5120)} L${sx(4096-ch)},${sy(5120)} L${sx(4096)},${sy(5120-ch)} L${sx(4096)},${sy(Y0)}" ${ln}/>`;
-  f+=`<line x1="0" x2="${W}" y1="${sy(0)}" y2="${sy(0)}" ${ln}/><path d="M${sx(-1000)},${sy(0)} A${su(1000)},${su(1000)} 0 0 1 ${sx(1000)},${sy(0)}" ${ln}/>`;
-  f+=`<rect x="${sx(-1800)}" y="${sy(5120)}" width="${su(3600)}" height="${su(1100)}" ${ln}/>`;
-  f+=`<text x="${W/2}" y="${sy(6000)-6}" text-anchor="middle">${mapSide==='us'?'Their goal':'Our goal'}</text><text x="6" y="${sy(0)-5}">Halfway</text>`;
+    f+=`<rect x="${sx(c*cell-4096)+.5}" y="${sy(-5120+(r+1)*cell)+.5}" width="${su(cell)-1}" height="${su(cell)-1}" rx="2" fill="${heatColor(n/bmax)}" opacity=".85"><title>${n} goal${n>1?'s':''} from here</title></rect>`;});
+  const ln='stroke="var(--pitch-line)" stroke-width="1.5" fill="none"';
+  f+=`<path d="${outline}" ${ln}/>`;
+  f+=`<line x1="${sx(-4096)}" x2="${sx(4096)}" y1="${sy(0)}" y2="${sy(0)}" ${ln}/><circle cx="${sx(0)}" cy="${sy(0)}" r="${su(1000)}" ${ln}/>`;
+  f+=`<rect x="${sx(-1800)}" y="${sy(5120)}" width="${su(3600)}" height="${su(1100)}" ${ln}/><rect x="${sx(-1800)}" y="${sy(-4020)}" width="${su(3600)}" height="${su(1100)}" ${ln}/>`;
+  f+=`<text x="${W/2}" y="${sy(6000)-6}" text-anchor="middle">${mapSide==='us'?'Their goal':'Our goal'}</text><text x="${W/2}" y="${sy(-6000)+14}" text-anchor="middle">${mapSide==='us'?'Our goal':'Their goal'}</text>`;
   // Dots stay neutral here so they don't fight the blue-to-red heat; the net view carries who scored.
-  shots.forEach(g=>{f+=`<circle class="dot" cx="${sx(clamp(g.x,-4096,4096))}" cy="${sy(clamp(g.y,Y0,5120))}" r="2.5" fill="#fff" fill-opacity=".9" stroke="#0b1017" stroke-opacity=".6" stroke-width="1"><title>${esc(tip(g))}</title></circle>`;});
-  $('fieldMap').innerHTML=`<svg viewBox="0 -18 ${W} ${H+18}" role="img" aria-label="Top-down field with ${shots.length} shot locations">${f}</svg>`;
+  shots.forEach(g=>{f+=`<circle class="dot" cx="${sx(clamp(g.x,-4096,4096))}" cy="${sy(clamp(g.y,-5120,5120))}" r="2.5" fill="#fff" fill-opacity=".9" stroke="#0b1017" stroke-opacity=".6" stroke-width="1"><title>${esc(tip(g))}</title></circle>`;});
+  $('fieldMap').innerHTML=`<svg viewBox="0 -18 ${W} ${H+36}" role="img" aria-label="Top-down field with ${shots.length} shot locations">${f}</svg>`;
   const NW=440,m=24,NH=Math.round((NW-2*m)*642/1786)+m+22;
   const nx=x=>m+(clamp(x,-893,893)+893)/1786*(NW-2*m),nz=z=>m+(642-clamp(z,0,642))/642*(NH-m-22);
   let n=`<rect x="${nx(-893)}" y="${nz(642)}" width="${nx(893)-nx(-893)}" height="${nz(0)-nz(642)}" fill="var(--surface-2)"/>`;
