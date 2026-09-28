@@ -31,10 +31,10 @@ function Start-Splash {
     Add-Type -AssemblyName System.Windows.Forms, System.Drawing
     $f = New-Object System.Windows.Forms.Form
     $f.FormBorderStyle = 'None'; $f.StartPosition = 'Manual'; $f.ShowInTaskbar = $false; $f.TopMost = $true
-    $f.ClientSize = New-Object System.Drawing.Size(360, 306)
+    $f.ClientSize = New-Object System.Drawing.Size(450, 403)
     $f.BackColor = [System.Drawing.ColorTranslator]::FromHtml('#12151C')
     $wa = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
-    $f.Location = New-Object System.Drawing.Point(($wa.Right - 380), ($wa.Bottom - 334))
+    $f.Location = New-Object System.Drawing.Point(($wa.Right - 470), ($wa.Bottom - 431))
     try {
       if (Test-Path $Prefs) {
         $p = Get-Content $Prefs -Raw | ConvertFrom-Json
@@ -45,18 +45,18 @@ function Start-Splash {
     $state = @{ Angle = 0; Ticks = 0 }
     $blue = [System.Drawing.ColorTranslator]::FromHtml('#4DA3FF'); $track = [System.Drawing.ColorTranslator]::FromHtml('#262C3A')
     $muted = [System.Drawing.ColorTranslator]::FromHtml('#8A93A6')
-    $font = New-Object System.Drawing.Font('Segoe UI', 9)
+    $font = New-Object System.Drawing.Font('Segoe UI', 11)
     $f.GetType().GetProperty('DoubleBuffered', [Reflection.BindingFlags]'NonPublic,Instance').SetValue($f, $true, $null)
     $f.add_Paint({
       param($s, $e)
       $g = $e.Graphics; $g.SmoothingMode = 'AntiAlias'
-      $r = New-Object System.Drawing.Rectangle(160, 118, 40, 40)
-      $pen1 = New-Object System.Drawing.Pen($track, 4); $g.DrawEllipse($pen1, $r); $pen1.Dispose()
-      $pen2 = New-Object System.Drawing.Pen($blue, 4); $pen2.StartCap = 'Round'; $pen2.EndCap = 'Round'
+      $r = New-Object System.Drawing.Rectangle(200, 160, 50, 50)
+      $pen1 = New-Object System.Drawing.Pen($track, 5); $g.DrawEllipse($pen1, $r); $pen1.Dispose()
+      $pen2 = New-Object System.Drawing.Pen($blue, 5); $pen2.StartCap = 'Round'; $pen2.EndCap = 'Round'
       $g.DrawArc($pen2, $r, $state.Angle, 90); $pen2.Dispose()
       $sf = New-Object System.Drawing.StringFormat; $sf.Alignment = 'Center'
       $b = New-Object System.Drawing.SolidBrush($muted)
-      $g.DrawString('Loading RL Stats...', $font, $b, (New-Object System.Drawing.RectangleF(0, 172, 360, 20)), $sf); $b.Dispose()
+      $g.DrawString('Loading RL Stats...', $font, $b, (New-Object System.Drawing.RectangleF(0, 226, 450, 24)), $sf); $b.Dispose()
     })
     $t = New-Object System.Windows.Forms.Timer; $t.Interval = 30
     $t.add_Tick({
@@ -112,12 +112,16 @@ $script:C = @{
   Bg = RGB '#12151C'; Panel = RGB '#1A1F2A'; Line = RGB '#262C3A'; Text = RGB '#E6E9EF'; Muted = RGB '#8A93A6'
   Blue = RGB '#4DA3FF'; Orange = RGB '#FF9F43'; Win = RGB '#3DDC84'; Loss = RGB '#FF5C6C'; Amber = RGB '#F5C04E'
 }
+# The layout below is drawn at 360 wide and then scaled up by UiScale; fonts are scaled to match.
+$script:UiScale = 1.25
+function UiFont([string]$Face, [double]$Pt) { New-Object System.Drawing.Font($Face, [single]($Pt * $script:UiScale)) }
 $script:F = @{
-  Small = New-Object System.Drawing.Font('Segoe UI', 8.25)
-  Body = New-Object System.Drawing.Font('Segoe UI', 9)
-  Bold = New-Object System.Drawing.Font('Segoe UI Semibold', 9)
-  Score = New-Object System.Drawing.Font('Segoe UI Semibold', 22)
-  Dot = New-Object System.Drawing.Font('Segoe UI', 11)
+  Small = UiFont 'Segoe UI' 8.25
+  Body = UiFont 'Segoe UI' 9
+  Bold = UiFont 'Segoe UI Semibold' 9
+  Head = UiFont 'Segoe UI' 7.5
+  Score = UiFont 'Segoe UI Semibold' 22
+  Dot = UiFont 'Segoe UI' 11
 }
 $script:Bullet = [string][char]0x25CF
 $script:Dash = [string][char]0x2013
@@ -135,7 +139,7 @@ $script:form = New-Object System.Windows.Forms.Form
 $script:form.Text = 'RL Stats'
 $script:form.FormBorderStyle = 'None'
 $script:form.StartPosition = 'Manual'
-$script:form.ClientSize = New-Object System.Drawing.Size(360, 306)
+$script:form.ClientSize = New-Object System.Drawing.Size(360, 322)
 $script:form.BackColor = $script:C.Bg
 $script:form.TopMost = $true
 $script:form.ShowInTaskbar = $true
@@ -165,67 +169,125 @@ $script:score = New-Label ("0 $script:Dash 0") 90 34 180 44 $script:F.Score $scr
 $script:sub = New-Label 'Waiting for a match' 16 76 328 18 $script:F.Small $script:C.Muted 'MiddleCenter'
 $script:form.Controls.AddRange(@($script:blueName, $script:orangeName, $script:score, $script:sub))
 
-# players table
-$script:cols = @(@{ K = 'Goals'; T = 'G' }, @{ K = 'Assists'; T = 'A' }, @{ K = 'Shots'; T = 'SH' }, @{ K = 'Saves'; T = 'SV' },
-  @{ K = 'Demos'; T = 'D' }, @{ K = 'Boost'; T = 'BST' })
+# players table: an icon and the full stat name over each column
+$script:cols = @(@{ K = 'Goals'; T = 'Goals' }, @{ K = 'Assists'; T = 'Assists' }, @{ K = 'Shots'; T = 'Shots' }, @{ K = 'Saves'; T = 'Saves' },
+  @{ K = 'Demos'; T = 'Demos' }, @{ K = 'Boost'; T = 'Boost' })
 $script:tableTop = 102
+$script:colX = 112; $script:colW = 40
 $script:sep1 = New-Object System.Windows.Forms.Panel
 $script:sep1.Location = New-Object System.Drawing.Point(12, ($script:tableTop - 4)); $script:sep1.Size = New-Object System.Drawing.Size(336, 1); $script:sep1.BackColor = $script:C.Line
 $script:form.Controls.Add($script:sep1)
-$script:form.Controls.Add((New-Label 'PLAYER' 16 $script:tableTop 120 18 $script:F.Small $script:C.Muted))
+$script:form.Controls.Add((New-Label 'PLAYER' 16 ($script:tableTop + 16) 90 16 $script:F.Head $script:C.Muted))
+
+# Small line icons for each stat, drawn at 32px so they stay sharp after scaling.
+function New-StatIcon([string]$Key) {
+  $bmp = New-Object System.Drawing.Bitmap(32, 32)
+  $g = [System.Drawing.Graphics]::FromImage($bmp); $g.SmoothingMode = 'AntiAlias'
+  $col = $script:C.Muted
+  $pen = New-Object System.Drawing.Pen($col, 2.6); $pen.StartCap = 'Round'; $pen.EndCap = 'Round'; $pen.LineJoin = 'Round'
+  $br = New-Object System.Drawing.SolidBrush($col)
+  switch ($Key) {
+    'Goals' {    # goal frame with net
+      $g.DrawLines($pen, [System.Drawing.PointF[]]@((New-Object System.Drawing.PointF(4, 27)), (New-Object System.Drawing.PointF(4, 7)), (New-Object System.Drawing.PointF(28, 7)), (New-Object System.Drawing.PointF(28, 27))))
+      $thin = New-Object System.Drawing.Pen($col, 1.2)
+      foreach ($x in 10, 16, 22) { $g.DrawLine($thin, $x, 9, $x, 26) }
+      foreach ($y in 13, 19, 25) { $g.DrawLine($thin, 6, $y, 26, $y) }
+      $thin.Dispose()
+    }
+    'Assists' {  # two arrows passing
+      $g.DrawLine($pen, 5, 11, 22, 11); $g.DrawLines($pen, [System.Drawing.PointF[]]@((New-Object System.Drawing.PointF(17, 6)), (New-Object System.Drawing.PointF(22, 11)), (New-Object System.Drawing.PointF(17, 16))))
+      $g.DrawLine($pen, 27, 22, 10, 22); $g.DrawLines($pen, [System.Drawing.PointF[]]@((New-Object System.Drawing.PointF(15, 17)), (New-Object System.Drawing.PointF(10, 22)), (New-Object System.Drawing.PointF(15, 27))))
+    }
+    'Shots' {    # ball with speed lines
+      $g.DrawEllipse($pen, 15, 9, 14, 14)
+      $g.DrawLine($pen, 3, 12, 11, 12); $g.DrawLine($pen, 1, 17, 11, 17); $g.DrawLine($pen, 3, 22, 11, 22)
+    }
+    'Saves' {    # shield
+      $path = New-Object System.Drawing.Drawing2D.GraphicsPath
+      $path.AddLines([System.Drawing.PointF[]]@((New-Object System.Drawing.PointF(16, 3)), (New-Object System.Drawing.PointF(27, 7)), (New-Object System.Drawing.PointF(27, 15))))
+      $path.AddBezier(27, 15, 27, 22, 22, 27, 16, 29); $path.AddBezier(16, 29, 10, 27, 5, 22, 5, 15)
+      $path.AddLines([System.Drawing.PointF[]]@((New-Object System.Drawing.PointF(5, 15)), (New-Object System.Drawing.PointF(5, 7)))); $path.CloseFigure()
+      $g.DrawPath($pen, $path); $path.Dispose()
+      $g.DrawLines($pen, [System.Drawing.PointF[]]@((New-Object System.Drawing.PointF(11, 16)), (New-Object System.Drawing.PointF(15, 20)), (New-Object System.Drawing.PointF(21, 12))))
+    }
+    'Demos' {    # burst
+      $pts = New-Object System.Collections.Generic.List[System.Drawing.PointF]
+      for ($i = 0; $i -lt 16; $i++) {
+        $a = -[math]::PI / 2 + $i * [math]::PI / 8; $r = 13; if ($i % 2) { $r = 6 }
+        $pts.Add((New-Object System.Drawing.PointF([single](16 + $r * [math]::Cos($a)), [single](16 + $r * [math]::Sin($a)))))
+      }
+      $g.DrawPolygon($pen, $pts.ToArray())
+    }
+    'Boost' {    # flame
+      $path = New-Object System.Drawing.Drawing2D.GraphicsPath
+      $path.AddBezier(16, 3, 19, 10, 26, 13, 25, 21); $path.AddBezier(25, 21, 24, 27, 20, 29, 16, 29)
+      $path.AddBezier(16, 29, 12, 29, 7, 27, 7, 21); $path.AddBezier(7, 21, 7, 15, 12, 12, 16, 3); $path.CloseFigure()
+      $g.DrawPath($pen, $path); $path.Dispose()
+      $g.FillEllipse($br, 12, 18, 8, 8)
+    }
+  }
+  $pen.Dispose(); $br.Dispose(); $g.Dispose()
+  return $bmp
+}
 for ($i = 0; $i -lt $script:cols.Count; $i++) {
-  $script:form.Controls.Add((New-Label $script:cols[$i].T (150 + $i * 33) $script:tableTop 33 18 $script:F.Small $script:C.Muted 'MiddleCenter'))
+  $x = $script:colX + $i * $script:colW
+  $pb = New-Object System.Windows.Forms.PictureBox
+  $pb.SizeMode = 'Zoom'; $pb.BackColor = [System.Drawing.Color]::Transparent
+  $pb.Location = New-Object System.Drawing.Point(($x + 12), $script:tableTop); $pb.Size = New-Object System.Drawing.Size(16, 16)
+  try { $pb.Image = New-StatIcon $script:cols[$i].K } catch { }
+  $script:form.Controls.Add($pb)
+  $script:form.Controls.Add((New-Label $script:cols[$i].T $x ($script:tableTop + 16) $script:colW 16 $script:F.Head $script:C.Muted 'MiddleCenter'))
 }
 $script:rows = @{}
 for ($r = 0; $r -lt $TrackedPlayers.Count -and $r -lt 3; $r++) {
-  $y = $script:tableTop + 20 + $r * 22
-  $cells = @{ Name = (New-Label $TrackedPlayers[$r] 16 $y 132 20 $script:F.Bold $script:C.Text) }
+  $y = $script:tableTop + 36 + $r * 22
+  $cells = @{ Name = (New-Label $TrackedPlayers[$r] 16 $y 96 20 $script:F.Bold $script:C.Text) }
   $script:form.Controls.Add($cells.Name)
   for ($i = 0; $i -lt $script:cols.Count; $i++) {
-    $cells[$script:cols[$i].K] = New-Label '-' (150 + $i * 33) $y 33 20 $script:F.Body $script:C.Text 'MiddleCenter'
+    $cells[$script:cols[$i].K] = New-Label '-' ($script:colX + $i * $script:colW) $y $script:colW 20 $script:F.Body $script:C.Text 'MiddleCenter'
     $script:form.Controls.Add($cells[$script:cols[$i].K])
   }
   $script:rows[$TrackedPlayers[$r]] = $cells
 }
 
 $script:sep2 = New-Object System.Windows.Forms.Panel
-$script:sep2.Location = New-Object System.Drawing.Point(12, 172); $script:sep2.Size = New-Object System.Drawing.Size(336, 1); $script:sep2.BackColor = $script:C.Line
+$script:sep2.Location = New-Object System.Drawing.Point(12, 188); $script:sep2.Size = New-Object System.Drawing.Size(336, 1); $script:sep2.BackColor = $script:C.Line
 $script:form.Controls.Add($script:sep2)
 
-$script:today = New-Label 'Session: no games yet' 16 178 328 20 $script:F.Body $script:C.Text
-$script:sessStats = New-Label '' 16 197 328 18 $script:F.Small $script:C.Text
-$script:streak = New-Label '' 16 216 328 18 $script:F.Small $script:C.Muted
-$script:mmrLabel = New-Label 'MMR: queue a ranked game to read it' 16 234 328 18 $script:F.Small $script:C.Muted
+$script:today = New-Label 'Session: no games yet' 16 194 328 20 $script:F.Body $script:C.Text
+$script:sessStats = New-Label '' 16 213 328 18 $script:F.Small $script:C.Text
+$script:streak = New-Label '' 16 232 328 18 $script:F.Small $script:C.Muted
+$script:mmrLabel = New-Label 'MMR: queue a ranked game to read it' 16 250 328 18 $script:F.Small $script:C.Muted
 $script:form.Controls.AddRange(@($script:today, $script:sessStats, $script:streak, $script:mmrLabel))
 
 # who's watching + drinks: stamped onto every match saved while they're set
 $script:Watching = New-Object System.Collections.Generic.List[string]
 $script:Drinks = 0
-$script:form.Controls.Add((New-Label 'Watching' 16 258 56 18 $script:F.Small $script:C.Muted))
+$script:form.Controls.Add((New-Label 'Watching' 16 274 56 18 $script:F.Small $script:C.Muted))
 $script:specLabels = @{}
 $x = 72
 foreach ($name in $Spectators) {
   $w = [math]::Max(44, 18 + 7 * $name.Length)
-  $l = New-Label '' $x 258 $w 18 $script:F.Small $script:C.Muted
+  $l = New-Label '' $x 274 $w 18 $script:F.Small $script:C.Muted
   $l.Cursor = [System.Windows.Forms.Cursors]::Hand; $l.Tag = $name
   $l.add_Click({ param($s, $e) Switch-Spectator ([string]$s.Tag) })
   $script:specLabels[$name] = $l; $script:form.Controls.Add($l)
   $x += $w + 2
 }
-$script:drinksLabel = New-Label 'Drinks' 250 258 40 18 $script:F.Small $script:C.Muted
-$script:drinksMinus = New-Label '-' 290 256 16 20 $script:F.Bold $script:C.Blue 'MiddleCenter'
-$script:drinksCount = New-Label '0' 306 258 22 18 $script:F.Bold $script:C.Text 'MiddleCenter'
-$script:drinksPlus = New-Label '+' 328 256 16 20 $script:F.Bold $script:C.Blue 'MiddleCenter'
+$script:drinksLabel = New-Label 'Drinks' 250 274 40 18 $script:F.Small $script:C.Muted
+$script:drinksMinus = New-Label '-' 290 272 16 20 $script:F.Bold $script:C.Blue 'MiddleCenter'
+$script:drinksCount = New-Label '0' 306 274 22 18 $script:F.Bold $script:C.Text 'MiddleCenter'
+$script:drinksPlus = New-Label '+' 328 272 16 20 $script:F.Bold $script:C.Blue 'MiddleCenter'
 foreach ($l in $script:drinksMinus, $script:drinksPlus) { $l.Cursor = [System.Windows.Forms.Cursors]::Hand }
 $script:drinksParts = @($script:drinksLabel, $script:drinksMinus, $script:drinksCount, $script:drinksPlus)
 foreach ($l in $script:drinksParts) { $l.Visible = $false }
 $script:form.Controls.AddRange($script:drinksParts)
 
 # footer links
-$script:openLink = New-Label 'Open data folder' 16 282 96 18 $script:F.Small $script:C.Blue
-$script:mmrLink = New-Label 'Type MMR' 114 282 62 18 $script:F.Small $script:C.Blue
-$script:dashLink = New-Label 'Open dashboard' 178 282 92 18 $script:F.Small $script:C.Blue
-$script:checkLink = New-Label 'Check updates' 270 282 86 18 $script:F.Small $script:C.Blue
+$script:openLink = New-Label 'Open data folder' 16 298 96 18 $script:F.Small $script:C.Blue
+$script:mmrLink = New-Label 'Type MMR' 114 298 62 18 $script:F.Small $script:C.Blue
+$script:dashLink = New-Label 'Open dashboard' 178 298 92 18 $script:F.Small $script:C.Blue
+$script:checkLink = New-Label 'Check updates' 270 298 86 18 $script:F.Small $script:C.Blue
 foreach ($l in $script:openLink, $script:mmrLink, $script:dashLink, $script:checkLink) { $l.Cursor = [System.Windows.Forms.Cursors]::Hand }
 $script:form.Controls.AddRange(@($script:openLink, $script:mmrLink, $script:dashLink, $script:checkLink))
 
@@ -659,6 +721,9 @@ $script:OnMatchSaved = {
 $script:OnMmr = { param($Sample) Update-Mmr }
 
 # ---- saved window position ----------------------------------------------------------------------
+# Scale the whole layout up, then place it in the bottom-right corner (saved position below wins).
+$script:form.Scale((New-Object System.Drawing.SizeF([single]$script:UiScale, [single]$script:UiScale)))
+$script:form.Location = New-Object System.Drawing.Point(($script:wa.Right - $script:form.Width - 20), ($script:wa.Bottom - $script:form.Height - 28))
 $script:prefsFile = Join-Path $OutDir 'widget.json'
 try {
   if (Test-Path $script:prefsFile) {
