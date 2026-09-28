@@ -36,7 +36,7 @@ $Playlists = @{
 
 # Hooks the widget sets: $script:LogHook (text, color), $script:OnState (UpdateState data),
 # $script:OnMatchSaved (match record).
-$script:LogHook = $null; $script:OnState = $null; $script:OnMatchSaved = $null
+$script:LogHook = $null; $script:OnState = $null; $script:OnMatchSaved = $null; $script:MatchExtras = $null
 
 function Write-Log([string]$Text, [string]$Color = 'Gray') {
   if ($script:LogHook) { & $script:LogHook $Text $Color; return }
@@ -266,6 +266,11 @@ function Save-Match($M, [string]$Result, $WinnerTeamNum) {
 
   $q = $null; if ($playlist) { $q = Get-QueueMmr $playlist $M.StartedAt }
   if ($q) { $record.mmr_at_queue = $q.mmr; $record.mmr_party_size = $q.party_size }
+
+  # Extra fields from the widget (who was watching, drinks).
+  if ($script:MatchExtras) {
+    try { $x = & $script:MatchExtras; foreach ($k in @($x.Keys)) { $record[$k] = $x[$k] } } catch { }
+  }
 
   if (-not (Test-Path $OutDir)) { [void](New-Item -ItemType Directory -Path $OutDir) }
   $script:SavedRecords[$M.Guid] = $record

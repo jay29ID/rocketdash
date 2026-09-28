@@ -6,7 +6,9 @@
 
   Start it with "RL Stats Widget.bat". Closing the window stops recording.
 #>
-param([string[]]$TrackedPlayers = @('jay29ID', 'Kobra Kelvin'), [switch]$NoUpdate)
+param([string[]]$TrackedPlayers = @('jay29ID', 'Kobra Kelvin'), [switch]$NoUpdate,
+  [string[]]$Spectators = @('Morgan', 'Chance', 'Nick'),   # people who might be watching
+  [string]$DrinksPlayer = 'jay29ID')                        # whose widget shows the drinks counter
 
 Add-Type -AssemblyName System.Windows.Forms, System.Drawing
 [System.Windows.Forms.Application]::EnableVisualStyles()
@@ -29,10 +31,10 @@ function Start-Splash {
     Add-Type -AssemblyName System.Windows.Forms, System.Drawing
     $f = New-Object System.Windows.Forms.Form
     $f.FormBorderStyle = 'None'; $f.StartPosition = 'Manual'; $f.ShowInTaskbar = $false; $f.TopMost = $true
-    $f.ClientSize = New-Object System.Drawing.Size(360, 262)
+    $f.ClientSize = New-Object System.Drawing.Size(360, 288)
     $f.BackColor = [System.Drawing.ColorTranslator]::FromHtml('#12151C')
     $wa = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
-    $f.Location = New-Object System.Drawing.Point(($wa.Right - 380), ($wa.Bottom - 290))
+    $f.Location = New-Object System.Drawing.Point(($wa.Right - 380), ($wa.Bottom - 316))
     try {
       if (Test-Path $Prefs) {
         $p = Get-Content $Prefs -Raw | ConvertFrom-Json
@@ -48,13 +50,13 @@ function Start-Splash {
     $f.add_Paint({
       param($s, $e)
       $g = $e.Graphics; $g.SmoothingMode = 'AntiAlias'
-      $r = New-Object System.Drawing.Rectangle(160, 96, 40, 40)
+      $r = New-Object System.Drawing.Rectangle(160, 108, 40, 40)
       $pen1 = New-Object System.Drawing.Pen($track, 4); $g.DrawEllipse($pen1, $r); $pen1.Dispose()
       $pen2 = New-Object System.Drawing.Pen($blue, 4); $pen2.StartCap = 'Round'; $pen2.EndCap = 'Round'
       $g.DrawArc($pen2, $r, $state.Angle, 90); $pen2.Dispose()
       $sf = New-Object System.Drawing.StringFormat; $sf.Alignment = 'Center'
       $b = New-Object System.Drawing.SolidBrush($muted)
-      $g.DrawString('Loading RL Stats...', $font, $b, (New-Object System.Drawing.RectangleF(0, 150, 360, 20)), $sf); $b.Dispose()
+      $g.DrawString('Loading RL Stats...', $font, $b, (New-Object System.Drawing.RectangleF(0, 162, 360, 20)), $sf); $b.Dispose()
     })
     $t = New-Object System.Windows.Forms.Timer; $t.Interval = 30
     $t.add_Tick({
@@ -133,14 +135,14 @@ $script:form = New-Object System.Windows.Forms.Form
 $script:form.Text = 'RL Stats'
 $script:form.FormBorderStyle = 'None'
 $script:form.StartPosition = 'Manual'
-$script:form.ClientSize = New-Object System.Drawing.Size(360, 262)
+$script:form.ClientSize = New-Object System.Drawing.Size(360, 288)
 $script:form.BackColor = $script:C.Bg
 $script:form.TopMost = $true
 $script:form.ShowInTaskbar = $true
 $script:form.Opacity = 0   # shown once everything is loaded, see add_Shown
 
 $script:wa = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
-$script:form.Location = New-Object System.Drawing.Point(($script:wa.Right - 380), ($script:wa.Bottom - 290))
+$script:form.Location = New-Object System.Drawing.Point(($script:wa.Right - 380), ($script:wa.Bottom - 316))
 
 # header
 $script:header = New-Object System.Windows.Forms.Panel
@@ -195,10 +197,33 @@ $script:streak = New-Label '' 16 198 328 18 $script:F.Small $script:C.Muted
 $script:mmrLabel = New-Label 'MMR: queue a ranked game to read it' 16 216 328 18 $script:F.Small $script:C.Muted
 $script:form.Controls.AddRange(@($script:today, $script:streak, $script:mmrLabel))
 
+# who's watching + drinks: stamped onto every match saved while they're set
+$script:Watching = New-Object System.Collections.Generic.List[string]
+$script:Drinks = 0
+$script:form.Controls.Add((New-Label 'Watching' 16 240 56 18 $script:F.Small $script:C.Muted))
+$script:specLabels = @{}
+$x = 72
+foreach ($name in $Spectators) {
+  $w = [math]::Max(44, 18 + 7 * $name.Length)
+  $l = New-Label '' $x 240 $w 18 $script:F.Small $script:C.Muted
+  $l.Cursor = [System.Windows.Forms.Cursors]::Hand; $l.Tag = $name
+  $l.add_Click({ param($s, $e) Switch-Spectator ([string]$s.Tag) })
+  $script:specLabels[$name] = $l; $script:form.Controls.Add($l)
+  $x += $w + 2
+}
+$script:drinksLabel = New-Label 'Drinks' 250 240 40 18 $script:F.Small $script:C.Muted
+$script:drinksMinus = New-Label '-' 290 238 16 20 $script:F.Bold $script:C.Blue 'MiddleCenter'
+$script:drinksCount = New-Label '0' 306 240 22 18 $script:F.Bold $script:C.Text 'MiddleCenter'
+$script:drinksPlus = New-Label '+' 328 238 16 20 $script:F.Bold $script:C.Blue 'MiddleCenter'
+foreach ($l in $script:drinksMinus, $script:drinksPlus) { $l.Cursor = [System.Windows.Forms.Cursors]::Hand }
+$script:drinksParts = @($script:drinksLabel, $script:drinksMinus, $script:drinksCount, $script:drinksPlus)
+foreach ($l in $script:drinksParts) { $l.Visible = $false }
+$script:form.Controls.AddRange($script:drinksParts)
+
 # footer links
-$script:openLink = New-Label 'Open data folder' 16 238 110 18 $script:F.Small $script:C.Blue
-$script:mmrLink = New-Label 'Type MMR' 132 238 70 18 $script:F.Small $script:C.Blue
-$script:dashLink = New-Label 'Open dashboard' 214 238 110 18 $script:F.Small $script:C.Blue
+$script:openLink = New-Label 'Open data folder' 16 264 110 18 $script:F.Small $script:C.Blue
+$script:mmrLink = New-Label 'Type MMR' 132 264 70 18 $script:F.Small $script:C.Blue
+$script:dashLink = New-Label 'Open dashboard' 214 264 110 18 $script:F.Small $script:C.Blue
 foreach ($l in $script:openLink, $script:mmrLink, $script:dashLink) { $l.Cursor = [System.Windows.Forms.Cursors]::Hand }
 $script:form.Controls.AddRange(@($script:openLink, $script:mmrLink, $script:dashLink))
 
@@ -223,7 +248,29 @@ function Open-Dashboard {
 
 # tray icon
 $script:tray = New-Object System.Windows.Forms.NotifyIcon
-$script:tray.Icon = [System.Drawing.SystemIcons]::Application
+# Tray icon: a dark rounded tile with a ball in the status colour (amber waiting, green connected,
+# blue in a match), so you can see what the recorder is doing without opening the widget.
+$script:trayColor = $null
+function Set-TrayIcon($Color) {
+  if ($script:trayColor -eq $Color) { return }
+  $bmp = New-Object System.Drawing.Bitmap(32, 32)
+  $g = [System.Drawing.Graphics]::FromImage($bmp); $g.SmoothingMode = 'AntiAlias'
+  $path = New-Object System.Drawing.Drawing2D.GraphicsPath
+  $path.AddArc(1, 1, 10, 10, 180, 90); $path.AddArc(21, 1, 10, 10, 270, 90)
+  $path.AddArc(21, 21, 10, 10, 0, 90); $path.AddArc(1, 21, 10, 10, 90, 90); $path.CloseFigure()
+  $bg = New-Object System.Drawing.SolidBrush($script:C.Panel); $g.FillPath($bg, $path); $bg.Dispose()
+  $ball = New-Object System.Drawing.SolidBrush($Color); $g.FillEllipse($ball, 7, 7, 18, 18); $ball.Dispose()
+  $pen = New-Object System.Drawing.Pen($script:C.Bg, 1.6)
+  $g.DrawArc($pen, 7, 11, 18, 10, 0, 180); $g.DrawLine($pen, 16, 7, 16, 25); $pen.Dispose()
+  $g.Dispose(); $path.Dispose()
+  $h = $bmp.GetHicon(); $icon = [System.Drawing.Icon]::FromHandle($h)
+  $old = $script:tray.Icon
+  $script:tray.Icon = $icon; $script:trayColor = $Color
+  $script:form.Icon = $icon
+  $bmp.Dispose()
+  if ($old -and $old -ne [System.Drawing.SystemIcons]::Application) { try { $old.Dispose() } catch { } }
+}
+try { Set-TrayIcon $script:C.Amber } catch { $script:tray.Icon = [System.Drawing.SystemIcons]::Application }
 $script:tray.Text = 'RL Stats'
 $script:tray.Visible = $true
 $script:menu = New-Object System.Windows.Forms.ContextMenuStrip
@@ -251,6 +298,31 @@ foreach ($ctl in @($script:form, $script:header, $script:status, $script:dot, $s
   $ctl.add_MouseDown($dragDown); $ctl.add_MouseMove($dragMove); $ctl.add_MouseUp($dragUp)
 }
 
+function Update-Extras {
+  foreach ($name in $script:specLabels.Keys) {
+    $l = $script:specLabels[$name]
+    if ($script:Watching.Contains($name)) { $l.Text = "$script:Bullet $name"; $l.ForeColor = $script:C.Blue }
+    else { $l.Text = "$([char]0x25CB) $name"; $l.ForeColor = $script:C.Muted }
+  }
+  $script:drinksCount.Text = [string]$script:Drinks
+  # The drinks counter only shows on the PC signed in as $DrinksPlayer (read from the game's log).
+  $show = $script:MmrState.Player -eq $DrinksPlayer
+  foreach ($l in $script:drinksParts) { $l.Visible = $show }
+}
+function Switch-Spectator([string]$Name) {
+  if ($script:Watching.Contains($Name)) { [void]$script:Watching.Remove($Name) } else { $script:Watching.Add($Name) }
+  Update-Extras
+}
+$script:drinksPlus.add_Click({ if ($script:Drinks -lt 30) { $script:Drinks++ }; Update-Extras })
+$script:drinksMinus.add_Click({ if ($script:Drinks -gt 0) { $script:Drinks-- }; Update-Extras })
+# Called by the recorder as each match is saved.
+$script:MatchExtras = {
+  $x = [ordered]@{ spectators = @($script:Spectators | Where-Object { $script:Watching.Contains($_) }) }
+  if ($script:MmrState.Player -eq $DrinksPlayer) { $x.drinks = @{ $DrinksPlayer = $script:Drinks } }
+  return $x
+}
+$script:Spectators = $Spectators
+
 function Set-Pin([bool]$On) {
   $script:form.TopMost = $On
   if ($On) { $script:pin.ForeColor = $script:C.Blue } else { $script:pin.ForeColor = $script:C.Muted }
@@ -262,7 +334,11 @@ $script:openLink.add_Click({ if (-not (Test-Path $OutDir)) { [void](New-Item -It
 $script:dashLink.add_Click({ Open-Dashboard })
 $script:mmrLink.add_Click({ Show-TypeMmr })
 
-function Set-Status([string]$Text, $Color) { $script:status.Text = $Text; $script:dot.ForeColor = $Color }
+function Set-Status([string]$Text, $Color) {
+  $script:status.Text = $Text; $script:dot.ForeColor = $Color
+  $script:tray.Text = ('RL Stats: ' + $Text).Substring(0, [math]::Min(63, 10 + $Text.Length))
+  try { Set-TrayIcon $Color } catch { }
+}
 
 function Format-Clock($Seconds, $Overtime) {
   if ($null -eq $Seconds) { return '' }
@@ -475,6 +551,13 @@ try {
     $pt = New-Object System.Drawing.Point([int]$prefs.x, [int]$prefs.y)
     if ([System.Windows.Forms.Screen]::AllScreens | Where-Object { $_.WorkingArea.Contains($pt) }) { $script:form.Location = $pt }
     Set-Pin ([bool]$prefs.pinned)
+    # Watchers and drinks carry over a restart, but not to the next night.
+    $fresh = $false
+    try { $fresh = ((Get-Date) - [datetime]::Parse([string]$prefs.saved_at)).TotalHours -lt 8 } catch { }
+    if ($fresh) {
+      foreach ($n in @($prefs.watching)) { if ($n -and $Spectators -contains $n) { $script:Watching.Add([string]$n) } }
+      if ($prefs.drinks -match '^\d+$') { $script:Drinks = [int]$prefs.drinks }
+    }
   } else { Set-Pin $true }
 } catch { Set-Pin $true }
 
@@ -492,7 +575,7 @@ $script:timer.add_Tick({
 # Refresh "x min ago" once a minute.
 $script:slow = New-Object System.Windows.Forms.Timer
 $script:slow.Interval = 60000
-$script:slow.add_Tick({ try { Update-Session } catch { } })
+$script:slow.add_Tick({ try { Update-Session; Update-Extras } catch { } })
 
 # ---- updates while running ----------------------------------------------------------------------
 # Every 15 minutes a background check compares this install with the dashboard site. When something
@@ -543,7 +626,7 @@ $script:form.add_Shown({
     Import-History; Update-Session
     Test-StatsApiConfig
     Initialize-Upload
-    Initialize-MmrLog; Update-Mmr
+    Initialize-MmrLog; Update-Mmr; Update-Extras
   } catch { Set-Status "Error: $($_.Exception.Message)" $script:C.Loss }
   $script:form.Refresh()
   Stop-Splash
@@ -555,7 +638,8 @@ $script:form.add_FormClosing({
   $script:timer.Stop(); $script:slow.Stop(); $script:updTimer.Stop(); $script:updPoll.Stop()
   try {
     if (-not (Test-Path $OutDir)) { [void](New-Item -ItemType Directory -Path $OutDir) }
-    $json = ConvertTo-Json -InputObject @{ x = $script:form.Left; y = $script:form.Top; pinned = $script:form.TopMost } -Compress
+    $json = ConvertTo-Json -InputObject @{ x = $script:form.Left; y = $script:form.Top; pinned = $script:form.TopMost
+      watching = @($script:Watching); drinks = $script:Drinks; saved_at = (Get-Date).ToString('o') } -Compress
     [IO.File]::WriteAllText($script:prefsFile, $json, $Utf8NoBom)
   } catch { }
   try { Reset-Connection $null } catch { }

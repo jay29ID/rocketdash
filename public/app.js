@@ -59,6 +59,7 @@ function makeSample(names){
     const n=4+Math.floor(rnd()*8), form=norm(0,.09)+(si>=days.length-2?.16:si>12?.04:0);
     let t=start.getTime(),w=0;
     const wn=rnd()<.8?2+Math.floor(rnd()*3):0;   // casual doubles warm-ups first, most nights
+    const crowd=SPECTATORS.filter(()=>rnd()<.35);
     for(let k=0;k<wn+n;k++){
       const warm=k<wn;
       const win=rnd()<clamp((warm?.55:.52)+form*(warm?1.4:1),.2,.85);if(!warm)w+=win?1:-1;
@@ -84,7 +85,7 @@ function makeSample(names){
       matches.push({match_guid:'sample-'+si+'-'+k,started_at:new Date(t).toISOString(),duration_seconds:dur,playlist:warm?'Casual Doubles':'Ranked Doubles',arena:pick(arenas),
         overtime:ot,my_team:my,result:win?'Win':'Loss',team_score:us,opponent_score:them,goals,players,
         replay_created:rnd()<.2?new Date(t+dur*1000).toISOString():null,
-        players_left:rnd()<.08?[{name:'Opponent',team:1-my}]:[]});
+        players_left:rnd()<.08?[{name:'Opponent',team:1-my}]:[],spectators:crowd,drinks:{[names[0]]:Math.floor(k*.7)}});
       t+=(dur+60+Math.floor(rnd()*90))*1000;
     }
     rating=rating.map((v,j)=>Math.round(v+w*(8.5+j)+norm(0,6)));
@@ -96,6 +97,7 @@ function makeSample(names){
 // ---------- model ----------
 let PLAYERS=[], RAW={matches:[],mmr:[]}, SAMPLE=false;
 let ALL=[], DONE=[], sessions=[], NOW=Date.now();
+const SPECTATORS=['Morgan','Chance','Nick'];
 let period='30', mode='avg', metric='winpct', playlist=null, mapSide='us', mapWho='all';
 try{const s=JSON.parse(localStorage.getItem('rl-duo-ui')||'{}');if(s.period)period=s.period;if(s.mode)mode=s.mode;if(s.metric)metric=s.metric;if(s.playlist)playlist=s.playlist;}catch(e){}
 const saveUi=()=>{try{localStorage.setItem('rl-duo-ui',JSON.stringify({period,mode,metric,playlist}))}catch(e){}};
@@ -125,7 +127,9 @@ function toMatch(r){
   return {guid:r.match_guid,when:new Date(r.started_at),win:r.result==='Win',us:num(r.team_score)||0,them:num(r.opponent_score)||0,
     ot:!!r.overtime,dur,arena:arenaName(r.arena),playlist:r.playlist||'Unknown playlist',lines,
     ourGoals:goals.filter(g=>g.ours),theirGoals:goals.filter(g=>!g.ours),
-    replay:!!r.replay_created,left};
+    replay:!!r.replay_created,left,
+    spectators:Array.isArray(r.spectators)?r.spectators.map(String):null,
+    drinks:r.drinks&&num(r.drinks[PLAYERS[0].name])!=null?num(r.drinks[PLAYERS[0].name]):null};
 }
 
 function build(){
@@ -408,6 +412,32 @@ function renderPlay(list){
 // Seconds as 45s, 12m 05s or 3h 04m.
 function fmtDur(s){s=Math.round(s);if(s<60)return s+'s';const m=Math.floor(s/60);if(m<60)return m+'m '+String(s%60).padStart(2,'0')+'s';return Math.floor(m/60)+'h '+String(m%60).padStart(2,'0')+'m';}
 
+// ---------- crowd & drinks ----------
+// Only matches saved by a widget that has the Watching row count here; older ones have no answer.
+function crowdRow(label,sub,l){
+  const w=l.filter(m=>m.win).length,pct=l.length?100*w/l.length:null;
+  const sc=PLAYERS.map((p,j)=>{const v=l.map(m=>m.lines[j]).filter(Boolean);return v.length?p.short+' '+Math.round(v.reduce((a,x)=>a+x.score,0)/v.length):null;}).filter(Boolean).join(' · ');
+  return `<div class="warm-row"><span class="warm-label">${esc(label)}<small>${esc(sub||sc||'No games')}</small></span>
+    <div class="bar"><div class="track"><div class="fill" style="width:${pct==null?0:pct.toFixed(1)}%;background:${pct==null?'transparent':pct>=50?'var(--win)':'var(--loss)'}"></div></div>
+    <span class="val">${pct==null?'–':Math.round(pct)+'%'}</span></div><span class="warm-rec num">${l.length?w+'–'+(l.length-w):''}</span></div>`;
+}
+function renderCrowd(list){
+  const seen=list.filter(m=>m.spectators);
+  const names=[...new Set([...SPECTATORS,...seen.flatMap(m=>m.spectators)])];
+  $('crowdRows').innerHTML=seen.length
+    ?names.map(n=>{const l=seen.filter(m=>m.spectators.includes(n));return crowdRow(n+' watching',l.length?null:'Not yet',l);}).join('')+
+      crowdRow('Nobody watching',null,seen.filter(m=>!m.spectators.length))
+    :'<p class="note">No games recorded with the Watching row yet. Tick who is watching on the widget and it fills in from the next match.</p>';
+  const dk=list.filter(m=>m.drinks!=null);
+  const B=[[0,0,'Sober'],[1,2,'1–2 drinks'],[3,4,'3–4 drinks'],[5,6,'5–6 drinks'],[7,99,'7+ drinks']];
+  $('drinkRows').innerHTML=dk.length
+    ?B.map(([a,b,label])=>{const l=dk.filter(m=>m.drinks>=a&&m.drinks<=b);
+      const j=l.map(m=>m.lines[0]).filter(Boolean);
+      const sub=j.length?`${PLAYERS[0].short} ${Math.round(j.reduce((s,x)=>s+x.score,0)/j.length)} · ${(j.reduce((s,x)=>s+x.goals,0)/j.length).toFixed(2)} goals`:'No games';
+      return crowdRow(label,sub,l);}).join('')
+    :`<p class="note">No drinks logged yet. Use + on ${esc(PLAYERS[0].short)}'s widget as the night goes on.</p>`;
+}
+
 // ---------- match log ----------
 function renderLog(list){
   const rows=[...list].reverse().slice(0,15);
@@ -433,7 +463,7 @@ function syncButtons(){
   document.querySelectorAll('#mode button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.m===mode));
   document.querySelectorAll('#metric button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.k===metric));
 }
-function renderPeriod(){const list=inPeriod();renderSummary(list);renderCmp(list);renderMaps(list);renderPlay(list);renderLog(list);syncButtons();}
+function renderPeriod(){const list=inPeriod();renderSummary(list);renderCmp(list);renderMaps(list);renderPlay(list);renderCrowd(list);renderLog(list);syncButtons();}
 // ---------- warm-ups ----------
 // A night is every match with gaps under 90 minutes. Its warm-ups are the Casual Doubles games
 // played before the first Ranked Doubles game; the ranked games that night are what follows.
