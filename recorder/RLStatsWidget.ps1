@@ -16,7 +16,63 @@ Add-Type -AssemblyName System.Windows.Forms, System.Drawing
 # would otherwise shadow the widget's.
 $script:here = Split-Path -Parent $MyInvocation.MyCommand.Path
 
+# ---- loading splash ---------------------------------------------------------------------------
+# While the widget updates itself and reads its history, a small window with a spinning wheel sits
+# where the widget will appear. It runs on its own thread so it keeps spinning while this one works.
+$script:splash = $null
+function Start-Splash {
+  $sync = [hashtable]::Synchronized(@{ Done = $false })
+  $rs = [runspacefactory]::CreateRunspace(); $rs.ApartmentState = 'STA'; $rs.ThreadOptions = 'ReuseThread'; $rs.Open()
+  $ps = [powershell]::Create(); $ps.Runspace = $rs
+  [void]$ps.AddScript({
+    param($Sync, $Prefs)
+    Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+    $f = New-Object System.Windows.Forms.Form
+    $f.FormBorderStyle = 'None'; $f.StartPosition = 'Manual'; $f.ShowInTaskbar = $false; $f.TopMost = $true
+    $f.ClientSize = New-Object System.Drawing.Size(360, 262)
+    $f.BackColor = [System.Drawing.ColorTranslator]::FromHtml('#12151C')
+    $wa = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
+    $f.Location = New-Object System.Drawing.Point(($wa.Right - 380), ($wa.Bottom - 290))
+    try {
+      if (Test-Path $Prefs) {
+        $p = Get-Content $Prefs -Raw | ConvertFrom-Json
+        $pt = New-Object System.Drawing.Point([int]$p.x, [int]$p.y)
+        if ([System.Windows.Forms.Screen]::AllScreens | Where-Object { $_.WorkingArea.Contains($pt) }) { $f.Location = $pt }
+      }
+    } catch { }
+    $state = @{ Angle = 0; Ticks = 0 }
+    $blue = [System.Drawing.ColorTranslator]::FromHtml('#4DA3FF'); $track = [System.Drawing.ColorTranslator]::FromHtml('#262C3A')
+    $muted = [System.Drawing.ColorTranslator]::FromHtml('#8A93A6')
+    $font = New-Object System.Drawing.Font('Segoe UI', 9)
+    $f.GetType().GetProperty('DoubleBuffered', [Reflection.BindingFlags]'NonPublic,Instance').SetValue($f, $true, $null)
+    $f.add_Paint({
+      param($s, $e)
+      $g = $e.Graphics; $g.SmoothingMode = 'AntiAlias'
+      $r = New-Object System.Drawing.Rectangle(160, 96, 40, 40)
+      $pen1 = New-Object System.Drawing.Pen($track, 4); $g.DrawEllipse($pen1, $r); $pen1.Dispose()
+      $pen2 = New-Object System.Drawing.Pen($blue, 4); $pen2.StartCap = 'Round'; $pen2.EndCap = 'Round'
+      $g.DrawArc($pen2, $r, $state.Angle, 90); $pen2.Dispose()
+      $sf = New-Object System.Drawing.StringFormat; $sf.Alignment = 'Center'
+      $b = New-Object System.Drawing.SolidBrush($muted)
+      $g.DrawString('Loading RL Stats...', $font, $b, (New-Object System.Drawing.RectangleF(0, 150, 360, 20)), $sf); $b.Dispose()
+    })
+    $t = New-Object System.Windows.Forms.Timer; $t.Interval = 30
+    $t.add_Tick({
+      $state.Angle = ($state.Angle + 12) % 360; $state.Ticks++
+      if ($Sync.Done -or $state.Ticks -gt 2000) { $t.Stop(); $f.Close() } else { $f.Invalidate() }
+    })
+    $f.add_Shown({ $t.Start() })
+    [System.Windows.Forms.Application]::Run($f)
+  }).AddArgument($sync).AddArgument((Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'RLStats\widget.json'))
+  $script:splash = @{ Sync = $sync; PS = $ps; Handle = $ps.BeginInvoke() }
+}
+function Stop-Splash {
+  if ($script:splash) { $script:splash.Sync.Done = $true; $script:splash = $null }
+}
+try { Start-Splash } catch { }
+
 function Show-Fatal([string]$Text) {
+  Stop-Splash
   [void][System.Windows.Forms.MessageBox]::Show($Text, 'RL Stats', 'OK', 'Error')
 }
 
@@ -30,6 +86,7 @@ if (-not $NoUpdate -and (Test-Path $script:updater)) {
   if (Update-RLStats -InstallDir $script:here) {
     Start-Process powershell.exe -WindowStyle Hidden -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-STA',
       '-WindowStyle', 'Hidden', '-File', ('"' + $MyInvocation.MyCommand.Path + '"'), '-NoUpdate')
+    Stop-Splash
     return
   }
 }
@@ -80,6 +137,7 @@ $script:form.ClientSize = New-Object System.Drawing.Size(360, 262)
 $script:form.BackColor = $script:C.Bg
 $script:form.TopMost = $true
 $script:form.ShowInTaskbar = $true
+$script:form.Opacity = 0   # shown once everything is loaded, see add_Shown
 
 $script:wa = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
 $script:form.Location = New-Object System.Drawing.Point(($script:wa.Right - 380), ($script:wa.Bottom - 290))
@@ -487,6 +545,9 @@ $script:form.add_Shown({
     Initialize-Upload
     Initialize-MmrLog; Update-Mmr
   } catch { Set-Status "Error: $($_.Exception.Message)" $script:C.Loss }
+  $script:form.Refresh()
+  Stop-Splash
+  $script:form.Opacity = 1
   $script:timer.Start(); $script:slow.Start(); $script:updTimer.Start(); $script:updPoll.Start()
 })
 
