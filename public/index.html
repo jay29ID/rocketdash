@@ -174,8 +174,7 @@ form.log button{background:var(--ink);color:var(--surface);border:0;border-radiu
 .map-col svg .dot{cursor:default}
 .map-col svg .dot:hover{stroke-width:3}
 .heat-key{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
-.heat-key .ramp{display:flex;gap:2px}
-.heat-key .ramp i{width:16px;height:10px;border-radius:2px;background:var(--heat)}
+.heat-key .ramp{display:block;width:80px;height:10px;border-radius:3px;background:linear-gradient(90deg,rgb(47,111,214),rgb(124,77,196),rgb(214,51,57));opacity:.85}
 .map-note{font-size:12px;color:var(--muted)}
 
 .chip{display:inline-block;font-size:11px;font-weight:600;padding:1px 7px;border-radius:4px;border:1px solid var(--line);color:var(--ink-2);white-space:nowrap}
@@ -305,7 +304,7 @@ footer{font-size:12px;color:var(--muted);max-width:70ch}
       <div class="map-col">
         <h3 id="fieldTitle">Shot from</h3>
         <div id="fieldMap"></div>
-        <div class="heat-key"><span>Fewer</span><span class="ramp"><i style="opacity:.15"></i><i style="opacity:.35"></i><i style="opacity:.55"></i><i style="opacity:.8"></i></span><span>More goals</span></div>
+        <div class="heat-key"><span>Cold</span><span class="ramp"></span><span>Hot</span></div>
       </div>
       <div class="map-col">
         <h3 id="netTitle">Where it hit the net</h3>

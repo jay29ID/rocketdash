@@ -325,6 +325,13 @@ function renderMMR(){
 }
 
 // ---------- goal map ----------
+// Cold to hot: blue, through violet, to red. t runs 0..1.
+const HEAT=[[47,111,214],[124,77,196],[214,51,57]];
+function heatColor(t){
+  t=clamp(t,0,1)*(HEAT.length-1);const i=Math.min(HEAT.length-2,Math.floor(t)),f=t-i;
+  const c=HEAT[i].map((v,k)=>Math.round(v+(HEAT[i+1][k]-v)*f));
+  return `rgb(${c[0]},${c[1]},${c[2]})`;
+}
 function renderMaps(list){
   let goals=list.flatMap(m=>(mapSide==='us'?m.ourGoals:m.theirGoals).map(g=>({...g,m})));
   if(mapSide==='us'&&mapWho!=='all')goals=goals.filter(g=>g.who===+mapWho);
@@ -339,13 +346,14 @@ function renderMaps(list){
   const bmax=Math.max(1,...Object.values(bins));
   let f=`<rect x="0" y="${sy(5120)}" width="${W}" height="${sy(Y0)-sy(5120)}" fill="var(--pitch)"/>`;
   Object.entries(bins).forEach(([k,n])=>{const [c,r]=k.split(',').map(Number);
-    f+=`<rect x="${sx(c*cell-4096)+.5}" y="${sy(Y0+(r+1)*cell)+.5}" width="${su(cell)-1}" height="${su(cell)-1}" rx="2" fill="var(--heat)" opacity="${(.12+.78*n/bmax).toFixed(2)}"><title>${n} goal${n>1?'s':''} from here</title></rect>`;});
+    f+=`<rect x="${sx(c*cell-4096)+.5}" y="${sy(Y0+(r+1)*cell)+.5}" width="${su(cell)-1}" height="${su(cell)-1}" rx="2" fill="${heatColor(n/bmax)}" opacity=".85"><title>${n} goal${n>1?'s':''} from here</title></rect>`;});
   const ln='stroke="var(--pitch-line)" stroke-width="1.5" fill="none"',ch=1152;
   f+=`<path d="M${sx(-4096)},${sy(Y0)} L${sx(-4096)},${sy(5120-ch)} L${sx(-4096+ch)},${sy(5120)} L${sx(-893)},${sy(5120)} L${sx(-893)},${sy(6000)} L${sx(893)},${sy(6000)} L${sx(893)},${sy(5120)} L${sx(4096-ch)},${sy(5120)} L${sx(4096)},${sy(5120-ch)} L${sx(4096)},${sy(Y0)}" ${ln}/>`;
   f+=`<line x1="0" x2="${W}" y1="${sy(0)}" y2="${sy(0)}" ${ln}/><path d="M${sx(-1000)},${sy(0)} A${su(1000)},${su(1000)} 0 0 1 ${sx(1000)},${sy(0)}" ${ln}/>`;
   f+=`<rect x="${sx(-1800)}" y="${sy(5120)}" width="${su(3600)}" height="${su(1100)}" ${ln}/>`;
   f+=`<text x="${W/2}" y="${sy(6000)-6}" text-anchor="middle">${mapSide==='us'?'Their goal':'Our goal'}</text><text x="6" y="${sy(0)-5}">Halfway</text>`;
-  shots.forEach(g=>{f+=`<circle class="dot" cx="${sx(clamp(g.x,-4096,4096))}" cy="${sy(clamp(g.y,Y0,5120))}" r="3" fill="${col(g)}" fill-opacity=".8" stroke="var(--pitch)" stroke-width="1"><title>${esc(tip(g))}</title></circle>`;});
+  // Dots stay neutral here so they don't fight the blue-to-red heat; the net view carries who scored.
+  shots.forEach(g=>{f+=`<circle class="dot" cx="${sx(clamp(g.x,-4096,4096))}" cy="${sy(clamp(g.y,Y0,5120))}" r="2.5" fill="#fff" fill-opacity=".9" stroke="#0b1017" stroke-opacity=".6" stroke-width="1"><title>${esc(tip(g))}</title></circle>`;});
   $('fieldMap').innerHTML=`<svg viewBox="0 -18 ${W} ${H+18}" role="img" aria-label="Top-down field with ${shots.length} shot locations">${f}</svg>`;
   const NW=440,m=24,NH=Math.round((NW-2*m)*642/1786)+m+22;
   const nx=x=>m+(clamp(x,-893,893)+893)/1786*(NW-2*m),nz=z=>m+(642-clamp(z,0,642))/642*(NH-m-22);
@@ -355,12 +363,12 @@ function renderMaps(list){
   const zmax=Math.max(1,...Object.values(zones)),labels=[];
   for(let c=0;c<3;c++)for(let r=0;r<3;r++){const v=zones[c+','+r]||0,pct=hits.length?Math.round(100*v/hits.length):0;
     const x0=nx(-893+c*1786/3),y0=nz((r+1)*214),zw=nx(-893+1786/3)-nx(-893),zh=nz(0)-nz(214);
-    n+=`<rect x="${x0+1}" y="${y0+1}" width="${zw-2}" height="${zh-2}" fill="var(--heat)" opacity="${v?(.1+.6*v/zmax).toFixed(2):0}"><title>${v} goals (${pct}%)</title></rect>`;
-    if(hits.length)labels.push(`<text class="zone" x="${x0+zw/2}" y="${y0+zh/2+5}" text-anchor="middle" paint-order="stroke" stroke="var(--surface-2)" stroke-width="4">${pct}%</text>`);}
+    n+=`<rect x="${x0+1}" y="${y0+1}" width="${zw-2}" height="${zh-2}" fill="${heatColor(v/zmax)}" opacity="${hits.length?.6:0}"><title>${v} goals (${pct}%)</title></rect>`;
+    if(hits.length)labels.push(`<text class="zone" x="${x0+zw/2}" y="${y0+zh/2+5}" text-anchor="middle" paint-order="stroke" stroke="rgba(11,16,23,.55)" stroke-width="3" fill="#fff" style="fill:#fff">${pct}%</text>`);}
   n+=`<path d="M${nx(-893)},${nz(0)} L${nx(-893)},${nz(642)} L${nx(893)},${nz(642)} L${nx(893)},${nz(0)}" stroke="var(--ink-2)" stroke-width="4" fill="none" stroke-linejoin="round"/>`;
   n+=`<line x1="4" x2="${NW-4}" y1="${nz(0)}" y2="${nz(0)}" stroke="var(--line)" stroke-width="2"/>`;
   n+=`<text x="${nx(-893)}" y="${NH-4}">Left post</text><text x="${nx(893)}" y="${NH-4}" text-anchor="end">Right post</text><text x="${NW/2}" y="${nz(642)-8}" text-anchor="middle">Crossbar</text>`;
-  hits.forEach(g=>{n+=`<circle class="dot" cx="${nx(g.ix)}" cy="${nz(g.iz)}" r="3.5" fill="${col(g)}" fill-opacity=".75" stroke="var(--surface-2)" stroke-width="1"><title>${esc(tip(g))}</title></circle>`;});
+  hits.forEach(g=>{n+=`<circle class="dot" cx="${nx(g.ix)}" cy="${nz(g.iz)}" r="3.5" fill="${col(g)}" stroke="#fff" stroke-width="1.5"><title>${esc(tip(g))}</title></circle>`;});
   n+=labels.join('');
   $('netMap').innerHTML=`<svg viewBox="0 0 ${NW} ${NH}" role="img" aria-label="Goal mouth with ${hits.length} impact points">${n}</svg>`;
   $('fieldTitle').textContent=mapSide==='us'?'Where our goals were shot from':'Where their goals were shot from';
