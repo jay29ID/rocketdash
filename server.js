@@ -265,6 +265,11 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
+  try { // TEMP last-match check
+    for (const m of Object.values(store.matches).sort((a, b) => String(a.started_at).localeCompare(String(b.started_at))).slice(-3)) console.log('last check: ' + JSON.stringify({ at: m.started_at, recv: m.received_at, my: m.my_team, res: m.result, ts: m.team_score, os: m.opponent_score, copies: m.copies,
+      players: (m.players || []).map(p => [PLAYERS.includes(p.name) ? p.name.slice(0, 3) : 'x', p.team, p.goals, p.assists, p.shots, p.score]),
+      goals: (m.goals || []).map(g => [g.team, PLAYERS.includes(g.scorer) ? g.scorer.slice(0, 3) : (g.scorer ? 'opp' : '-'), PLAYERS.includes(g.assister) ? g.assister.slice(0, 3) : (g.assister ? 'opp' : '-'), g.goal_time, PLAYERS.includes(g.last_touch) ? g.last_touch.slice(0, 3) : (g.last_touch ? 'opp' : '-')]) }));
+  } catch (e) { console.log('last check failed ' + e.message); }
   console.log(`rocketdash listening on ${PORT}, data in ${DATA_DIR}`);
   if (process.env.GIPHY_KEY) randomGif().then(g => console.log(g ? `goal GIFs ready: ${gifCache.list.length} for "${GIF_QUERY}"` : 'goal GIFs: GIPHY returned nothing (check GIPHY_KEY)'));
 });
