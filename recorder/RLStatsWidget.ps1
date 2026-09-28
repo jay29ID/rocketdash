@@ -31,10 +31,10 @@ function Start-Splash {
     Add-Type -AssemblyName System.Windows.Forms, System.Drawing
     $f = New-Object System.Windows.Forms.Form
     $f.FormBorderStyle = 'None'; $f.StartPosition = 'Manual'; $f.ShowInTaskbar = $false; $f.TopMost = $true
-    $f.ClientSize = New-Object System.Drawing.Size(360, 288)
+    $f.ClientSize = New-Object System.Drawing.Size(360, 306)
     $f.BackColor = [System.Drawing.ColorTranslator]::FromHtml('#12151C')
     $wa = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
-    $f.Location = New-Object System.Drawing.Point(($wa.Right - 380), ($wa.Bottom - 316))
+    $f.Location = New-Object System.Drawing.Point(($wa.Right - 380), ($wa.Bottom - 334))
     try {
       if (Test-Path $Prefs) {
         $p = Get-Content $Prefs -Raw | ConvertFrom-Json
@@ -50,13 +50,13 @@ function Start-Splash {
     $f.add_Paint({
       param($s, $e)
       $g = $e.Graphics; $g.SmoothingMode = 'AntiAlias'
-      $r = New-Object System.Drawing.Rectangle(160, 108, 40, 40)
+      $r = New-Object System.Drawing.Rectangle(160, 118, 40, 40)
       $pen1 = New-Object System.Drawing.Pen($track, 4); $g.DrawEllipse($pen1, $r); $pen1.Dispose()
       $pen2 = New-Object System.Drawing.Pen($blue, 4); $pen2.StartCap = 'Round'; $pen2.EndCap = 'Round'
       $g.DrawArc($pen2, $r, $state.Angle, 90); $pen2.Dispose()
       $sf = New-Object System.Drawing.StringFormat; $sf.Alignment = 'Center'
       $b = New-Object System.Drawing.SolidBrush($muted)
-      $g.DrawString('Loading RL Stats...', $font, $b, (New-Object System.Drawing.RectangleF(0, 162, 360, 20)), $sf); $b.Dispose()
+      $g.DrawString('Loading RL Stats...', $font, $b, (New-Object System.Drawing.RectangleF(0, 172, 360, 20)), $sf); $b.Dispose()
     })
     $t = New-Object System.Windows.Forms.Timer; $t.Interval = 30
     $t.add_Tick({
@@ -135,14 +135,14 @@ $script:form = New-Object System.Windows.Forms.Form
 $script:form.Text = 'RL Stats'
 $script:form.FormBorderStyle = 'None'
 $script:form.StartPosition = 'Manual'
-$script:form.ClientSize = New-Object System.Drawing.Size(360, 288)
+$script:form.ClientSize = New-Object System.Drawing.Size(360, 306)
 $script:form.BackColor = $script:C.Bg
 $script:form.TopMost = $true
 $script:form.ShowInTaskbar = $true
 $script:form.Opacity = 0   # shown once everything is loaded, see add_Shown
 
 $script:wa = [System.Windows.Forms.Screen]::PrimaryScreen.WorkingArea
-$script:form.Location = New-Object System.Drawing.Point(($script:wa.Right - 380), ($script:wa.Bottom - 316))
+$script:form.Location = New-Object System.Drawing.Point(($script:wa.Right - 380), ($script:wa.Bottom - 334))
 
 # header
 $script:header = New-Object System.Windows.Forms.Panel
@@ -192,39 +192,40 @@ $script:sep2 = New-Object System.Windows.Forms.Panel
 $script:sep2.Location = New-Object System.Drawing.Point(12, 172); $script:sep2.Size = New-Object System.Drawing.Size(336, 1); $script:sep2.BackColor = $script:C.Line
 $script:form.Controls.Add($script:sep2)
 
-$script:today = New-Label 'Today: no games yet' 16 178 328 20 $script:F.Body $script:C.Text
-$script:streak = New-Label '' 16 198 328 18 $script:F.Small $script:C.Muted
-$script:mmrLabel = New-Label 'MMR: queue a ranked game to read it' 16 216 328 18 $script:F.Small $script:C.Muted
-$script:form.Controls.AddRange(@($script:today, $script:streak, $script:mmrLabel))
+$script:today = New-Label 'Session: no games yet' 16 178 328 20 $script:F.Body $script:C.Text
+$script:sessStats = New-Label '' 16 197 328 18 $script:F.Small $script:C.Text
+$script:streak = New-Label '' 16 216 328 18 $script:F.Small $script:C.Muted
+$script:mmrLabel = New-Label 'MMR: queue a ranked game to read it' 16 234 328 18 $script:F.Small $script:C.Muted
+$script:form.Controls.AddRange(@($script:today, $script:sessStats, $script:streak, $script:mmrLabel))
 
 # who's watching + drinks: stamped onto every match saved while they're set
 $script:Watching = New-Object System.Collections.Generic.List[string]
 $script:Drinks = 0
-$script:form.Controls.Add((New-Label 'Watching' 16 240 56 18 $script:F.Small $script:C.Muted))
+$script:form.Controls.Add((New-Label 'Watching' 16 258 56 18 $script:F.Small $script:C.Muted))
 $script:specLabels = @{}
 $x = 72
 foreach ($name in $Spectators) {
   $w = [math]::Max(44, 18 + 7 * $name.Length)
-  $l = New-Label '' $x 240 $w 18 $script:F.Small $script:C.Muted
+  $l = New-Label '' $x 258 $w 18 $script:F.Small $script:C.Muted
   $l.Cursor = [System.Windows.Forms.Cursors]::Hand; $l.Tag = $name
   $l.add_Click({ param($s, $e) Switch-Spectator ([string]$s.Tag) })
   $script:specLabels[$name] = $l; $script:form.Controls.Add($l)
   $x += $w + 2
 }
-$script:drinksLabel = New-Label 'Drinks' 250 240 40 18 $script:F.Small $script:C.Muted
-$script:drinksMinus = New-Label '-' 290 238 16 20 $script:F.Bold $script:C.Blue 'MiddleCenter'
-$script:drinksCount = New-Label '0' 306 240 22 18 $script:F.Bold $script:C.Text 'MiddleCenter'
-$script:drinksPlus = New-Label '+' 328 238 16 20 $script:F.Bold $script:C.Blue 'MiddleCenter'
+$script:drinksLabel = New-Label 'Drinks' 250 258 40 18 $script:F.Small $script:C.Muted
+$script:drinksMinus = New-Label '-' 290 256 16 20 $script:F.Bold $script:C.Blue 'MiddleCenter'
+$script:drinksCount = New-Label '0' 306 258 22 18 $script:F.Bold $script:C.Text 'MiddleCenter'
+$script:drinksPlus = New-Label '+' 328 256 16 20 $script:F.Bold $script:C.Blue 'MiddleCenter'
 foreach ($l in $script:drinksMinus, $script:drinksPlus) { $l.Cursor = [System.Windows.Forms.Cursors]::Hand }
 $script:drinksParts = @($script:drinksLabel, $script:drinksMinus, $script:drinksCount, $script:drinksPlus)
 foreach ($l in $script:drinksParts) { $l.Visible = $false }
 $script:form.Controls.AddRange($script:drinksParts)
 
 # footer links
-$script:openLink = New-Label 'Open data folder' 16 264 96 18 $script:F.Small $script:C.Blue
-$script:mmrLink = New-Label 'Type MMR' 114 264 62 18 $script:F.Small $script:C.Blue
-$script:dashLink = New-Label 'Open dashboard' 178 264 92 18
-$script:checkLink = New-Label 'Check updates' 270 264 86 18 $script:F.Small $script:C.Blue
+$script:openLink = New-Label 'Open data folder' 16 282 96 18 $script:F.Small $script:C.Blue
+$script:mmrLink = New-Label 'Type MMR' 114 282 62 18 $script:F.Small $script:C.Blue
+$script:dashLink = New-Label 'Open dashboard' 178 282 92 18 $script:F.Small $script:C.Blue
+$script:checkLink = New-Label 'Check updates' 270 282 86 18 $script:F.Small $script:C.Blue
 foreach ($l in $script:openLink, $script:mmrLink, $script:dashLink, $script:checkLink) { $l.Cursor = [System.Windows.Forms.Cursors]::Hand }
 $script:form.Controls.AddRange(@($script:openLink, $script:mmrLink, $script:dashLink, $script:checkLink))
 
@@ -394,18 +395,48 @@ function Import-History {
     try {
       $o = $line | ConvertFrom-Json
       [void]$script:History.Add(@{ ended = [datetime]::Parse($o.ended_at).ToLocalTime(); result = $o.result
-        playlist = $o.playlist; us = $o.team_score; them = $o.opponent_score })
+        playlist = $o.playlist; us = $o.team_score; them = $o.opponent_score; players = (Get-HistPlayers $o.players) })
     } catch { }
   }
 }
 
+# Goals, saves and score per tracked player, kept with each match for the session line.
+function Get-HistPlayers($Players) {
+  $h = @{}
+  foreach ($p in @($Players)) {
+    if ($p -is [System.Collections.IDictionary]) { $p = [pscustomobject]$p }   # live records hold dictionaries
+    $n = [string](Get-Prop $p 'name')
+    if ($n -and $TrackedPlayers -contains $n) { $h[$n] = @{ g = [int](Get-Prop $p 'goals' 0); sv = [int](Get-Prop $p 'saves' 0); sc = [int](Get-Prop $p 'score' 0) } }
+  }
+  return $h
+}
+# A session is every game with less than 90 minutes between them (the dashboard uses the same rule).
+function Get-CurrentSession {
+  $games = @($script:History | Where-Object { $_.result -eq 'Win' -or $_.result -eq 'Loss' } | Sort-Object { $_.ended })
+  if ($games.Count -eq 0 -or ((Get-Date) - $games[-1].ended).TotalMinutes -gt 90) { return @() }
+  $i = $games.Count - 1
+  while ($i -gt 0 -and ($games[$i].ended - $games[$i - 1].ended).TotalMinutes -le 90) { $i-- }
+  return @($games[$i..($games.Count - 1)])
+}
 function Update-Session {
-  $d = (Get-Date).Date
-  $games = @($script:History | Where-Object { $_.ended.Date -eq $d -and ($_.result -eq 'Win' -or $_.result -eq 'Loss') })
+  $games = @(Get-CurrentSession)
   $w = @($games | Where-Object { $_.result -eq 'Win' }).Count
   $l = $games.Count - $w
-  if ($games.Count -eq 0) { $script:today.Text = 'Today: no games yet' }
-  else { $script:today.Text = ('Today: {0}W {1} {2}L   ({3}% win rate)' -f $w, $script:Dash, $l, [math]::Round(100 * $w / $games.Count)) }
+  if ($games.Count -eq 0) { $script:today.Text = 'Session: no games yet'; $script:sessStats.Text = '' }
+  else {
+    $script:today.Text = ('Session: {0}W {1} {2}L   ({3}% win rate)' -f $w, $script:Dash, $l, [math]::Round(100 * $w / $games.Count))
+    $bits = @()
+    foreach ($n in $TrackedPlayers) {
+      $g = 0; $sv = 0; $sc = 0; $any = $false
+      foreach ($m in $games) { if ($m.players -and $m.players.ContainsKey($n)) { $any = $true; $g += $m.players[$n].g; $sv += $m.players[$n].sv; $sc += $m.players[$n].sc } }
+      if ($any) {
+        $short = ($n -split '\s+')[0] -replace '\d.*$', ''
+        if ($short) { $short = $short.Substring(0, 1).ToUpper() + $short.Substring(1) } else { $short = $n }
+        $bits += ('{0} {1}G {2}SV {3}pts' -f $short, $g, $sv, $sc)
+      }
+    }
+    $script:sessStats.Text = ($bits -join '   |   ')
+  }
 
   $decided = @($script:History | Where-Object { $_.result -eq 'Win' -or $_.result -eq 'Loss' })
   $parts = @()
@@ -611,7 +642,7 @@ $script:OnMatchSaved = {
   param($Record)
   $script:InMatch = $false
   [void]$script:History.Add(@{ ended = (Get-Date); result = $Record.result; playlist = $Record.playlist
-    us = $Record.team_score; them = $Record.opponent_score })
+    us = $Record.team_score; them = $Record.opponent_score; players = (Get-HistPlayers $Record.players) })
   $color = $script:C.Muted
   if ($Record.result -eq 'Win') { $color = $script:C.Win } elseif ($Record.result -eq 'Loss') { $color = $script:C.Loss }
   $script:sub.Text = ('{0}  {1}' -f $Record.result.ToUpper(), $Record.playlist)
