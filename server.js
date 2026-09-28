@@ -200,6 +200,26 @@ const server = http.createServer(async (req, res) => {
     }
 
     // A random GIF for the widget's goal pop-up. Needs GIPHY_KEY (free at developers.giphy.com).
+    // Shared "who's watching" and drinks, so a change on one widget shows on the others.
+    // Resets once nobody has touched it for 8 hours (the next night).
+    if (p === '/api/crew') {
+      if (!UPLOAD_KEY || !same(req.headers['x-upload-key'] || '', UPLOAD_KEY)) return send(res, 401, { error: 'bad upload key' });
+      let c = store.crew || { rev: 0 };
+      if (c.updated_at && Date.now() - Date.parse(c.updated_at) > 8 * 3600e3) c = { rev: c.rev || 0 };
+      if (req.method === 'POST') {
+        const b = await readJson(req);
+        const watching = Array.isArray(b.watching) ? [...new Set(b.watching.map(String))].slice(0, 20) : c.watching || [];
+        const drinks = {};
+        for (const [k, v] of Object.entries(b.drinks && typeof b.drinks === 'object' ? b.drinks : c.drinks || {})) {
+          const n = Math.round(+v);
+          if (Number.isFinite(n) && n >= 0 && n <= 99) drinks[String(k)] = n;
+        }
+        c = { rev: (c.rev || 0) + 1, watching, drinks, updated_at: new Date().toISOString() };
+        store.crew = c; save();
+      }
+      return send(res, 200, { rev: c.rev || 0, watching: c.watching || [], drinks: c.drinks || {}, updated_at: c.updated_at || null });
+    }
+
     if (p === '/api/gif') {
       if (!UPLOAD_KEY || !same(req.headers['x-upload-key'] || '', UPLOAD_KEY)) return send(res, 401, { error: 'bad upload key' });
       const pick = await randomGif();

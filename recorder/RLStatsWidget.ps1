@@ -72,6 +72,11 @@ function Start-Splash {
       $blue = [System.Drawing.ColorTranslator]::FromHtml('#4DA3FF'); $track = [System.Drawing.ColorTranslator]::FromHtml('#262C3A')
       $muted = [System.Drawing.ColorTranslator]::FromHtml('#8A93A6'); $font = New-Object System.Drawing.Font('Segoe UI', 11); $caption = 'Loading RL Stats...'
     }
+    if ($p -and $p.theme -eq 'rl') {
+      $f.BackColor = [System.Drawing.ColorTranslator]::FromHtml('#07142B')
+      $blue = [System.Drawing.ColorTranslator]::FromHtml('#2A8CFF'); $track = [System.Drawing.ColorTranslator]::FromHtml('#16376B')
+      $muted = [System.Drawing.ColorTranslator]::FromHtml('#9DB4D8'); $font = New-Object System.Drawing.Font('Bahnschrift SemiBold Condensed', 12); $caption = 'LOADING...'
+    }
     $f.GetType().GetProperty('DoubleBuffered', [Reflection.BindingFlags]'NonPublic,Instance').SetValue($f, $true, $null)
     $f.add_Paint({
       param($s, $e)
@@ -134,14 +139,15 @@ $ErrorActionPreference = 'Continue'
 
 # ---- look -------------------------------------------------------------------------------------
 function RGB([string]$Hex) { [System.Drawing.ColorTranslator]::FromHtml($Hex) }
-# Themes: 'cyber' (framed neon panels) or 'classic' (the original plain dark look). Picked from the
+# Themes: 'cyber' (framed neon panels), 'rl' (Rocket League menus: navy, blue and orange, slanted
+# tabs) or 'classic' (the original plain dark look). Picked from the
 # theme button in the title bar and saved in widget.json; switching restarts the widget.
 $script:Theme = 'cyber'
 try {
   $tp = Join-Path $OutDir 'widget.json'
-  if (Test-Path $tp) { $t = (Get-Content $tp -Raw | ConvertFrom-Json).theme; if ($t -in 'cyber', 'classic') { $script:Theme = $t } }
+  if (Test-Path $tp) { $t = (Get-Content $tp -Raw | ConvertFrom-Json).theme; if ($t -in 'cyber', 'rl', 'classic') { $script:Theme = $t } }
 } catch { }
-$script:Themes = [ordered]@{ cyber = 'Cyber'; classic = 'Classic' }
+$script:Themes = [ordered]@{ cyber = 'Cyber'; rl = 'Rocket League'; classic = 'Classic' }
 $script:C = @{
   # neon-on-black: cyan for structure, magenta for secondary accents
   Bg = RGB '#080C12'; Panel = RGB '#0E1520'; Line = RGB '#1B2A3A'; Text = RGB '#DDE8F5'; Muted = RGB '#6D7F96'
@@ -156,6 +162,14 @@ if ($script:Theme -eq 'classic') {
     Bg = RGB '#12151C'; Panel = RGB '#1A1F2A'; Line = RGB '#262C3A'; Text = RGB '#E6E9EF'; Muted = RGB '#8A93A6'
     Blue = RGB '#4DA3FF'; Orange = RGB '#FF9F43'; Win = RGB '#3DDC84'; Loss = RGB '#FF5C6C'; Amber = RGB '#F5C04E'
     Cyan = RGB '#4DA3FF'; Magenta = RGB '#FF9F43'; Frame = RGB '#262C3A'
+  }
+}
+if ($script:Theme -eq 'rl') {
+  # the game's menus: deep navy panels, bright team blue and orange, white condensed type
+  $script:C = @{
+    Bg = RGB '#061127'; Panel = RGB '#0B1E42'; Line = RGB '#16376B'; Text = RGB '#FFFFFF'; Muted = RGB '#9DB4D8'
+    Blue = RGB '#2A8CFF'; Orange = RGB '#FF7A1A'; Win = RGB '#4CE38A'; Loss = RGB '#FF4D4D'; Amber = RGB '#FFC940'
+    Cyan = RGB '#2A8CFF'; Magenta = RGB '#FF7A1A'; Frame = RGB '#1F4C8F'
   }
 }
 $script:F = @{
@@ -174,6 +188,16 @@ if ($script:Theme -eq 'classic') {
     Small = UiFont 'Segoe UI' 8.25; Body = UiFont 'Segoe UI' 9; Bold = UiFont 'Segoe UI Semibold' 9
     Head = UiFont 'Segoe UI' 7.5; Tiny = UiFont 'Segoe UI' 6.75; Tag = UiFont 'Segoe UI' 6.75
     Speed = UiFont 'Segoe UI Semibold' 15; Score = UiFont 'Segoe UI Semibold' 22; Dot = UiFont 'Segoe UI' 11
+  }
+}
+if ($script:Theme -eq 'rl') {
+  $cond = 'Bahnschrift SemiBold Condensed'
+  $script:F = @{
+    Small = UiFont 'Bahnschrift' 8.25; Body = UiFont 'Bahnschrift' 9; Bold = UiFont 'Bahnschrift SemiBold' 9
+    Head = UiFont $cond 7.5; Tiny = UiFont $cond 7; Tag = UiFont $cond 7.5
+    Speed = UiFont $cond 16
+    Score = New-Object System.Drawing.Font($cond, [single](25 * $script:UiScale), [System.Drawing.FontStyle]::Italic)
+    Dot = UiFont 'Segoe UI' 11
   }
 }
 $script:Bullet = [string][char]0x25CF
@@ -206,9 +230,18 @@ $script:form.Location = New-Object System.Drawing.Point(($script:wa.Right - 380)
 $script:header = New-Object System.Windows.Forms.Panel
 $script:header.Location = New-Object System.Drawing.Point(0, 0); $script:header.Size = New-Object System.Drawing.Size(360, 30); $script:header.BackColor = $script:C.Panel
 $script:form.Controls.Add($script:header)
+if ($script:Theme -eq 'rl') {
+  $script:header.GetType().GetProperty('DoubleBuffered', [Reflection.BindingFlags]'NonPublic,Instance').SetValue($script:header, $true, $null)
+  $script:header.add_Paint({
+    param($s, $e)
+    $r = $s.ClientRectangle
+    $gb = New-Object System.Drawing.Drawing2D.LinearGradientBrush($r, (RGB '#123A80'), $script:C.Bg, [single]0)
+    $e.Graphics.FillRectangle($gb, $r); $gb.Dispose()
+  })
+}
 $script:dot = New-Label $script:Bullet 8 4 18 22 $script:F.Dot $script:C.Amber 'MiddleCenter'
 $script:status = New-Label 'Starting...' 28 5 206 20 $script:F.Small $script:C.Muted
-$script:status.AutoEllipsis = $true
+$script:status.AutoEllipsis = $true; $script:status.UseMnemonic = $false
 $script:updLink = New-Label 'Update' 168 5 66 20 $script:F.Bold $script:C.Win 'MiddleCenter'
 $script:updLink.Visible = $false
 $script:pin = New-Label 'Pin' 262 5 30 20 $script:F.Small $script:C.Text 'MiddleCenter'
@@ -224,6 +257,13 @@ $script:blueName = New-Label 'BLUE' 16 40 110 20 $script:F.Small $script:C.Blue 
 $script:orangeName = New-Label 'ORANGE' 234 40 110 20 $script:F.Small $script:C.Orange 'MiddleRight'
 $script:score = New-Label ("0 $script:Dash 0") 90 34 180 44 $script:F.Score $script:C.Text 'MiddleCenter'
 $script:sub = New-Label 'Waiting for a match' 16 76 328 18 $script:F.Small $script:C.Muted 'MiddleCenter'
+if ($script:Theme -eq 'rl') {
+  # white names sit on the blue and orange bars painted behind them
+  $script:blueName.ForeColor = $script:C.Text; $script:orangeName.ForeColor = $script:C.Text
+  $script:blueName.Location = New-Object System.Drawing.Point(18, 40); $script:blueName.Width = 96
+  $script:orangeName.Location = New-Object System.Drawing.Point(246, 40); $script:orangeName.Width = 96
+  $script:blueName.AutoEllipsis = $true; $script:orangeName.AutoEllipsis = $true
+}
 $script:form.Controls.AddRange(@($script:blueName, $script:orangeName, $script:score, $script:sub))
 
 # players table: an icon and the full stat name over each column
@@ -441,8 +481,55 @@ $script:Frames = @(
   @{ Tag = '04 // SESSION';   Y = 302; H = 84 }
   @{ Tag = '05 // CREW';      Y = 390; H = 26 }
 )
+# Rocket League look: flat navy panels with a bright top edge, a slanted blue tab for each title,
+# and blue and orange team bars under the score, like the in-game scoreboard.
+function New-Slant([single]$X, [single]$Y, [single]$W, [single]$H, [single]$Lean) {
+  [System.Drawing.PointF[]]@(
+    (New-Object System.Drawing.PointF(($X + $Lean), $Y)), (New-Object System.Drawing.PointF(($X + $W), $Y)),
+    (New-Object System.Drawing.PointF(($X + $W - $Lean), ($Y + $H))), (New-Object System.Drawing.PointF($X, ($Y + $H))))
+}
+function Draw-RlFrames($g) {
+  $g.SmoothingMode = 'AntiAlias'; $g.TextRenderingHint = 'ClearTypeGridFit'
+  $k = [single]$script:UiScale
+  $fill = New-Object System.Drawing.SolidBrush($script:C.Panel)
+  $edge = New-Object System.Drawing.Pen($script:C.Frame, [single](1 * $k))
+  $top = New-Object System.Drawing.Pen($script:C.Blue, [single](2 * $k))
+  $white = New-Object System.Drawing.SolidBrush($script:C.Text)
+  $x0 = 6 * $k; $x1 = 354 * $k
+  foreach ($f in $script:Frames) {
+    $y0 = $f.Y * $k; $y1 = ($f.Y + $f.H) * $k
+    $g.FillRectangle($fill, $x0, $y0, ($x1 - $x0), ($y1 - $y0))
+    $g.DrawRectangle($edge, $x0, $y0, ($x1 - $x0), ($y1 - $y0))
+    $g.DrawLine($top, $x0, $y0, $x1, $y0)
+    # slanted title tab hanging off the top edge
+    $name = ($f.Tag -replace '^\d+ // ', '')
+    $sz = $g.MeasureString($name, $script:F.Tag)
+    $th = $sz.Height; $tw = $sz.Width + 18 * $k; $tx = $x0 + 10 * $k; $ty = $y0 - $th / 2
+    $rect = New-Object System.Drawing.RectangleF($tx, $ty, $tw, $th)
+    $grad = New-Object System.Drawing.Drawing2D.LinearGradientBrush($rect, $script:C.Blue, (RGB '#1456C8'), [single]90)
+    $g.FillPolygon($grad, (New-Slant $tx $ty $tw $th (6 * $k))); $grad.Dispose()
+    $g.DrawString($name, $script:F.Tag, $white, ($tx + 9 * $k), $ty)
+  }
+  # scoreboard team bars behind the team names
+  $bh = 20 * $k; $by = 40 * $k
+  $bb = New-Object System.Drawing.Drawing2D.LinearGradientBrush((New-Object System.Drawing.RectangleF((12 * $k), $by, (110 * $k), $bh)), $script:C.Blue, (RGB '#1456C8'), [single]0)
+  $bpts = [System.Drawing.PointF[]]@(
+    (New-Object System.Drawing.PointF((12 * $k), $by)), (New-Object System.Drawing.PointF((122 * $k), $by)),
+    (New-Object System.Drawing.PointF((122 * $k - 8 * $k), ($by + $bh))), (New-Object System.Drawing.PointF((12 * $k), ($by + $bh))))
+  $g.FillPolygon($bb, $bpts); $bb.Dispose()
+  $ob = New-Object System.Drawing.Drawing2D.LinearGradientBrush((New-Object System.Drawing.RectangleF((238 * $k), $by, (110 * $k), $bh)), (RGB '#C9500A'), $script:C.Orange, [single]0)
+  $opts = [System.Drawing.PointF[]]@(
+    (New-Object System.Drawing.PointF((238 * $k), $by)), (New-Object System.Drawing.PointF((348 * $k), $by)),
+    (New-Object System.Drawing.PointF((348 * $k), ($by + $bh))), (New-Object System.Drawing.PointF((238 * $k + 8 * $k), ($by + $bh))))
+  $g.FillPolygon($ob, $opts); $ob.Dispose()
+  # blue and orange split under the title bar
+  $bp = New-Object System.Drawing.Pen($script:C.Blue, [single](2 * $k)); $g.DrawLine($bp, 0, (30 * $k), (180 * $k), (30 * $k)); $bp.Dispose()
+  $op = New-Object System.Drawing.Pen($script:C.Orange, [single](2 * $k)); $g.DrawLine($op, (180 * $k), (30 * $k), (360 * $k), (30 * $k)); $op.Dispose()
+  $fill.Dispose(); $edge.Dispose(); $top.Dispose(); $white.Dispose()
+}
 $script:form.add_Paint({
   param($s, $e)
+  if ($script:Theme -eq 'rl') { Draw-RlFrames $e.Graphics; return }
   if ($script:Theme -ne 'cyber') { return }
   $g = $e.Graphics; $g.SmoothingMode = 'AntiAlias'; $g.TextRenderingHint = 'ClearTypeGridFit'
   $k = [single]$script:UiScale
@@ -562,20 +649,69 @@ function Update-Extras {
     else { $l.Text = "$([char]0x25CB) $name"; $l.ForeColor = $script:C.Muted }
   }
   $script:drinksCount.Text = [string]$script:Drinks
-  # The drinks counter only shows on the PC signed in as $DrinksPlayer (read from the game's log).
-  $show = $script:MmrState.Player -eq $DrinksPlayer
-  foreach ($l in $script:drinksParts) { $l.Visible = $show }
+  # Drinks are $DrinksPlayer's, but every widget shows them and can change them (they're shared).
+  foreach ($l in $script:drinksParts) { $l.Visible = $true }
 }
 function Switch-Spectator([string]$Name) {
   if ($script:Watching.Contains($Name)) { [void]$script:Watching.Remove($Name) } else { $script:Watching.Add($Name) }
-  Update-Extras
+  Update-Extras; Send-Crew
 }
-$script:drinksPlus.add_Click({ if ($script:Drinks -lt 30) { $script:Drinks++ }; Update-Extras })
-$script:drinksMinus.add_Click({ if ($script:Drinks -gt 0) { $script:Drinks-- }; Update-Extras })
+$script:drinksPlus.add_Click({ if ($script:Drinks -lt 30) { $script:Drinks++ }; Update-Extras; Send-Crew })
+$script:drinksMinus.add_Click({ if ($script:Drinks -gt 0) { $script:Drinks-- }; Update-Extras; Send-Crew })
+
+# ---- shared crew ------------------------------------------------------------------------------
+# Watching and drinks live on the dashboard site too, so a click on either widget shows on the
+# others within a few seconds. Changes are pushed straight away; the site is read every 8 seconds.
+$script:crewJob = $null; $script:crewPush = $false; $script:crewChanged = [DateTime]::MinValue
+$script:crewPulled = [DateTime]::MinValue
+function Send-Crew { $script:crewPush = $true; $script:crewChanged = [DateTime]::UtcNow }
+function Start-CrewJob([bool]$Push) {
+  $body = $null
+  if ($Push) {
+    $body = @{ watching = @($script:Watching); drinks = @{ $DrinksPlayer = $script:Drinks } } | ConvertTo-Json -Compress -Depth 4
+  }
+  $ps = [powershell]::Create()
+  [void]$ps.AddScript({
+    param($CfgPath, $Body)
+    $ErrorActionPreference = 'Stop'
+    try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch { }
+    $cfg = Get-Content $CfgPath -Raw | ConvertFrom-Json
+    $base = ([Uri]$cfg.url).GetLeftPart([UriPartial]::Authority)
+    $h = @{ 'X-Upload-Key' = [string]$cfg.key }
+    if ($Body) { Invoke-RestMethod -Uri "$base/api/crew" -Method Post -Headers $h -Body $Body -ContentType 'application/json' -TimeoutSec 6 -UseBasicParsing }
+    else { Invoke-RestMethod -Uri "$base/api/crew" -Headers $h -TimeoutSec 6 -UseBasicParsing }
+  }).AddArgument((Join-Path $OutDir 'upload.json')).AddArgument($body)
+  $script:crewJob = @{ PS = $ps; Handle = $ps.BeginInvoke(); Started = [DateTime]::UtcNow; Push = $Push }
+}
+function Step-Crew {
+  if (-not (Test-Path (Join-Path $OutDir 'upload.json'))) { return }
+  $j = $script:crewJob
+  if ($j) {
+    if (-not $j.Handle.IsCompleted) { return }
+    $script:crewJob = $null
+    $r = $null
+    try { $r = @($j.PS.EndInvoke($j.Handle)) | Select-Object -Last 1 } catch { if ($j.Push) { $script:crewPush = $true } }
+    $j.PS.Dispose()
+    # Apply what the site says unless something was clicked here after this request went out.
+    if ($r -and $null -ne $r.rev -and [int]$r.rev -gt 0 -and $j.Started -gt $script:crewChanged -and -not $script:crewPush) {
+      $script:Watching.Clear()
+      foreach ($n in @($r.watching)) { if ($n -and $script:Spectators -contains $n -and -not $script:Watching.Contains([string]$n)) { $script:Watching.Add([string]$n) } }
+      $d = 0; if ($r.drinks -and $null -ne $r.drinks.$DrinksPlayer) { $d = [int]$r.drinks.$DrinksPlayer }
+      $script:Drinks = $d
+      Update-Extras
+    }
+    return
+  }
+  if ($script:crewPush) { $script:crewPush = $false; Start-CrewJob $true; return }
+  if (([DateTime]::UtcNow - $script:crewPulled).TotalSeconds -ge 8) { $script:crewPulled = [DateTime]::UtcNow; Start-CrewJob $false }
+}
+$script:crewTimer = New-Object System.Windows.Forms.Timer
+$script:crewTimer.Interval = 500
+$script:crewTimer.add_Tick({ try { Step-Crew } catch { } })
 # Called by the recorder as each match is saved.
 $script:MatchExtras = {
   $x = [ordered]@{ spectators = @($script:Spectators | Where-Object { $script:Watching.Contains($_) }) }
-  if ($script:MmrState.Player -eq $DrinksPlayer) { $x.drinks = @{ $DrinksPlayer = $script:Drinks } }
+  $x.drinks = @{ $DrinksPlayer = $script:Drinks }
   return $x
 }
 $script:Spectators = $Spectators
@@ -610,8 +746,18 @@ $script:dashLink.add_Click({ Open-Dashboard })
 $script:checkLink.add_Click({ Invoke-UpdateCheckNow })
 $script:mmrLink.add_Click({ Show-TypeMmr })
 
+# The title bar only has room for a few words, so long messages get a short form there;
+# the tray tooltip keeps the full text.
+$script:ShortStatus = @{
+  'Connected, waiting for a match' = 'Ready for a match'
+  'Waiting for Rocket League' = 'Waiting for RL'
+  'Match saved, waiting for the next one' = 'Match saved'
+  'Stats API is off: run Enable Stats API' = 'Stats API is off'
+  'Update failed, try again later' = 'Update failed'
+}
 function Set-Status([string]$Text, $Color) {
-  $script:status.Text = $Text; $script:dot.ForeColor = $Color
+  $short = $script:ShortStatus[$Text]; if (-not $short) { $short = $Text }
+  $script:status.Text = $short; $script:dot.ForeColor = $Color
   $script:tray.Text = ('RL Stats: ' + $Text).Substring(0, [math]::Min(63, 10 + $Text.Length))
   try { Set-TrayIcon $Color } catch { }
 }
@@ -1072,7 +1218,7 @@ $script:form.add_Shown({
   $script:form.Refresh()
   Stop-Splash
   $script:form.Opacity = 1
-  $script:timer.Start(); $script:slow.Start(); $script:updTimer.Start(); $script:updPoll.Start(); $script:gifPoll.Start()
+  $script:timer.Start(); $script:slow.Start(); $script:updTimer.Start(); $script:updPoll.Start(); $script:gifPoll.Start(); $script:crewTimer.Start()
 })
 
 $script:form.add_FormClosing({
