@@ -74,10 +74,10 @@ function Test-RLStatsUpdate {
     [string]$OutDir = (Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'RLStats')
   )
   $cfgPath = Join-Path $OutDir 'upload.json'
-  if (-not (Test-Path $cfgPath)) { return 0 }
+  if (-not (Test-Path $cfgPath)) { return -1 }
   try {
     $cfg = Get-Content $cfgPath -Raw | ConvertFrom-Json
-    if (-not $cfg.url) { return 0 }
+    if (-not $cfg.url) { return -1 }
     $base = ([Uri]$cfg.url).GetLeftPart([UriPartial]::Authority)
     try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch { }
     $manifest = Invoke-RestMethod -Uri "$base/api/recorder/manifest" -Headers @{ 'X-Upload-Key' = [string]$cfg.key } -TimeoutSec 6 -UseBasicParsing
@@ -91,5 +91,5 @@ function Test-RLStatsUpdate {
       if ($hash -ne ([string]$f.sha256).ToUpper()) { $n++ }
     }
     return $n
-  } catch { return 0 }
+  } catch { return -1 }   # -1: couldn't reach the site
 }

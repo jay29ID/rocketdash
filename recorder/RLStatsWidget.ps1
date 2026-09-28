@@ -221,11 +221,12 @@ foreach ($l in $script:drinksParts) { $l.Visible = $false }
 $script:form.Controls.AddRange($script:drinksParts)
 
 # footer links
-$script:openLink = New-Label 'Open data folder' 16 264 110 18 $script:F.Small $script:C.Blue
-$script:mmrLink = New-Label 'Type MMR' 132 264 70 18 $script:F.Small $script:C.Blue
-$script:dashLink = New-Label 'Open dashboard' 214 264 110 18 $script:F.Small $script:C.Blue
-foreach ($l in $script:openLink, $script:mmrLink, $script:dashLink) { $l.Cursor = [System.Windows.Forms.Cursors]::Hand }
-$script:form.Controls.AddRange(@($script:openLink, $script:mmrLink, $script:dashLink))
+$script:openLink = New-Label 'Open data folder' 16 264 96 18 $script:F.Small $script:C.Blue
+$script:mmrLink = New-Label 'Type MMR' 114 264 62 18 $script:F.Small $script:C.Blue
+$script:dashLink = New-Label 'Open dashboard' 178 264 92 18
+$script:checkLink = New-Label 'Check updates' 270 264 86 18 $script:F.Small $script:C.Blue
+foreach ($l in $script:openLink, $script:mmrLink, $script:dashLink, $script:checkLink) { $l.Cursor = [System.Windows.Forms.Cursors]::Hand }
+$script:form.Controls.AddRange(@($script:openLink, $script:mmrLink, $script:dashLink, $script:checkLink))
 
 # Opens the online dashboard. The site hands back its private share link to anyone holding the
 # upload key, so the browser is signed in without the link being stored on this PC.
@@ -277,6 +278,7 @@ $script:menu = New-Object System.Windows.Forms.ContextMenuStrip
 [void]$script:menu.Items.Add('Show', $null, { $script:form.Show(); $script:form.Activate() })
 [void]$script:menu.Items.Add('Open dashboard', $null, { Open-Dashboard })
 [void]$script:menu.Items.Add('Open data folder', $null, { Start-Process explorer.exe $OutDir })
+[void]$script:menu.Items.Add('Check for updates', $null, { Invoke-UpdateCheckNow })
 [void]$script:menu.Items.Add('Quit', $null, { $script:form.Close() })
 $script:tray.ContextMenuStrip = $script:menu
 $script:tray.add_DoubleClick({ $script:form.Show(); $script:form.Activate() })
@@ -332,6 +334,7 @@ $script:min.add_Click({ $script:form.Hide(); $script:tray.ShowBalloonTip(2000, '
 $script:close.add_Click({ $script:form.Close() })
 $script:openLink.add_Click({ if (-not (Test-Path $OutDir)) { [void](New-Item -ItemType Directory -Path $OutDir) }; Start-Process explorer.exe $OutDir })
 $script:dashLink.add_Click({ Open-Dashboard })
+$script:checkLink.add_Click({ Invoke-UpdateCheckNow })
 $script:mmrLink.add_Click({ Show-TypeMmr })
 
 function Set-Status([string]$Text, $Color) {
@@ -669,12 +672,42 @@ function Start-UpdateCheck {
   [void]$ps.AddScript({ param($U, $Dir, $Out) . $U; Test-RLStatsUpdate -InstallDir $Dir -OutDir $Out }).AddArgument($script:updater).AddArgument($script:here).AddArgument($OutDir)
   $script:updCheck = @{ PS = $ps; Handle = $ps.BeginInvoke() }
 }
+# The "Check updates" link: runs the same background check now and says what it found.
+$script:manualCheck = $null
+function Invoke-UpdateCheckNow {
+  if ($script:updLink.Visible) { Invoke-UpdateNow; return }
+  if (-not (Get-Command Test-RLStatsUpdate -ErrorAction SilentlyContinue)) { Show-Note 'Updates are not set up on this PC' $script:C.Loss; return }
+  $script:manualCheck = @{ Text = $script:status.Text; Color = $script:dot.ForeColor }
+  $script:status.Text = 'Checking for updates...'
+  Start-UpdateCheck
+}
+# Shows a status message for a few seconds, then puts the previous one back.
+$script:noteTimer = New-Object System.Windows.Forms.Timer
+$script:noteTimer.Interval = 4000
+$script:noteRestore = $null
+$script:noteTimer.add_Tick({
+  $script:noteTimer.Stop()
+  if ($script:noteRestore -and $script:status.Text -eq $script:noteRestore.Shown) { Set-Status $script:noteRestore.Text $script:noteRestore.Color }
+  $script:noteRestore = $null
+})
+function Show-Note([string]$Text, $Color) {
+  $prev = @{ Text = $script:status.Text; Color = $script:dot.ForeColor }
+  if ($script:manualCheck) { $prev = $script:manualCheck }
+  Set-Status $Text $Color
+  $script:noteRestore = @{ Text = $prev.Text; Color = $prev.Color; Shown = $Text }
+  $script:noteTimer.Stop(); $script:noteTimer.Start()
+}
 function Step-UpdateCheck {
   $c = $script:updCheck
   if (-not $c -or -not $c.Handle.IsCompleted) { return }
-  $n = 0
+  $n = -1
   try { $n = [int](@($c.PS.EndInvoke($c.Handle)) | Select-Object -Last 1) } catch { }
   $c.PS.Dispose(); $script:updCheck = $null
+  $manual = $script:manualCheck
+  if ($manual -and $n -eq 0) { Show-Note 'Up to date' $script:C.Win }
+  if ($manual -and $n -lt 0) { Show-Note "Couldn't reach the dashboard to check" $script:C.Loss }
+  $script:manualCheck = $null
+  if ($manual -and $n -gt 0) { Set-Status $manual.Text $manual.Color }
   if ($n -gt 0) {
     $script:status.Width = 160; $script:updLink.Visible = $true; $script:updLink.BringToFront()
     $script:tray.ShowBalloonTip(5000, 'RL Stats', 'An update is ready. Click Update in the widget to install it.', 'Info')
