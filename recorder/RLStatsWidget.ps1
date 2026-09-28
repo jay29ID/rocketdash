@@ -202,7 +202,7 @@ $script:min.add_Click({ $script:form.Hide(); $script:tray.ShowBalloonTip(2000, '
 $script:close.add_Click({ $script:form.Close() })
 $script:openLink.add_Click({ if (-not (Test-Path $OutDir)) { [void](New-Item -ItemType Directory -Path $OutDir) }; Start-Process explorer.exe $OutDir })
 $script:dashLink.add_Click({ Open-Dashboard })
-$script:mmrLink.add_Click({ Start-Process powershell.exe -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ('"' + (Join-Path $script:here 'LogMMR.ps1') + '"')) })
+$script:mmrLink.add_Click({ Show-TypeMmr })
 
 function Set-Status([string]$Text, $Color) { $script:status.Text = $Text; $script:dot.ForeColor = $Color }
 
@@ -284,18 +284,75 @@ function Update-Session {
 }
 
 function Update-Mmr {
-  if ($script:MmrSamples.Count -eq 0) { return }
-  $latest = $script:MmrSamples[$script:MmrSamples.Count - 1]
+  # Follow the playlist of the last match played; before any match, the latest value logged.
+  $pl = $null
+  if ($script:History.Count -gt 0) { $pl = $script:History[$script:History.Count - 1].playlist }
+  $mine = @($script:MmrSamples | Where-Object { -not $pl -or $_.playlist -eq $pl })
+  if ($mine.Count -eq 0) {
+    if ($pl) { $script:mmrLabel.Text = "MMR ($pl): not logged here, use Type MMR" }
+    elseif ($script:MmrSamples.Count -eq 0) { return }
+    return
+  }
+  $latest = $mine[-1]
   $pl = $latest.playlist
   $todayStr = (Get-Date).ToUniversalTime().ToString('yyyy-MM-dd')
-  $first = $script:MmrSamples | Where-Object { $_.playlist -eq $pl -and $_.logged_at.StartsWith($todayStr) } | Select-Object -First 1
+  $first = $mine | Where-Object { $_.logged_at.StartsWith($todayStr) } | Select-Object -First 1
   $text = "MMR ($pl): $($latest.mmr)"
   if ($first -and $first.mmr -ne $latest.mmr) {
     $delta = $latest.mmr - $first.mmr
     if ($delta -gt 0) { $text += " (+$delta today)" } else { $text += " ($delta today)" }
   }
+  if (-not $latest.logged_at.StartsWith($todayStr)) {
+    try { $text += ' (from ' + ([datetime]::Parse($latest.logged_at).ToLocalTime().ToString('d MMM')) + ')' } catch { }
+  }
   if ($latest.party_size -gt 1) { $text += '  [party queue]' }
   $script:mmrLabel.Text = $text
+}
+
+# Small pop-up for entering an MMR by hand (the game only logs it on the party leader's PC).
+# Saves to mmr.csv, uploads it to the dashboard and updates the MMR line.
+function Show-TypeMmr {
+  $d = New-Object System.Windows.Forms.Form
+  $d.Text = 'Type MMR'; $d.FormBorderStyle = 'FixedToolWindow'; $d.StartPosition = 'CenterParent'
+  $d.ClientSize = New-Object System.Drawing.Size(250, 150); $d.BackColor = $script:C.Panel; $d.TopMost = $true
+  $d.MaximizeBox = $false; $d.MinimizeBox = $false; $d.ShowInTaskbar = $false
+  $who = $script:MmrState.Player
+  if (-not $who) { $who = [Environment]::UserName }
+  $d.Controls.Add((New-Label "Player: $who" 12 8 226 18 $script:F.Small $script:C.Muted))
+  $d.Controls.Add((New-Label 'Playlist' 12 32 70 22 $script:F.Body $script:C.Text))
+  $pick = New-Object System.Windows.Forms.ComboBox
+  $pick.DropDownStyle = 'DropDownList'; $pick.Location = New-Object System.Drawing.Point(86, 32); $pick.Size = New-Object System.Drawing.Size(152, 22)
+  [void]$pick.Items.AddRange(@('Ranked Doubles', 'Ranked Duel', 'Ranked Standard', 'Casual Doubles', 'Casual Duel', 'Casual Standard'))
+  $pl = 'Ranked Doubles'
+  if ($script:History.Count -gt 0 -and $pick.Items.Contains($script:History[$script:History.Count - 1].playlist)) { $pl = $script:History[$script:History.Count - 1].playlist }
+  $pick.SelectedItem = $pl
+  $d.Controls.Add((New-Label 'MMR' 12 64 70 22 $script:F.Body $script:C.Text))
+  $box = New-Object System.Windows.Forms.TextBox
+  $box.Location = New-Object System.Drawing.Point(86, 64); $box.Size = New-Object System.Drawing.Size(80, 22); $box.MaxLength = 4
+  $msg = New-Label '' 12 90 226 18 $script:F.Small $script:C.Loss
+  $ok = New-Object System.Windows.Forms.Button
+  $ok.Text = 'Save'; $ok.Location = New-Object System.Drawing.Point(86, 114); $ok.Size = New-Object System.Drawing.Size(70, 26)
+  $cancel = New-Object System.Windows.Forms.Button
+  $cancel.Text = 'Cancel'; $cancel.Location = New-Object System.Drawing.Point(164, 114); $cancel.Size = New-Object System.Drawing.Size(74, 26)
+  $cancel.DialogResult = 'Cancel'
+  foreach ($b in $ok, $cancel) { $b.FlatStyle = 'Flat'; $b.ForeColor = $script:C.Text; $b.BackColor = $script:C.Line }
+  $d.Controls.AddRange(@($pick, $box, $msg, $ok, $cancel))
+  $d.AcceptButton = $ok; $d.CancelButton = $cancel
+  $ok.add_Click({
+    if ($box.Text.Trim() -notmatch '^\d{2,4}$') { $msg.Text = 'Enter a number, like 1354.'; return }
+    $d.Tag = [int]$box.Text.Trim(); $d.DialogResult = 'OK'; $d.Close()
+  })
+  $d.add_Shown({ $box.Focus() })
+  if ($d.ShowDialog($script:form) -ne 'OK') { $d.Dispose(); return }
+  $sample = [ordered]@{ logged_at = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ'); player = $who
+    playlist = [string]$pick.SelectedItem; mmr = [int]$d.Tag; mu = $null; party_size = $null; source = 'typed' }
+  $d.Dispose()
+  [void]$script:MmrSamples.Add($sample)
+  $cells = @($sample.logged_at, $sample.player, $sample.playlist, $sample.mmr, '', '', 'typed') |
+    ForEach-Object { '"' + ([string]$_).Replace('"', '""') + '"' }
+  try { [IO.File]::AppendAllText((Join-Path $OutDir 'mmr.csv'), ($cells -join ',') + "`r`n", $Utf8NoBom) } catch { }
+  try { Send-Upload 'mmr' $sample } catch { }
+  Update-Mmr
 }
 
 # ---- hooks from the recorder ------------------------------------------------------------------
@@ -344,6 +401,7 @@ $script:OnMatchSaved = {
   Set-PlayerRows @($Record.players) 'saved'
   Set-Status 'Match saved, waiting for the next one' $script:C.Win
   Update-Session
+  Update-Mmr
   if ($Record.result -eq 'Win' -or $Record.result -eq 'Loss') {
     $script:tray.ShowBalloonTip(3000, 'RL Stats', ('{0} {1}-{2} saved' -f $Record.result, $Record.team_score, $Record.opponent_score), 'Info')
   }
