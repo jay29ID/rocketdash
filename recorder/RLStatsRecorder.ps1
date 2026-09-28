@@ -153,6 +153,8 @@ function Get-Pct($Part, $Whole) { if ($Whole -gt 0) { [math]::Round(100.0 * $Par
 # sent for your own team, so opponents end up with empty values for those.
 function Add-Sample($M, $Data) {
   $game = Get-Prop $Data 'Game'
+  $ot = [bool](Get-Prop $game 'bOvertime' $false)
+  if ($ot -ne [bool]$M.WasOvertime) { $M.WasOvertime = $ot; foreach ($ag in $M.Agg.Values) { $ag.LastBoost = $null } }
   $ballTeam = Get-Prop (Get-Prop $game 'Ball') 'TeamNum'
   if ($null -ne $ballTeam -and [int]$ballTeam -ge 0 -and [int]$ballTeam -le 1) { $M.BallTeam[[int]$ballTeam] = 1 + [int]$M.BallTeam[[int]$ballTeam] }
   foreach ($p in @(Get-Prop $Data 'Players' @())) {
@@ -163,13 +165,18 @@ function Add-Sample($M, $Data) {
     if (-not $name -or $null -eq $boost) { continue }
     if (-not $M.Agg.ContainsKey($name)) {
       $M.Agg[$name] = @{ N = 0; Boost = 0.0; Zero = 0; Full = 0; Boosting = 0; Super = 0; Ground = 0; Wall = 0; Air = 0
-        Slide = 0; Speed = 0.0; MaxSpeed = 0.0; DemoedNow = $false; Demoed = 0 }
+        Slide = 0; Speed = 0.0; MaxSpeed = 0.0; DemoedNow = $false; Demoed = 0; LastBoost = $null; Pads = 0 }
     }
     $a = $M.Agg[$name]
     $demoed = [bool](Get-Prop $p 'bDemolished' $false)
     if ($demoed -and -not $a.DemoedNow) { $a.Demoed++ }
     $a.DemoedNow = $demoed
-    if ($demoed -or -not [bool](Get-Prop $p 'bHasCar' $true)) { continue }
+    if ($demoed -or -not [bool](Get-Prop $p 'bHasCar' $true)) { $a.LastBoost = $null; continue }
+    # Boost pads: the game never sent BoostPickup events in our matches, so count jumps in the
+    # tank instead (a small pad is +12, a big one fills it). Respawns and kickoffs reset the
+    # baseline so their free 33 boost isn't counted.
+    if ($null -ne $a.LastBoost -and $boost - $a.LastBoost -ge 8) { $a.Pads++ }
+    $a.LastBoost = $boost
     $speed = [double](Get-Prop $p 'Speed' 0)
     $ground = [bool](Get-Prop $p 'bOnGround' $false); $wall = [bool](Get-Prop $p 'bOnWall' $false)
     $a.N++; $a.Boost += $boost; $a.Speed += $speed
@@ -237,6 +244,7 @@ function Save-Match($M, [string]$Result, $WinnerTeamNum) {
       boost_pickups = $null; loadout = $M.Loadouts[$name]
     }
     if ($M.Pickups.ContainsKey($name)) { $row.boost_pickups = [int]$M.Pickups[$name] }
+    elseif ($a -and $a.N -gt 0) { $row.boost_pickups = [int]$a.Pads }
     if ($hit) { $row.ball_hits = $hit.Count; if ($hit.Max -gt 0) { $row.hardest_hit = [math]::Round($hit.Max, 1) } }
     if ($a) { $row.times_demolished = $a.Demoed }
     if ($n -gt 0) {
@@ -366,9 +374,10 @@ function Invoke-Message($Msg) {
       if (-not [bool](Get-Prop (Get-Prop $data 'Game') 'bReplay' $false)) {
         $m.State = $data; Add-Sample $m $data
         if ($script:OnState) { & $script:OnState $data }
-      }
+      } else { foreach ($ag in $m.Agg.Values) { $ag.LastBoost = $null } }   # kickoff refill follows
     }
     'GoalScored'    {
+      foreach ($ag in $m.Agg.Values) { $ag.LastBoost = $null }
       $last = Get-Prop $data 'BallLastTouch'
       # Shot origin: where the ball was when the last toucher hit it (from BallHit events).
       $shot = $m.LastHitBy[[string](Get-Prop (Get-Prop $last 'Player') 'Name')]
