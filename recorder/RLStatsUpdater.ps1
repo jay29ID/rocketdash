@@ -65,3 +65,31 @@ function Update-RLStats {
     return $false
   }
 }
+
+# Check only: returns how many files differ from the site's copy (0 when up to date or offline).
+# The widget runs this in the background to show its "Update" button.
+function Test-RLStatsUpdate {
+  param(
+    [string]$InstallDir,
+    [string]$OutDir = (Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'RLStats')
+  )
+  $cfgPath = Join-Path $OutDir 'upload.json'
+  if (-not (Test-Path $cfgPath)) { return 0 }
+  try {
+    $cfg = Get-Content $cfgPath -Raw | ConvertFrom-Json
+    if (-not $cfg.url) { return 0 }
+    $base = ([Uri]$cfg.url).GetLeftPart([UriPartial]::Authority)
+    try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch { }
+    $manifest = Invoke-RestMethod -Uri "$base/api/recorder/manifest" -Headers @{ 'X-Upload-Key' = [string]$cfg.key } -TimeoutSec 6 -UseBasicParsing
+    $n = 0
+    foreach ($f in @($manifest.files)) {
+      $name = [string]$f.name
+      if (-not $name -or $name -match '[\\/:*?"<>|]' -or $name -like '*..*' -or $name -ieq 'upload.json') { continue }
+      $local = Join-Path $InstallDir $name
+      $hash = $null
+      if (Test-Path $local) { $hash = (Get-FileHash -Algorithm SHA256 -Path $local).Hash }
+      if ($hash -ne ([string]$f.sha256).ToUpper()) { $n++ }
+    }
+    return $n
+  } catch { return 0 }
+}

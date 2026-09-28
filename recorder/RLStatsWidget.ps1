@@ -23,6 +23,8 @@ function Show-Fatal([string]$Text) {
 # Self-update: check the dashboard site for newer files, swap them in, and restart once.
 # This runs before the mutex below is taken, so the relaunched copy can take it.
 $script:updater = Join-Path $script:here 'RLStatsUpdater.ps1'
+$script:selfPath = $MyInvocation.MyCommand.Path
+$script:restartAfterClose = $false
 if (-not $NoUpdate -and (Test-Path $script:updater)) {
   . $script:updater
   if (Update-RLStats -InstallDir $script:here) {
@@ -31,6 +33,8 @@ if (-not $NoUpdate -and (Test-Path $script:updater)) {
     return
   }
 }
+
+if ((Test-Path $script:updater) -and -not (Get-Command Update-RLStats -ErrorAction SilentlyContinue)) { . $script:updater }
 
 # Only one copy at a time, otherwise every match would be saved twice.
 $script:mutex = New-Object System.Threading.Mutex($false, 'Local\RLStatsWidget')
@@ -85,12 +89,14 @@ $script:header = New-Object System.Windows.Forms.Panel
 $script:header.Location = New-Object System.Drawing.Point(0, 0); $script:header.Size = New-Object System.Drawing.Size(360, 30); $script:header.BackColor = $script:C.Panel
 $script:form.Controls.Add($script:header)
 $script:dot = New-Label $script:Bullet 8 4 18 22 $script:F.Dot $script:C.Amber 'MiddleCenter'
-$script:status = New-Label 'Starting...' 28 5 200 20 $script:F.Small $script:C.Muted
+$script:status = New-Label 'Starting...' 28 5 228 20 $script:F.Small $script:C.Muted
+$script:updLink = New-Label 'Update' 190 5 66 20 $script:F.Bold $script:C.Win 'MiddleCenter'
+$script:updLink.Visible = $false
 $script:pin = New-Label 'Pin' 262 5 30 20 $script:F.Small $script:C.Text 'MiddleCenter'
 $script:min = New-Label '_' 296 3 28 22 $script:F.Bold $script:C.Muted 'MiddleCenter'
 $script:close = New-Label 'x' 326 3 28 22 $script:F.Bold $script:C.Muted 'MiddleCenter'
-foreach ($b in $script:pin, $script:min, $script:close) { $b.Cursor = [System.Windows.Forms.Cursors]::Hand }
-$script:header.Controls.AddRange(@($script:dot, $script:status, $script:pin, $script:min, $script:close))
+foreach ($b in $script:pin, $script:min, $script:close, $script:updLink) { $b.Cursor = [System.Windows.Forms.Cursors]::Hand }
+$script:header.Controls.AddRange(@($script:dot, $script:status, $script:updLink, $script:pin, $script:min, $script:close))
 
 # score block
 $script:blueName = New-Label 'BLUE' 16 40 110 20 $script:F.Small $script:C.Blue 'MiddleLeft'
@@ -372,6 +378,49 @@ $script:slow = New-Object System.Windows.Forms.Timer
 $script:slow.Interval = 60000
 $script:slow.add_Tick({ try { Update-Session } catch { } })
 
+# ---- updates while running ----------------------------------------------------------------------
+# Every 15 minutes a background check compares this install with the dashboard site. When something
+# is newer, the header shows an "Update" button; clicking it installs the files and restarts.
+$script:updCheck = $null
+function Start-UpdateCheck {
+  if ($script:updCheck -or $script:updLink.Visible -or -not (Get-Command Test-RLStatsUpdate -ErrorAction SilentlyContinue)) { return }
+  $ps = [powershell]::Create()
+  [void]$ps.AddScript({ param($U, $Dir, $Out) . $U; Test-RLStatsUpdate -InstallDir $Dir -OutDir $Out }).AddArgument($script:updater).AddArgument($script:here).AddArgument($OutDir)
+  $script:updCheck = @{ PS = $ps; Handle = $ps.BeginInvoke() }
+}
+function Step-UpdateCheck {
+  $c = $script:updCheck
+  if (-not $c -or -not $c.Handle.IsCompleted) { return }
+  $n = 0
+  try { $n = [int](@($c.PS.EndInvoke($c.Handle)) | Select-Object -Last 1) } catch { }
+  $c.PS.Dispose(); $script:updCheck = $null
+  if ($n -gt 0) {
+    $script:status.Width = 160; $script:updLink.Visible = $true; $script:updLink.BringToFront()
+    $script:tray.ShowBalloonTip(5000, 'RL Stats', 'An update is ready. Click Update in the widget to install it.', 'Info')
+  }
+}
+function Invoke-UpdateNow {
+  if ($script:InMatch) {
+    [void][System.Windows.Forms.MessageBox]::Show('Finish this match first, so it gets saved. Then click Update.', 'RL Stats', 'OK', 'Information')
+    return
+  }
+  Set-Status 'Updating...' $script:C.Blue
+  $script:form.Refresh()
+  if (Update-RLStats -InstallDir $script:here -OutDir $OutDir) {
+    $script:restartAfterClose = $true
+    $script:form.Close()
+  } else {
+    Set-Status 'Update failed, try again later' $script:C.Loss
+  }
+}
+$script:updLink.add_Click({ Invoke-UpdateNow })
+$script:updTimer = New-Object System.Windows.Forms.Timer
+$script:updTimer.Interval = 15 * 60 * 1000
+$script:updTimer.add_Tick({ try { Start-UpdateCheck } catch { } })
+$script:updPoll = New-Object System.Windows.Forms.Timer
+$script:updPoll.Interval = 2000
+$script:updPoll.add_Tick({ try { Step-UpdateCheck } catch { } })
+
 $script:form.add_Shown({
   try {
     Set-Status 'Waiting for Rocket League' $script:C.Amber
@@ -380,11 +429,11 @@ $script:form.add_Shown({
     Initialize-Upload
     Initialize-MmrLog; Update-Mmr
   } catch { Set-Status "Error: $($_.Exception.Message)" $script:C.Loss }
-  $script:timer.Start(); $script:slow.Start()
+  $script:timer.Start(); $script:slow.Start(); $script:updTimer.Start(); $script:updPoll.Start()
 })
 
 $script:form.add_FormClosing({
-  $script:timer.Stop(); $script:slow.Stop()
+  $script:timer.Stop(); $script:slow.Stop(); $script:updTimer.Stop(); $script:updPoll.Stop()
   try {
     if (-not (Test-Path $OutDir)) { [void](New-Item -ItemType Directory -Path $OutDir) }
     $json = ConvertTo-Json -InputObject @{ x = $script:form.Left; y = $script:form.Top; pinned = $script:form.TopMost } -Compress
@@ -400,4 +449,8 @@ try {
   Show-Fatal "RL Stats stopped because of an error:`n`n$($_.Exception.Message)"
 } finally {
   $script:mutex.ReleaseMutex()
+  if ($script:restartAfterClose) {
+    Start-Process powershell.exe -WindowStyle Hidden -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-STA',
+      '-WindowStyle', 'Hidden', '-File', ('"' + $script:selfPath + '"'), '-NoUpdate')
+  }
 }
