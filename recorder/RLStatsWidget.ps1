@@ -253,8 +253,8 @@ $script:themeBtn.Cursor = [System.Windows.Forms.Cursors]::Hand
 $script:header.Controls.AddRange(@($script:dot, $script:status, $script:updLink, $script:themeBtn, $script:pin, $script:min, $script:close))
 
 # score block
-$script:blueName = New-Label 'BLUE' 16 40 110 20 $script:F.Small $script:C.Blue 'MiddleLeft'
-$script:orangeName = New-Label 'ORANGE' 234 40 110 20 $script:F.Small $script:C.Orange 'MiddleRight'
+$script:blueName = New-Label 'BLUE' 16 40 104 20 $script:F.Small $script:C.Blue 'MiddleLeft'
+$script:orangeName = New-Label 'ORANGE' 240 40 104 20 $script:F.Small $script:C.Orange 'MiddleRight'
 $script:score = New-Label ("0 $script:Dash 0") 90 34 180 44 $script:F.Score $script:C.Text 'MiddleCenter'
 $script:sub = New-Label 'Waiting for a match' 16 76 328 18 $script:F.Small $script:C.Muted 'MiddleCenter'
 if ($script:Theme -eq 'rl') {
@@ -263,6 +263,19 @@ if ($script:Theme -eq 'rl') {
   $script:blueName.Location = New-Object System.Drawing.Point(18, 40); $script:blueName.Width = 96
   $script:orangeName.Location = New-Object System.Drawing.Point(246, 40); $script:orangeName.Width = 96
   $script:blueName.AutoEllipsis = $true; $script:orangeName.AutoEllipsis = $true
+}
+# Long team names ("THE DANGEROUS NIGHTS CREW") shrink to fit on one line, then get "..." if still too long.
+foreach ($l in $script:blueName, $script:orangeName) { $l.AutoEllipsis = $true; $l.UseMnemonic = $false }
+$script:NameFonts = foreach ($pt in 8.25, 7.5, 6.75, 6) { New-Object System.Drawing.Font($script:F.Small.FontFamily, [single]($pt * $script:UiScale), $script:F.Small.Style) }
+function Set-TeamName($Label, [string]$Text) {
+  if ($Label.Text -eq $Text) { return }
+  $flags = [System.Windows.Forms.TextFormatFlags]'SingleLine, NoPadding'
+  $pick = $script:NameFonts[-1]
+  foreach ($f in $script:NameFonts) {
+    $w = [System.Windows.Forms.TextRenderer]::MeasureText($Text, $f, (New-Object System.Drawing.Size([int]::MaxValue, 100)), $flags).Width
+    if ($w -le $Label.ClientSize.Width - 4) { $pick = $f; break }
+  }
+  $Label.Font = $pick; $Label.Text = $Text
 }
 $script:form.Controls.AddRange(@($script:blueName, $script:orangeName, $script:score, $script:sub))
 
@@ -1064,7 +1077,7 @@ $script:OnState = {
     if ((Get-Prop $t 'TeamNum') -eq 1) { $o = Get-Prop $t 'Score' 0; $on = Get-Prop $t 'Name' 'ORANGE' }
   }
   $script:score.Text = "$b $script:Dash $o"
-  $script:blueName.Text = ([string]$bn).ToUpper(); $script:orangeName.Text = ([string]$on).ToUpper()
+  Set-TeamName $script:blueName ([string]$bn).ToUpper(); Set-TeamName $script:orangeName ([string]$on).ToUpper()
   $pl = $null; $plId = Get-Prop $game 'PlaylistId'
   if ($null -ne $plId -and $Playlists.ContainsKey([int]$plId)) { $pl = $Playlists[[int]$plId] }
   $script:sub.Text = (@($pl, (Format-Clock (Get-Prop $game 'TimeSeconds') ([bool](Get-Prop $game 'bOvertime' $false)))) | Where-Object { $_ }) -join '   '
