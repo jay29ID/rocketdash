@@ -103,6 +103,7 @@ function makeSample(names){
         goals.push({team:my,ours:true,scorer:names[who],assister:mate>=0?names[mate]:null,since_kickoff:+(rnd()<.12?3+rnd()*11:16+rnd()*70).toFixed(1),since_save:rnd()<.25?+(2+rnd()*20).toFixed(1):null,speed:Math.round(clamp(norm(prof[who].gs,18),35,140)),...pos(spot(who?.8:1),f)});
       }
       for(let g=0;g<them;g++)goals.push({team:1-my,ours:false,scorer:'Opponent',speed:Math.round(clamp(norm(86,18),35,140)),...pos(spot(1.1),-f)});
+      for(let g=goals.length-1;g>0;g--){const k=Math.floor(rnd()*(g+1));[goals[g],goals[k]]=[goals[k],goals[g]];}
       const players=prof.map((p,j)=>{
         const L=lines[j],shots=L.goals+pois(Math.max(.4,p.sh-p.g)),saves=pois(p.sv*(them>2?1.25:1)),demos=pois(p.d),touches=Math.max(8,Math.round(norm(p.t,5)));
         const air=+clamp(norm(p.air,1.8),1,20).toFixed(1),wall=+clamp(norm(p.wall,2.5),3,25).toFixed(1);
@@ -162,9 +163,13 @@ function toMatch(r){
       ix:co(i,'X')!=null?f*co(i,'X'):null,iz:co(i,'Z')};
   });
   const dur=num(r.duration_seconds)||300;
+  // Lowest and highest goal margin during the match, replayed from the goals in scoring order.
+  // Skipped when the goals don't add up to the final score.
+  let mg=0,lo=0,hi=0;goals.forEach(g=>{mg+=g.ours?1:-1;lo=Math.min(lo,mg);hi=Math.max(hi,mg);});
+  const swing=goals.length&&mg===(num(r.team_score)||0)-(num(r.opponent_score)||0)?{lo,hi}:null;
   const left=(r.players_left||[]).filter(Boolean).map(x=>({name:x.name,ours:myTeam!=null&&num(x.team)===myTeam}));
   return {guid:r.match_guid,when:new Date(r.started_at),win:r.result==='Win',us:num(r.team_score)||0,them:num(r.opponent_score)||0,
-    ot:!!r.overtime,dur,arena:arenaName(r.arena),playlist:r.playlist||'Unknown playlist',lines,
+    ot:!!r.overtime,dur,swing,arena:arenaName(r.arena),playlist:r.playlist||'Unknown playlist',lines,
     ourGoals:goals.filter(g=>g.ours),theirGoals:goals.filter(g=>!g.ours),
     replay:!!r.replay_created,forfeit:!!r.forfeit,left,
     spectators:Array.isArray(r.spectators)?r.spectators.map(String):null,
@@ -483,6 +488,16 @@ function renderCrowd(list){
     :`<p class="note">No drinks logged yet. Use + on ${esc(PLAYERS[0].short)}'s widget as the night goes on.</p>`;
 }
 
+// ---------- comebacks & leads ----------
+// Margins move one goal at a time, so being down 3 at some point means passing through down 1 and 2.
+function renderSwing(list){
+  const l=list.filter(m=>m.swing);
+  const row=n=>{const g=l.filter(m=>n<0?m.swing.lo<=n:m.swing.hi>=n),a=Math.abs(n);
+    return crowdRow((n<0?'Down ':'Up ')+a+(a>1?' goals':' goal'),g.length+(g.length===1?' game':' games'),g);};
+  $('behindRows').innerHTML=[-3,-2,-1].map(row).join('');
+  $('aheadRows').innerHTML=[1,2,3].map(row).join('');
+}
+
 // ---------- match log ----------
 function renderLog(list){
   const rows=[...list].reverse().slice(0,15);
@@ -509,7 +524,7 @@ function syncButtons(){
   document.querySelectorAll('#mode button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.m===mode));
   document.querySelectorAll('#metric button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.k===metric));
 }
-function renderPeriod(){const list=inPeriod();renderSummary(list);renderCmp(list);renderMaps(list);renderPlay(list);renderCrowd(list);renderLog(list);syncButtons();}
+function renderPeriod(){const list=inPeriod();renderSummary(list);renderCmp(list);renderMaps(list);renderPlay(list);renderCrowd(list);renderSwing(list);renderLog(list);syncButtons();}
 // ---------- warm-ups ----------
 // A night is every match with gaps under 90 minutes. Its warm-ups are the Casual Doubles games
 // played before the first Ranked Doubles game; the ranked games that night are what follows.
