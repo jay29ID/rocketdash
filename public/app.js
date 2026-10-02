@@ -100,7 +100,7 @@ function makeSample(names){
       for(let g=0;g<us;g++){
         const who=Math.floor(rnd()*names.length);lines[who].goals++;
         const mate=names.length>1&&rnd()<.55?(who+1+Math.floor(rnd()*(names.length-1)))%names.length:-1;if(mate>=0)lines[mate].assists++;
-        goals.push({team:my,ours:true,scorer:names[who],assister:mate>=0?names[mate]:null,speed:Math.round(clamp(norm(prof[who].gs,18),35,140)),...pos(spot(who?.8:1),f)});
+        goals.push({team:my,ours:true,scorer:names[who],assister:mate>=0?names[mate]:null,since_kickoff:+(rnd()<.12?3+rnd()*11:16+rnd()*70).toFixed(1),since_save:rnd()<.25?+(2+rnd()*20).toFixed(1):null,speed:Math.round(clamp(norm(prof[who].gs,18),35,140)),...pos(spot(who?.8:1),f)});
       }
       for(let g=0;g<them;g++)goals.push({team:1-my,ours:false,scorer:'Opponent',speed:Math.round(clamp(norm(86,18),35,140)),...pos(spot(1.1),-f)});
       const players=prof.map((p,j)=>{
@@ -114,7 +114,7 @@ function makeSample(names){
       matches.push({match_guid:'sample-'+si+'-'+k,started_at:new Date(t).toISOString(),duration_seconds:dur,playlist:warm?'Casual Doubles':'Ranked Doubles',arena:pick(arenas),
         overtime:ot,my_team:my,result:win?'Win':'Loss',team_score:us,opponent_score:them,goals,players,
         replay_created:rnd()<.2?new Date(t+dur*1000).toISOString():null,
-        players_left:rnd()<.08?[{name:'Opponent',team:1-my}]:[],spectators:crowd,drinks:{[names[0]]:Math.floor(k*.7)}});
+        kickoffs:us+them+1,players_left:rnd()<.08?[{name:'Opponent',team:1-my}]:[],spectators:crowd,drinks:{[names[0]]:Math.floor(k*.7)}});
       t+=(dur+60+Math.floor(rnd()*90))*1000;
     }
     rating=rating.map((v,j)=>Math.round(v+w*(8.5+j)+norm(0,6)));
@@ -131,14 +131,20 @@ let period='30', mode='avg', metric='winpct', playlist=null, mapSide='us', mapWh
 try{const s=JSON.parse(localStorage.getItem('rl-duo-ui')||'{}');if(s.period)period=s.period;if(s.mode)mode=s.mode;if(s.metric)metric=s.metric;if(s.playlist)playlist=s.playlist;}catch(e){}
 const saveUi=()=>{try{localStorage.setItem('rl-duo-ui',JSON.stringify({period,mode,metric,playlist}))}catch(e){}};
 
+// Goals within this many seconds of play after a kickoff, or after a save by the scoring team.
+const QUICK=15;
 function toMatch(r){
   const rows=r.players||[];
+  // Only matches recorded with kickoff timing can say how quick a goal was.
+  const kicks=num(r.kickoffs)>0;
+  const quick=(p,k)=>kicks?(r.goals||[]).filter(g=>g&&g.scorer===p.name&&num(g[k])!=null&&+g[k]<=QUICK).length:null;
   const lines=PLAYERS.map(p=>{
     const row=rows.find(x=>x&&x.name===p.name);if(!row)return null;
     return {score:num(row.score)||0,goals:num(row.goals)||0,assists:num(row.assists)||0,shots:num(row.shots)||0,saves:num(row.saves)||0,
       demos:num(row.demos)||0,touches:num(row.touches)||0,bumps:num(row.car_touches),boost:num(row.avg_boost),ss:num(row.pct_supersonic),
       air:num(row.pct_air),wall:num(row.pct_wall),ground:num(row.pct_ground),hardest:toKmh(num(row.hardest_hit)),
       pickups:num(row.boost_pickups),car:carName(row.loadout),
+      kickoffGoals:quick(p,'since_kickoff'),saveGoals:quick(p,'since_save'),
       noBoost:row.zero_boost_fixed&&num(row.pct_zero_boost)!=null?num(row.pct_zero_boost)/100*(num(r.duration_seconds)||300):null,
       goalSpeeds:(r.goals||[]).filter(g=>g&&!(+g.goal_time<=0&&(r.goals||[]).some(x=>x&&+x.goal_time>0))&&g.scorer===p.name&&num(g.speed)!=null).map(g=>+g.speed)};
   });
@@ -211,6 +217,8 @@ function agg(list){
     ['score','goals','assists','shots','saves','demos','touches'].forEach(k=>t[k]=L.reduce((s,l)=>s+l[k],0));
     const avg=k=>{const v=L.map(l=>l[k]).filter(v=>v!=null);return v.length?v.reduce((a,b)=>a+b,0)/v.length:null;};
     ['boost','ss','air','wall','ground','bumps','pickups'].forEach(k=>t[k]=avg(k));
+    const tl=L.filter(l=>l.kickoffGoals!=null);t.timed=tl.length;
+    ['kickoffGoals','saveGoals'].forEach(k=>t[k]=tl.reduce((s,l)=>s+l[k],0));
     const cars={};L.forEach(l=>{if(l.car)cars[l.car]=(cars[l.car]||0)+1;});
     t.car=Object.keys(cars).sort((a,b)=>cars[b]-cars[a])[0]||null;
     t.shotpct=t.shots?100*t.goals/t.shots:null;
@@ -281,19 +289,20 @@ function renderStrip(){
 }
 
 // ---------- comparison ----------
-const STATS=[{k:'score',label:'Score'},{k:'goals',label:'Goals'},{k:'assists',label:'Assists'},{k:'shots',label:'Shots'},{k:'shotpct',label:'Shooting %',pct:true},{k:'saves',label:'Saves'},{k:'demos',label:'Demos'},{k:'touches',label:'Touches'},{k:'mvp',label:'Top scorer',count:true}];
+const STATS=[{k:'score',label:'Score'},{k:'goals',label:'Goals'},{k:'assists',label:'Assists'},{k:'shots',label:'Shots'},{k:'shotpct',label:'Shooting %',pct:true},{k:'saves',label:'Saves'},{k:'demos',label:'Demos'},{k:'touches',label:'Touches'},{k:'kickoffGoals',label:'Kickoff goals',n:'timed',tip:`Goals within ${QUICK}s of play after a kickoff`},{k:'saveGoals',label:'Counter goals',n:'timed',tip:`Goals within ${QUICK}s of play after a save by your team`},{k:'mvp',label:'Top scorer',count:true}];
 function renderCmp(list){
   const A=agg(list);
   const rows=STATS.map(s=>{
     const vals=A.map(a=>{
       if(s.pct)return a[s.k];
       if(s.count)return mode==='avg'?(a.both?100*a.mvp/a.both:null):a.mvp;
-      return a.games?(mode==='avg'?a[s.k]/a.games:a[s.k]):null;
+      const g=s.n?a[s.n]:a.games;
+      return g?(mode==='avg'?a[s.k]/g:a[s.k]):null;
     });
     const mx=Math.max(1e-9,...vals.filter(v=>v!=null));
     const fmt=v=>v==null?'–':s.pct||(s.count&&mode==='avg')?v.toFixed(0)+'%':mode==='avg'?(s.k==='score'||s.k==='touches'?v.toFixed(0):v.toFixed(2)):Math.round(v).toLocaleString();
     const label=s.count&&mode==='avg'?'Top scorer %':s.label;
-    return `<div class="cmp-row"><span class="stat">${label}</span>`+vals.map((v,j)=>`<div class="bar"><span class="val ${leads(vals,j)?'lead':''}">${fmt(v)}</span><div class="track"><div class="fill" style="width:${v==null?0:(100*v/mx).toFixed(1)}%;background:${PLAYERS[j].color}"></div></div></div>`).join('')+'</div>';
+    return `<div class="cmp-row"><span class="stat"${s.tip?` title="${s.tip}"`:''}>${label}</span>`+vals.map((v,j)=>`<div class="bar"><span class="val ${leads(vals,j)?'lead':''}">${fmt(v)}</span><div class="track"><div class="fill" style="width:${v==null?0:(100*v/mx).toFixed(1)}%;background:${PLAYERS[j].color}"></div></div></div>`).join('')+'</div>';
   });
   $('cmp').innerHTML=`<div class="cmp-row head"><span>${list.length} games</span>`+PLAYERS.map((p,j)=>`<span class="tag ${p.tag}" style="justify-self:start"><i></i>${esc(p.name)} · ${A[j].games}</span>`).join('')+'</div>'+rows.join('');
 }
