@@ -15,22 +15,13 @@ No dependencies: `npm start` runs `server.js` on Node 18+.
 
 ## Running your own copy
 
-The site runs anywhere Node 18+ does. On your own PC, in PowerShell:
+To run the site on your own Windows PC:
 
 ```powershell
-$env:VIEW_KEY = 'pick-a-view-secret'
-$env:UPLOAD_KEY = 'pick-an-upload-secret'
-$env:PLAYERS = 'YourName'
-npm start
+npm run local
 ```
 
-Then point the recorder at it with `Documents\RLStats\upload.json`:
-
-```json
-{ "url": "http://localhost:3000/api/ingest", "key": "pick-an-upload-secret" }
-```
-
-Open `http://localhost:3000/s/pick-a-view-secret` once to sign in. Data is kept in `data\store.json`. The sign-in cookie is `Secure`, so other devices need the site behind HTTPS.
+It asks which players to show (Enter keeps the last list), makes a random view key and upload key the first time, and keeps them in `data\local.json`. It points the recorder at this copy through `Documents\RLStats\upload.json`, asking first if matches currently go to another site. Then it starts the site on port 3000 and opens it, signed in. Matches are kept in `data\store.json`. The sign-in cookie is `Secure`, so other devices need the site behind HTTPS.
 
 The widget records the names set under **Players...** (in the tray menu and the theme menu) as your team, and asks for them the first time it starts. Every player's stats are saved for every match, so adding a regular teammate to `PLAYERS` later also fills in their past games.
 

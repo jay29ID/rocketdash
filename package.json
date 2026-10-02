@@ -5,7 +5,8 @@
   "description": "Rocket League duo stats dashboard fed by the RL stats recorder",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "local": "powershell -NoProfile -ExecutionPolicy Bypass -File start-local.ps1"
   },
   "engines": {
     "node": ">=18"
