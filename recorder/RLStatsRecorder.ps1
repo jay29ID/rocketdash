@@ -138,7 +138,7 @@ function Get-Match([string]$Guid) {
       Feed = @{}         # per-player counts of statfeed events (EpicSave, AerialGoal, ...)
       FeedAgainst = @{}  # per-player counts of statfeed events where they were the second target (e.g. got demoed)
       Hits = @{}         # per-player ball hits and hardest hit
-      Crossbars = @{}; BallTeam = @{}; LastSecond = $null
+      Crossbars = @{}; BallTeam = @{}; LastSecond = $null; ClockStart = $null   # clock at the first update, for time played
       LastHitBy = @{}; LastHit = $null   # where the ball was on each player's latest touch (shot origin for goals)
       Loadouts = @{}     # per-player car and cosmetics, from UpdateState
       Pickups = @{}      # per-player boost pad pickups (BoostPickup events)
@@ -204,6 +204,7 @@ function Add-Sample($M, $Data) {
   }
   # Slim once-a-second timeline for charts (score, boost and speed over time).
   $sec = Get-Prop $game 'TimeSeconds'
+  if ($null -eq $M.ClockStart -and $null -ne $sec -and -not $ot) { $M.ClockStart = [int]$sec }
   if ($null -ne $sec -and $sec -ne $M.LastSecond) {
     $M.LastSecond = $sec
     $slim = foreach ($p in @(Get-Prop $Data 'Players' @())) {
@@ -220,6 +221,11 @@ function Save-Match($M, [string]$Result, $WinnerTeamNum) {
   $M.Saved = $true
   [void]$script:DoneMatches.Add($M.Guid)
   $game = Get-Prop $M.State 'Game'
+  # Time played by the match clock, which counts down in regulation and up in overtime.
+  $clock = Get-Prop $game 'TimeSeconds'; $played = $null
+  if ($null -ne $M.ClockStart -and $null -ne $clock) {
+    if ([bool](Get-Prop $game 'bOvertime' $false)) { $played = $M.ClockStart + [int]$clock } else { $played = $M.ClockStart - [int]$clock }
+  }
   $players = @(Get-Prop $M.State 'Players' @())
   $teams = @(Get-Prop $game 'Teams' @())
   $playlistId = Get-Prop $game 'PlaylistId'
@@ -282,7 +288,7 @@ function Save-Match($M, [string]$Result, $WinnerTeamNum) {
     match_guid = $M.Guid
     started_at = $M.StartedAt.ToString('o')
     ended_at = (Get-Date).ToUniversalTime().ToString('o')
-    duration_seconds = Get-Prop $game 'Elapsed'
+    duration_seconds = $played
     playlist_id = $playlistId; playlist = $playlist
     arena = Get-Prop $game 'Arena'
     overtime = [bool](Get-Prop $game 'bOvertime' $false)
