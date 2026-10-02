@@ -144,7 +144,7 @@ function Get-Match([string]$Guid) {
       Pickups = @{}      # per-player boost pad pickups (BoostPickup events)
       Left = New-Object System.Collections.ArrayList   # players who quit before the end (PlayerLeft)
       Replay = $null     # set when the game sends ReplayCreated
-      Kickoffs = 0; KickoffAt = $null; SaveAt = @{}   # game time of the latest kickoff and of each team's latest save
+      Kickoffs = 0; KickoffAt = $null; SaveAt = @{}   # when the latest kickoff and each team's latest save happened
     }
   }
   return $script:OpenMatches[$Guid]
@@ -158,10 +158,10 @@ function Add-Count([hashtable]$Table, [string]$Key, [string]$Sub) {
 
 function Get-Pct($Part, $Whole) { if ($Whole -gt 0) { [math]::Round(100.0 * $Part / $Whole, 1) } else { $null } }
 
-# Game time from the latest UpdateState. It only runs while the ball is in play, so replays and
-# kickoff countdowns don't count towards the gaps below.
-function Get-Elapsed($M) { $e = Get-Prop (Get-Prop $M.State 'Game') 'Elapsed'; if ($null -ne $e) { [double]$e } }
-function Get-Since($M, $From) { $now = Get-Elapsed $M; if ($null -ne $now -and $null -ne $From) { [math]::Round($now - $From, 1) } }
+# Seconds since an earlier event, by when the events arrived. Play never stops between a kickoff or
+# a save and the next goal (replays come after goals), so this is time in play. The game's own
+# GoalTime counts from the countdown and runs on across overtime, and its clock waits for the first touch.
+function Get-Since($From) { if ($null -ne $From) { [math]::Round(((Get-Date) - $From).TotalSeconds, 1) } }
 
 # Adds one UpdateState snapshot to the running totals. Boost and movement are only
 # sent for your own team, so opponents end up with empty values for those.
@@ -409,8 +409,8 @@ function Invoke-Message($Msg) {
         last_touch = Get-Prop (Get-Prop $last 'Player') 'Name'; last_touch_speed = Get-Prop $last 'Speed'
         impact = Get-Prop $data 'ImpactLocation'
         shot_from = $shot.location; shot_from_player = $shot.player; shot_speed = $shot.speed
-        since_kickoff = Get-Since $m $m.KickoffAt
-        since_save = Get-Since $m $m.SaveAt[[int](Get-Prop (Get-Prop $data 'Scorer') 'TeamNum' -1)]
+        since_kickoff = Get-Since $m.KickoffAt
+        since_save = Get-Since $m.SaveAt[[int](Get-Prop (Get-Prop $data 'Scorer') 'TeamNum' -1)]
         ours = $null
       })
       if ($script:OnGoal) { try { & $script:OnGoal $m.Goals[$m.Goals.Count - 1] } catch { } }
@@ -436,9 +436,9 @@ function Invoke-Message($Msg) {
       Add-Count $m.Feed ([string](Get-Prop (Get-Prop $data 'MainTarget') 'Name')) $kind
       Add-Count $m.FeedAgainst ([string](Get-Prop (Get-Prop $data 'SecondaryTarget') 'Name')) $kind
       $saveTeam = Get-Prop (Get-Prop $data 'MainTarget') 'TeamNum'
-      if ($kind -in 'Save', 'EpicSave' -and $null -ne $saveTeam) { $m.SaveAt[[int]$saveTeam] = Get-Elapsed $m }
+      if ($kind -in 'Save', 'EpicSave' -and $null -ne $saveTeam) { $m.SaveAt[[int]$saveTeam] = Get-Date }
     }
-    'RoundStarted'  { $m.Kickoffs++; $m.KickoffAt = Get-Elapsed $m; $m.SaveAt = @{} }
+    'RoundStarted'  { $m.Kickoffs++; $m.KickoffAt = Get-Date; $m.SaveAt = @{} }
     'BoostPickup'   {
       $name = [string](Get-Prop (Get-Prop $data 'Player') 'Name')
       if (-not $name) { $name = [string](Get-Prop $data 'PlayerName') }
