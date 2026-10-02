@@ -13,7 +13,8 @@
   --bg:#eef1f5; --surface:#ffffff; --surface-2:#f6f8fb;
   --ink:#0e1420; --ink-2:#465164; --muted:#768194;
   --line:#dbe0e8; --grid:#e9edf2;
-  --p1:#2a78d6; --p2:#eb6834; --p1-soft:#2a78d61f; --p2-soft:#eb68341f;
+  --p1:#2a78d6; --p2:#eb6834; --p3:#1baf7a; --p4:#eda100;
+  --p1-soft:#2a78d61f; --p2-soft:#eb68341f; --p3-soft:#1baf7a1f; --p4-soft:#eda1001f;
   --win:#1b8f4c; --loss:#cf3b36; --win-soft:#1b8f4c1a; --loss-soft:#cf3b361a;
   --focus:#2a78d6; --heat:#e08a00; --opp:#6b7686; --pitch:#e6ebe4; --pitch-line:#c3ccc0;
   --display:"Chakra Petch", "Rajdhani", "Segoe UI", system-ui, sans-serif;
@@ -26,7 +27,8 @@
     --bg:#0b1017; --surface:#131a24; --surface-2:#18212d;
     --ink:#eef2f7; --ink-2:#aab4c3; --muted:#7c8899;
     --line:#233042; --grid:#1b2533;
-    --p1:#3987e5; --p2:#d95926; --p1-soft:#3987e526; --p2-soft:#d9592626;
+    --p1:#3987e5; --p2:#d95926; --p3:#199e70; --p4:#c98500;
+    --p1-soft:#3987e526; --p2-soft:#d9592626; --p3-soft:#199e7026; --p4-soft:#c9850026;
     --win:#3fb872; --loss:#e5605a; --win-soft:#3fb87222; --loss-soft:#e5605a22;
     --focus:#5fa0ee; --heat:#f0a62a; --opp:#9aa5b5; --pitch:#15201a; --pitch-line:#2e3d33;
   }
@@ -36,7 +38,8 @@
   --bg:#0b1017; --surface:#131a24; --surface-2:#18212d;
   --ink:#eef2f7; --ink-2:#aab4c3; --muted:#7c8899;
   --line:#233042; --grid:#1b2533;
-  --p1:#3987e5; --p2:#d95926; --p1-soft:#3987e526; --p2-soft:#d9592626;
+  --p1:#3987e5; --p2:#d95926; --p3:#199e70; --p4:#c98500;
+  --p1-soft:#3987e526; --p2-soft:#d9592626; --p3-soft:#199e7026; --p4-soft:#c9850026;
   --win:#3fb872; --loss:#e5605a; --win-soft:#3fb87222; --loss-soft:#e5605a22;
   --focus:#5fa0ee; --heat:#f0a62a; --opp:#9aa5b5; --pitch:#15201a; --pitch-line:#2e3d33;
 }
@@ -58,8 +61,9 @@ header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:spac
 .duo .names{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .tag{display:inline-flex;align-items:center;gap:6px;font-family:var(--display);font-weight:600;font-size:13px;padding:3px 10px;border-radius:4px}
 .tag.p1{background:var(--p1-soft);color:var(--ink)} .tag.p2{background:var(--p2-soft);color:var(--ink)}
+.tag.p3{background:var(--p3-soft);color:var(--ink)} .tag.p4{background:var(--p4-soft);color:var(--ink)}
 .tag i{width:8px;height:8px;border-radius:2px;display:inline-block}
-.tag.p1 i{background:var(--p1)} .tag.p2 i{background:var(--p2)}
+.tag.p1 i{background:var(--p1)} .tag.p2 i{background:var(--p2)} .tag.p3 i{background:var(--p3)} .tag.p4 i{background:var(--p4)}
 .sample{font-size:12px;color:var(--ink-2);border:1px dashed var(--line);border-radius:4px;padding:2px 8px}
 .seg{display:inline-flex;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:3px;gap:2px}
 .seg button{border:0;background:transparent;padding:6px 12px;border-radius:4px;cursor:pointer;color:var(--ink-2);font-weight:500;font-size:13px}
@@ -119,7 +123,7 @@ header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:spac
 
 /* comparison */
 .cmp{display:flex;flex-direction:column}
-.cmp-row{display:grid;grid-template-columns:110px minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:center;padding:8px 0;border-bottom:1px solid var(--grid)}
+.cmp-row{display:grid;grid-template-columns:110px repeat(var(--n,2),minmax(0,1fr));gap:12px;align-items:center;padding:8px 0;border-bottom:1px solid var(--grid)}
 .cmp-row:last-child{border-bottom:0}
 .cmp-row.head{padding-top:0;font-size:12px;color:var(--muted)}
 .cmp-row .stat{font-weight:500}
@@ -128,7 +132,7 @@ header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:spac
 .bar .fill{height:100%;border-radius:0 3px 3px 0}
 .bar .val{font-family:var(--mono);font-size:13px;min-width:52px;text-align:right}
 .bar .val.lead{font-weight:600}
-@media (max-width:460px){.cmp-row{grid-template-columns:78px minmax(0,1fr) minmax(0,1fr);gap:8px}.bar .val{min-width:40px}}
+@media (max-width:460px){.cmp-row{grid-template-columns:78px repeat(var(--n,2),minmax(0,1fr));gap:8px}.bar .val{min-width:40px}}
 
 /* charts */
 .chart{position:relative;width:100%}
@@ -151,7 +155,7 @@ header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:spac
 .stack{display:flex;height:22px;gap:2px}
 .stack div{height:100%;display:flex;align-items:center;justify-content:center;font-size:11px;font-family:var(--mono);color:#fff;min-width:0;overflow:hidden}
 .stack div:first-child{border-radius:3px 0 0 3px}.stack div:last-child{border-radius:0 3px 3px 0}
-.play-kv{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:0 16px}
+.play-kv{display:grid;grid-template-columns:minmax(0,1fr) repeat(var(--n,2),auto);gap:0 16px}
 .play-kv > div{padding:7px 0;border-bottom:1px solid var(--grid)}
 .play-kv .h{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
 .play-kv .v{text-align:right;font-family:var(--mono)}
@@ -210,12 +214,11 @@ footer{font-size:12px;color:var(--muted);max-width:70ch}
   <header class="top">
     <div class="duo">
       <div class="names">
-        <h1>Jay &amp; Kobra</h1>
+        <h1 id="title">Jay &amp; Kobra</h1>
         <span class="sample" id="dataBadge" hidden>Sample data</span>
       </div>
       <div class="names">
-        <span class="tag p1"><i></i>jay29ID</span>
-        <span class="tag p2"><i></i>Kobra Kelvin</span>
+        <span id="playerTags" style="display:contents"></span>
         <span class="muted" id="rangeText"></span>
       </div>
     </div>
@@ -317,11 +320,7 @@ footer{font-size:12px;color:var(--muted);max-width:70ch}
           <button type="button" data-s="us" aria-pressed="true">Our goals</button>
           <button type="button" data-s="them">Goals against</button>
         </div>
-        <div class="seg" role="group" aria-label="Scorer" id="mapWho">
-          <button type="button" data-w="all" aria-pressed="true">Both</button>
-          <button type="button" data-w="0">Jay</button>
-          <button type="button" data-w="1">Kobra</button>
-        </div>
+        <div class="seg" role="group" aria-label="Scorer" id="mapWho"></div>
       </div>
     </div>
     <div class="maps">
@@ -342,14 +341,11 @@ footer{font-size:12px;color:var(--muted);max-width:70ch}
   <section class="grid g-2b">
     <div class="panel" aria-labelledby="mmrTitle">
       <div class="panel-head"><h2 id="mmrTitle">MMR history</h2><span class="muted" id="mmrSub"></span></div>
-      <div class="legend">
-        <span><i style="background:var(--p1)"></i>jay29ID</span>
-        <span><i style="background:var(--p2)"></i>Kobra Kelvin</span>
-      </div>
+      <div class="legend" id="mmrLegend"></div>
       <div class="chart" id="mmrChart"></div>
       <form class="log" id="mmrForm">
         <label for="mmrWho">Player
-          <select id="mmrWho"><option value="0">jay29ID</option><option value="1">Kobra Kelvin</option></select>
+          <select id="mmrWho"></select>
         </label>
         <label for="mmrVal">2v2 MMR
           <input id="mmrVal" type="number" inputmode="numeric" min="0" max="3000" placeholder="e.g. 1012" required>
@@ -373,7 +369,7 @@ footer{font-size:12px;color:var(--muted);max-width:70ch}
         <div id="crowdRows"></div>
       </div>
       <div class="warm">
-        <div class="note">How many drinks Jay had</div>
+        <div class="note" id="drinkWho">How many drinks Jay had</div>
         <div id="drinkRows"></div>
       </div>
     </div>

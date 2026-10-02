@@ -8,7 +8,7 @@
 #>
 param([string[]]$TrackedPlayers = @('jay29ID', 'Kobra Kelvin'), [switch]$NoUpdate,
   [string[]]$Spectators = @('Morgan', 'Chance', 'Nick'),   # people who might be watching
-  [string]$DrinksPlayer = 'jay29ID')                        # whose widget shows the drinks counter
+  [string]$DrinksPlayer)                                    # whose drinks the counter tracks; the first player by default
 
 Add-Type -AssemblyName System.Windows.Forms, System.Drawing
 [System.Windows.Forms.Application]::EnableVisualStyles()
@@ -130,11 +130,18 @@ if ((Test-Path $script:updater) -and -not (Get-Command Update-RLStats -ErrorActi
 $script:mutex = New-Object System.Threading.Mutex($false, 'Local\RLStatsWidget')
 if (-not $script:mutex.WaitOne(0)) { Show-Fatal 'RL Stats is already running (check the system tray).'; return }
 
+# Without -TrackedPlayers, the recorder uses the names saved from the Players menu and sets
+# $TrackedPlayers here to them.
+$script:firstRun = -not (Test-Path (Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'RLStats\widget.json'))
+$recArgs = @{ NoLoop = $true }
+if ($PSBoundParameters.ContainsKey('TrackedPlayers')) { $recArgs.TrackedPlayers = $TrackedPlayers }
 try {
-  . (Join-Path $script:here 'RLStatsRecorder.ps1') -TrackedPlayers $TrackedPlayers -NoLoop
+  . (Join-Path $script:here 'RLStatsRecorder.ps1') @recArgs
 } catch {
   Show-Fatal "Could not load RLStatsRecorder.ps1 from $script:here.`n`n$($_.Exception.Message)"; return
 }
+if (-not $DrinksPlayer) { $DrinksPlayer = $TrackedPlayers[0] }
+$script:Players = @($TrackedPlayers)
 $ErrorActionPreference = 'Continue'
 
 # ---- look -------------------------------------------------------------------------------------
@@ -633,6 +640,7 @@ $script:menu = New-Object System.Windows.Forms.ContextMenuStrip
 [void]$script:menu.Items.Add('Show', $null, { $script:form.Show(); $script:form.Activate() })
 [void]$script:menu.Items.Add('Open dashboard', $null, { Open-Dashboard })
 [void]$script:menu.Items.Add('Open data folder', $null, { Start-Process explorer.exe $OutDir })
+[void]$script:menu.Items.Add('Players...', $null, { Show-Players })
 [void]$script:menu.Items.Add('Check for updates', $null, { Invoke-UpdateCheckNow })
 [void]$script:menu.Items.Add('Quit', $null, { $script:form.Close() })
 $script:tray.ContextMenuStrip = $script:menu
@@ -741,6 +749,8 @@ foreach ($key in $script:Themes.Keys) {
   $it.add_Click({ param($s, $e) Set-Theme ([string]$s.Tag) })
   [void]$script:themeMenu.Items.Add($it)
 }
+[void]$script:themeMenu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
+[void]$script:themeMenu.Items.Add('Players...', $null, { Show-Players })
 $script:themeBtn.add_Click({ $script:themeMenu.Show($script:themeBtn, (New-Object System.Drawing.Point(0, $script:themeBtn.Height))) })
 function Set-Theme([string]$Name) {
   if ($Name -eq $script:Theme) { return }
@@ -968,6 +978,48 @@ function Show-TypeMmr {
   try { [IO.File]::AppendAllText((Join-Path $OutDir 'mmr.csv'), ($cells -join ',') + "`r`n", $Utf8NoBom) } catch { }
   try { Send-Upload 'mmr' $sample } catch { }
   Update-Mmr
+}
+
+# Pop-up for the in-game names recorded as your team: yours first, then anyone you queue with.
+# Saved to widget.json as the widget closes; it restarts to apply them.
+function Show-Players {
+  if ($script:InMatch) {
+    [void][System.Windows.Forms.MessageBox]::Show('Finish this match first, then change players (the widget restarts to apply it).', 'RL Stats', 'OK', 'Information')
+    return
+  }
+  $d = New-Object System.Windows.Forms.Form
+  $d.Text = 'Players'; $d.FormBorderStyle = 'FixedToolWindow'; $d.StartPosition = 'CenterParent'
+  $d.ClientSize = New-Object System.Drawing.Size(290, 150); $d.BackColor = $script:C.Panel; $d.TopMost = $true
+  $d.MaximizeBox = $false; $d.MinimizeBox = $false; $d.ShowInTaskbar = $false
+  $d.Controls.Add((New-Label 'Rocket League names, separated by commas. Yours first, then anyone you queue with.' 12 8 266 34 $script:F.Small $script:C.Muted))
+  $names = @($script:Players)
+  $me = $script:MmrState.Player
+  if ($me -and $names -notcontains $me) { if ($script:firstRun) { $names = @($me) } else { $names = @($me) + $names } }
+  $box = New-Object System.Windows.Forms.TextBox
+  $box.Location = New-Object System.Drawing.Point(12, 48); $box.Size = New-Object System.Drawing.Size(266, 22); $box.Text = $names -join ', '
+  $msg = New-Label '' 12 76 266 18 $script:F.Small $script:C.Loss
+  if ($me) { $msg.Text = "Signed in to Rocket League as $me."; $msg.ForeColor = $script:C.Muted }
+  $ok = New-Object System.Windows.Forms.Button
+  $ok.Text = 'Save'; $ok.Location = New-Object System.Drawing.Point(126, 114); $ok.Size = New-Object System.Drawing.Size(70, 26)
+  $cancel = New-Object System.Windows.Forms.Button
+  $cancel.Text = 'Cancel'; $cancel.Location = New-Object System.Drawing.Point(204, 114); $cancel.Size = New-Object System.Drawing.Size(74, 26)
+  $cancel.DialogResult = 'Cancel'
+  foreach ($b in $ok, $cancel) { $b.FlatStyle = 'Flat'; $b.ForeColor = $script:C.Text; $b.BackColor = $script:C.Line }
+  $d.Controls.AddRange(@($box, $msg, $ok, $cancel))
+  $d.AcceptButton = $ok; $d.CancelButton = $cancel
+  $ok.add_Click({
+    $list = @($box.Text -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ } | Select-Object -Unique)
+    if (-not $list.Count) { $msg.Text = 'Enter at least your own name.'; $msg.ForeColor = $script:C.Loss; return }
+    $d.Tag = $list; $d.DialogResult = 'OK'; $d.Close()
+  })
+  $d.add_Shown({ $box.Focus(); $box.SelectAll() })
+  if ($d.ShowDialog($script:form) -ne 'OK') { $d.Dispose(); return }
+  $list = [string[]]$d.Tag
+  $d.Dispose()
+  if (($list -join "`n") -ceq ($script:Players -join "`n")) { return }
+  $script:Players = $list
+  $script:restartAfterClose = $true
+  $script:form.Close()
 }
 
 # ---- goal GIFs ---------------------------------------------------------------------------------
@@ -1233,6 +1285,7 @@ $script:form.add_Shown({
   Stop-Splash
   $script:form.Opacity = 1
   $script:timer.Start(); $script:slow.Start(); $script:updTimer.Start(); $script:updPoll.Start(); $script:gifPoll.Start(); $script:crewTimer.Start()
+  if ($script:firstRun) { Show-Players }
 })
 
 $script:form.add_FormClosing({
@@ -1240,7 +1293,7 @@ $script:form.add_FormClosing({
   try {
     if (-not (Test-Path $OutDir)) { [void](New-Item -ItemType Directory -Path $OutDir) }
     $json = ConvertTo-Json -InputObject @{ x = $script:form.Left; y = $script:form.Top; pinned = $script:form.TopMost
-      watching = @($script:Watching); drinks = $script:Drinks; saved_at = (Get-Date).ToString('o'); GoalGifs = $script:GoalGifs; theme = $script:Theme } -Compress
+      watching = @($script:Watching); drinks = $script:Drinks; saved_at = (Get-Date).ToString('o'); GoalGifs = $script:GoalGifs; theme = $script:Theme; players = @($script:Players) } -Compress
     [IO.File]::WriteAllText($script:prefsFile, $json, $Utf8NoBom)
   } catch { }
   try { Reset-Connection $null } catch { }

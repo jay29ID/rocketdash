@@ -11,7 +11,28 @@ No dependencies: `npm start` runs `server.js` on Node 18+.
 | `VIEW_KEY` | Secret for the share link. Open `https://<site>/s/<VIEW_KEY>` once and the browser stays signed in. |
 | `UPLOAD_KEY` | Secret the recorder sends in the `X-Upload-Key` header. |
 | `DATA_DIR` | Folder for `store.json`. On Railway this is the volume, `/data`. |
-| `PLAYERS` | Tracked players, comma separated. Default `jay29ID,Kobra Kelvin`. |
+| `PLAYERS` | Players the dashboard shows, comma separated, up to four. Default `jay29ID,Kobra Kelvin`. |
+
+## Running your own copy
+
+The site runs anywhere Node 18+ does. On your own PC, in PowerShell:
+
+```powershell
+$env:VIEW_KEY = 'pick-a-view-secret'
+$env:UPLOAD_KEY = 'pick-an-upload-secret'
+$env:PLAYERS = 'YourName'
+npm start
+```
+
+Then point the recorder at it with `Documents\RLStats\upload.json`:
+
+```json
+{ "url": "http://localhost:3000/api/ingest", "key": "pick-an-upload-secret" }
+```
+
+Open `http://localhost:3000/s/pick-a-view-secret` once to sign in. Data is kept in `data\store.json`. The sign-in cookie is `Secure`, so other devices need the site behind HTTPS.
+
+The widget records the names set under **Players...** (in the tray menu and the theme menu) as your team, and asks for them the first time it starts. Every player's stats are saved for every match, so adding a regular teammate to `PLAYERS` later also fills in their past games.
 
 ## Endpoints
 

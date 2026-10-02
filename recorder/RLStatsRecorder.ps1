@@ -26,6 +26,14 @@ param(
 $ErrorActionPreference = 'Stop'
 $Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 
+# Names saved from the widget's Players menu replace the defaults above.
+if (-not $PSBoundParameters.ContainsKey('TrackedPlayers')) {
+  try {
+    $saved = @((Get-Content (Join-Path $OutDir 'widget.json') -Raw | ConvertFrom-Json).players | Where-Object { $_ })
+    if ($saved.Count) { $TrackedPlayers = [string[]]$saved }
+  } catch { }
+}
+
 # Known playlist ids (Game.PlaylistId). Unknown ids are saved as the number.
 $Playlists = @{
   1 = 'Casual Duel'; 2 = 'Casual Doubles'; 3 = 'Casual Standard'; 4 = 'Casual Chaos'

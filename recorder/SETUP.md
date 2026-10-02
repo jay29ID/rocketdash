@@ -16,6 +16,8 @@ Double-click `RL Stats Widget.bat`. A small window appears in the bottom-right c
 - After a match it shows the result, and below that today's record, your win or loss streak and your MMR.
 - To move it, drag it by the top bar or the score. **Pin** keeps it on top of other windows. **_** hides it to the system tray, where it keeps recording. **x** quits.
 
+The first time it starts, the widget asks for your Rocket League name, then the names of anyone you queue with. It records them as your team. To change them later, right-click the tray icon (or click the theme button) and choose **Players...**.
+
 Windows may say "Windows protected your PC" the first time you open a .bat file. Click More info, then Run anyway.
 
 Run either the widget or `Start RL Recorder.bat` (the plain console version), not both, or every match gets saved twice.
