@@ -35,5 +35,5 @@ You don't have to do anything. Every time you queue, the game writes your MMR to
 - `mmr.csv`: every MMR value, with the time and playlist.
 - `events\<match id>.jsonl`: the full event log for each match.
 
-Matches you leave early are saved as "Incomplete". Freeplay, training and replays are ignored.
+A match that ends early while your team is behind, by surrendering or leaving, counts as a loss. Other matches you leave early are saved as "Incomplete". Freeplay, training and replays are ignored.
 Boost, speed and movement are only sent for your own team, so opponents have blanks for those.

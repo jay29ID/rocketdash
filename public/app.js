@@ -166,7 +166,7 @@ function toMatch(r){
   return {guid:r.match_guid,when:new Date(r.started_at),win:r.result==='Win',us:num(r.team_score)||0,them:num(r.opponent_score)||0,
     ot:!!r.overtime,dur,arena:arenaName(r.arena),playlist:r.playlist||'Unknown playlist',lines,
     ourGoals:goals.filter(g=>g.ours),theirGoals:goals.filter(g=>!g.ours),
-    replay:!!r.replay_created,left,
+    replay:!!r.replay_created,forfeit:!!r.forfeit,left,
     spectators:Array.isArray(r.spectators)?r.spectators.map(String):null,
     drinks:r.drinks&&num(r.drinks[PLAYERS[0].name])!=null?num(r.drinks[PLAYERS[0].name]):null};
 }
@@ -495,6 +495,7 @@ function renderLog(list){
 
 function notes(m){
   const out=[];
+  if(m.forfeit)out.push('<span class="chip" title="Ended early while behind">Forfeit</span>');
   if(m.replay)out.push('<span class="chip">Replay</span>');
   const us=m.left.filter(x=>x.ours).length,them=m.left.length-us;
   if(them)out.push(`<span class="chip" title="${esc(m.left.filter(x=>!x.ours).map(x=>x.name).join(', '))}">Opponent quit</span>`);

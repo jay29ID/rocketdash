@@ -243,6 +243,11 @@ function Save-Match($M, [string]$Result, $WinnerTeamNum) {
       if ([int]$WinnerTeamNum -eq $myTeam) { $Result = 'Win' } else { $Result = 'Loss' }
     } else { $Result = 'Unknown' }
   }
+  # Surrendering (or leaving) skips MatchEnded and counts as a loss. When the other team surrenders
+  # the game still sends MatchEnded, so a match cut short while behind is ours. Level or ahead stays
+  # Incomplete (more likely a crash or disconnect).
+  $forfeit = $Result -eq 'Incomplete' -and $null -ne $myTeam -and $score[1 - [int]$myTeam] -gt $score[[int]$myTeam]
+  if ($forfeit) { $Result = 'Loss' }
 
   $rows = foreach ($p in $players) {
     $name = [string](Get-Prop $p 'Name')
@@ -302,6 +307,7 @@ function Save-Match($M, [string]$Result, $WinnerTeamNum) {
     players_left = @($M.Left)
     replay_created = $M.Replay
     kickoffs = $M.Kickoffs
+    forfeit = $forfeit
   }
 
   if ($null -ne $myTeam) { foreach ($g in $M.Goals) { if ($null -ne $g.team) { $g.ours = ([int]$g.team -eq [int]$myTeam) } } }
