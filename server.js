@@ -12,6 +12,13 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
+// A local copy on Windows (no keys set): start-local.ps1 asks for players, makes the keys, points
+// the recorder here and starts this file again with them set.
+if (require.main === module && process.platform === 'win32' && !process.env.VIEW_KEY && !process.env.UPLOAD_KEY) {
+  const r = require('child_process').spawnSync('powershell', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(__dirname, 'start-local.ps1')], { stdio: 'inherit' });
+  process.exit(r.status ?? 1);
+}
+
 const PORT = +process.env.PORT || 3000;
 const VIEW_KEY = process.env.VIEW_KEY || '';
 const UPLOAD_KEY = process.env.UPLOAD_KEY || '';

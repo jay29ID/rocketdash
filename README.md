@@ -15,13 +15,7 @@ No dependencies: `npm start` runs `server.js` on Node 18+.
 
 ## Running your own copy
 
-To run the site on your own Windows PC, double-click `dashboard.bat`, or from PowerShell in the repo folder:
-
-```powershell
-.\dashboard.bat
-```
-
-`npm run local` does the same, but PowerShell's default execution policy blocks `npm` itself, so use `npm.cmd run local` there.
+To run the site on your own Windows PC, run `npm start` with no `VIEW_KEY` or `UPLOAD_KEY` set, or double-click `dashboard.bat`. PowerShell's default execution policy blocks `npm` itself, so in PowerShell use `npm.cmd start` or `.\dashboard.bat`.
 
 It asks which players to show (Enter keeps the last list), makes a random view key and upload key the first time, and keeps them in `data\local.json`. It points the recorder at this copy through `Documents\RLStats\upload.json`, asking first if matches currently go to another site. Then it starts the site on port 3000 and opens it, signed in. Matches are kept in `data\store.json`. The sign-in cookie is `Secure`, so other devices need the site behind HTTPS.
 

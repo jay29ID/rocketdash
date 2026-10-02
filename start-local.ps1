@@ -1,5 +1,6 @@
 <#
-  Runs your own copy of the dashboard on this PC. Start it with dashboard.bat (or npm.cmd run local).
+  Runs your own copy of the dashboard on this PC. npm start and dashboard.bat both run it when no
+  VIEW_KEY or UPLOAD_KEY is set.
 
   Every start asks which players to show (Enter keeps the last list). The first start makes a
   random view key and upload key, kept in data\local.json, and points the recorder at this copy
