@@ -132,7 +132,8 @@ if (-not $script:mutex.WaitOne(0)) { Show-Fatal 'RL Stats is already running (ch
 
 # Without -TrackedPlayers, the recorder uses the names saved from the Players menu and sets
 # $TrackedPlayers here to them.
-$script:firstRun = -not (Test-Path (Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'RLStats\widget.json'))
+$script:firstRun = -not (Test-Path (Join-Path ([Environment]::GetFolderPath('MyDocuments')) 'RLStats\widget.json')) -and
+  -not $PSBoundParameters.ContainsKey('TrackedPlayers')
 $recArgs = @{ NoLoop = $true }
 if ($PSBoundParameters.ContainsKey('TrackedPlayers')) { $recArgs.TrackedPlayers = $TrackedPlayers }
 try {

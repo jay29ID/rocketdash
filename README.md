@@ -17,9 +17,15 @@ No dependencies: `npm start` runs `server.js` on Node 18+.
 
 To run the site on your own Windows PC, run `npm start` with no `VIEW_KEY` or `UPLOAD_KEY` set, or double-click `dashboard.bat`. PowerShell's default execution policy blocks `npm` itself, so in PowerShell use `npm.cmd start` or `.\dashboard.bat`.
 
-It asks which players to show (Enter keeps the last list), makes a random view key and upload key the first time, and keeps them in `data\local.json`. It points the recorder at this copy through `Documents\RLStats\upload.json`, asking first if matches currently go to another site. Then it starts the site on port 3000 and opens it, signed in. Matches are kept in `data\store.json`. The sign-in cookie is `Secure`, so other devices need the site behind HTTPS.
+It sets up everything recording needs:
 
-The widget records the names set under **Players...** (in the tray menu and the theme menu) as your team, and asks for them the first time it starts. Every player's stats are saved for every match, so adding a regular teammate to `PLAYERS` later also fills in their past games.
+- Asks for the players and the Rocket League folder (the one with `TAGame` in it). Enter keeps the saved answer.
+- Makes a random view key and upload key the first time. Keys, players and the folder are kept in `data\local.json`.
+- Points the recorder at this copy through `Documents\RLStats\upload.json`, asking first if matches currently go to another site.
+- Switches on the game's Stats API if it is off, asking for admin rights only if the folder needs them. Restart the game if it was open.
+- Starts the site on port 3000 and the RL Stats widget with the same players, then opens the dashboard, signed in.
+
+Matches are kept in `data\store.json`. The sign-in cookie is `Secure`, so other devices need the site behind HTTPS. Every player's stats are saved for every match, so adding a regular teammate later also fills in their past games.
 
 ## Endpoints
 
