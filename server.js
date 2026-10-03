@@ -88,8 +88,9 @@ function addMmr(s) {
 const GIF_QUERY = process.env.GIF_QUERY || 'tim robinson';
 // Goals against sometimes get a Mortal Kombat "Whoopsie" instead (AGAINST_GIF_QUERY, 1 in 3).
 const AGAINST_GIF_QUERY = process.env.AGAINST_GIF_QUERY || 'mortal kombat whoopsie';
+const WHOOPS = /wh?oops|oopsie/i;   // GIPHY mixes in other Mortal Kombat GIFs; keep the whoopsie ones
 const gifPools = {}; const gifRecent = [];
-async function gifList(query, pages, keep) {
+async function gifList(query, pages, keep, match) {
   const key = process.env.GIPHY_KEY;
   if (!key) return [];
   const c = gifPools[query];
@@ -107,13 +108,14 @@ async function gifList(query, pages, keep) {
       if ((j.data || []).length < 50) break;
     } catch (e) { break; }
   }
-  const kept = keep ? list.slice(0, keep) : list;   // only the best matches for a specific GIF
+  let kept = match ? list.filter(g => match.test(g.title)) : list;
+  if (keep) kept = kept.slice(0, keep);   // only the best matches for a specific GIF
   if (kept.length) gifPools[query] = { at: Date.now(), list: kept };
   return kept.length ? kept : (c ? c.list : []);
 }
 async function randomGif(against) {
   let all = await gifList(GIF_QUERY, 3, 0);
-  if (against && Math.random() < 1 / 3) { const w = await gifList(AGAINST_GIF_QUERY, 1, 6); if (w.length) all = w; }
+  if (against && Math.random() < 1 / 3) { const w = await gifList(AGAINST_GIF_QUERY, 1, 6, WHOOPS); if (w.length) all = w; }
   if (!all.length) return null;
   const pool = all.filter(g => !gifRecent.includes(g.id));
   const from = pool.length ? pool : all;
@@ -276,7 +278,7 @@ server.listen(PORT, () => {
   console.log(`rocketdash listening on ${PORT}, data in ${DATA_DIR}`);
   if (process.env.GIPHY_KEY) {
     gifList(GIF_QUERY, 3, 0).then(l => console.log(l.length ? `goal GIFs ready: ${l.length} for "${GIF_QUERY}"` : 'goal GIFs: GIPHY returned nothing (check GIPHY_KEY)'));
-    gifList(AGAINST_GIF_QUERY, 1, 6).then(l => console.log(`goals-against GIFs: ${l.map(g => g.title).join(' | ') || 'none'}`));
+    gifList(AGAINST_GIF_QUERY, 1, 6, WHOOPS).then(l => console.log(`goals-against GIFs: ${l.map(g => g.title).join(' | ') || 'none'}`));
   }
 });
 module.exports = { mergeMatch, quality };
