@@ -86,31 +86,39 @@ function addMmr(s) {
 
 // ---- goal GIFs ----
 const GIF_QUERY = process.env.GIF_QUERY || 'tim robinson';
-let gifCache = { at: 0, list: [] }; const gifRecent = [];
-async function randomGif() {
+// Goals against sometimes get a Mortal Kombat "Whoopsie" instead (AGAINST_GIF_QUERY, 1 in 3).
+const AGAINST_GIF_QUERY = process.env.AGAINST_GIF_QUERY || 'mortal kombat whoopsie';
+const gifPools = {}; const gifRecent = [];
+async function gifList(query, pages, keep) {
   const key = process.env.GIPHY_KEY;
-  if (!key) return null;
-  if (Date.now() - gifCache.at > 6 * 3600e3 || !gifCache.list.length) {
-    const list = [];
-    for (const offset of [0, 50, 100]) {
-      try {
-        const u = `https://api.giphy.com/v1/gifs/search?api_key=${encodeURIComponent(key)}&q=${encodeURIComponent(GIF_QUERY)}&limit=50&offset=${offset}&rating=r`;
-        const r = await fetch(u); if (!r.ok) break;
-        const j = await r.json();
-        for (const g of j.data || []) {
-          const im = (g.images && (g.images.fixed_height || g.images.downsized)) || null;
-          if (im && im.url) list.push({ id: g.id, url: im.url, width: +im.width || null, height: +im.height || null, title: g.title || '' });
-        }
-        if ((j.data || []).length < 50) break;
-      } catch (e) { break; }
-    }
-    if (list.length) gifCache = { at: Date.now(), list };
+  if (!key) return [];
+  const c = gifPools[query];
+  if (c && c.list.length && Date.now() - c.at < 6 * 3600e3) return c.list;
+  const list = [];
+  for (let i = 0; i < pages; i++) {
+    try {
+      const u = `https://api.giphy.com/v1/gifs/search?api_key=${encodeURIComponent(key)}&q=${encodeURIComponent(query)}&limit=50&offset=${i * 50}&rating=r`;
+      const r = await fetch(u); if (!r.ok) break;
+      const j = await r.json();
+      for (const g of j.data || []) {
+        const im = (g.images && (g.images.fixed_height || g.images.downsized)) || null;
+        if (im && im.url) list.push({ id: g.id, url: im.url, width: +im.width || null, height: +im.height || null, title: g.title || '' });
+      }
+      if ((j.data || []).length < 50) break;
+    } catch (e) { break; }
   }
-  const pool = gifCache.list.filter(g => !gifRecent.includes(g.id));
-  const from = pool.length ? pool : gifCache.list;
-  if (!from.length) return null;
+  const kept = keep ? list.slice(0, keep) : list;   // only the best matches for a specific GIF
+  if (kept.length) gifPools[query] = { at: Date.now(), list: kept };
+  return kept.length ? kept : (c ? c.list : []);
+}
+async function randomGif(against) {
+  let all = await gifList(GIF_QUERY, 3, 0);
+  if (against && Math.random() < 1 / 3) { const w = await gifList(AGAINST_GIF_QUERY, 1, 6); if (w.length) all = w; }
+  if (!all.length) return null;
+  const pool = all.filter(g => !gifRecent.includes(g.id));
+  const from = pool.length ? pool : all;
   const g = from[Math.floor(Math.random() * from.length)];
-  gifRecent.push(g.id); if (gifRecent.length > Math.min(30, Math.floor(gifCache.list.length / 2))) gifRecent.shift();
+  gifRecent.push(g.id); if (gifRecent.length > 30) gifRecent.shift();
   return { ...g, source: 'GIPHY' };
 }
 
@@ -222,7 +230,7 @@ const server = http.createServer(async (req, res) => {
 
     if (p === '/api/gif') {
       if (!UPLOAD_KEY || !same(req.headers['x-upload-key'] || '', UPLOAD_KEY)) return send(res, 401, { error: 'bad upload key' });
-      const pick = await randomGif();
+      const pick = await randomGif(url.searchParams.get('against') === '1');
       return pick ? send(res, 200, pick) : send(res, 404, { error: 'no GIFs available (is GIPHY_KEY set?)' });
     }
 
@@ -266,6 +274,9 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`rocketdash listening on ${PORT}, data in ${DATA_DIR}`);
-  if (process.env.GIPHY_KEY) randomGif().then(g => console.log(g ? `goal GIFs ready: ${gifCache.list.length} for "${GIF_QUERY}"` : 'goal GIFs: GIPHY returned nothing (check GIPHY_KEY)'));
+  if (process.env.GIPHY_KEY) {
+    gifList(GIF_QUERY, 3, 0).then(l => console.log(l.length ? `goal GIFs ready: ${l.length} for "${GIF_QUERY}"` : 'goal GIFs: GIPHY returned nothing (check GIPHY_KEY)'));
+    gifList(AGAINST_GIF_QUERY, 1, 6).then(l => console.log(`goals-against GIFs: ${l.map(g => g.title).join(' | ') || 'none'}`));
+  }
 });
 module.exports = { mergeMatch, quality };

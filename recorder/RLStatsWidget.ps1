@@ -981,13 +981,13 @@ function Start-GoalGif($Goal) {
   if (-not $script:GoalGifs -or $script:gifJob) { return }
   $ps = [powershell]::Create()
   [void]$ps.AddScript({
-    param($CfgPath, $GifDir)
+    param($CfgPath, $GifDir, $Against)
     $ErrorActionPreference = 'Stop'
     try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch { }
     try {
       $cfg = Get-Content $CfgPath -Raw | ConvertFrom-Json
       $base = ([Uri]$cfg.url).GetLeftPart([UriPartial]::Authority)
-      $r = Invoke-RestMethod -Uri "$base/api/gif" -Headers @{ 'X-Upload-Key' = [string]$cfg.key } -TimeoutSec 5 -UseBasicParsing
+      $r = Invoke-RestMethod -Uri ("$base/api/gif" + $(if ($Against) { '?against=1' } else { '' })) -Headers @{ 'X-Upload-Key' = [string]$cfg.key } -TimeoutSec 5 -UseBasicParsing
       if ($r.url) {
         $file = Join-Path ([IO.Path]::GetTempPath()) ('rlstats-goal-' + [guid]::NewGuid().ToString('N').Substring(0, 8) + '.gif')
         Invoke-WebRequest -Uri ([string]$r.url) -OutFile $file -TimeoutSec 8 -UseBasicParsing
@@ -999,7 +999,7 @@ function Start-GoalGif($Goal) {
       if ($f) { return @{ Path = $f.FullName; Temp = $false; Credit = '' } }
     }
     return $null
-  }).AddArgument((Join-Path $OutDir 'upload.json')).AddArgument((Join-Path $OutDir 'gifs'))
+  }).AddArgument((Join-Path $OutDir 'upload.json')).AddArgument((Join-Path $OutDir 'gifs')).AddArgument(-not ($TrackedPlayers -contains [string]$Goal.scorer))
   $who = [string]$Goal.scorer
   $script:gifJob = @{ PS = $ps; Handle = $ps.BeginInvoke(); Who = $who; Ours = ($TrackedPlayers -contains $who) }
 }
