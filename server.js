@@ -88,7 +88,7 @@ function addMmr(s) {
 const GIF_QUERY = process.env.GIF_QUERY || 'tim robinson';
 // Goals against sometimes get a Mortal Kombat "Whoopsie" instead (AGAINST_GIF_QUERY, 1 in 3).
 const AGAINST_GIF_QUERY = process.env.AGAINST_GIF_QUERY || 'mortal kombat whoopsie';
-const WHOOPS = /wh?oops|oopsie/i;   // GIPHY mixes in other Mortal Kombat GIFs; keep the whoopsie ones
+const WHOOPS = /oops/i;   // GIPHY mixes in other Mortal Kombat GIFs; keep the whoopsie ones
 const gifPools = {}; const gifRecent = [];
 async function gifList(query, pages, keep, match) {
   const key = process.env.GIPHY_KEY;
