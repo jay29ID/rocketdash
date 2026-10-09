@@ -155,11 +155,12 @@ function toMatch(r){
       ix:co(i,'X')!=null?f*co(i,'X'):null,iz:co(i,'Z')};
   });
   const dur=num(r.duration_seconds)||300;
+  const opps=(r.players||[]).filter(p=>p&&p.name&&!p.tracked&&myTeam!=null&&num(p.team)!==myTeam).map(p=>({name:String(p.name),url:trackerUrl(p)}));
   const left=(r.players_left||[]).filter(Boolean).map(x=>({name:x.name,ours:myTeam!=null&&num(x.team)===myTeam}));
   return {guid:r.match_guid,when:new Date(r.started_at),win:r.result==='Win',us:num(r.team_score)||0,them:num(r.opponent_score)||0,
     ot:!!r.overtime,dur,arena:arenaName(r.arena),playlist:r.playlist||'Unknown playlist',lines,
     ourGoals:goals.filter(g=>g.ours),theirGoals:goals.filter(g=>!g.ours),
-    replay:!!r.replay_created,left,
+    replay:!!r.replay_created,left,opps,
     spectators:Array.isArray(r.spectators)?r.spectators.map(String):null,
     drinks:r.drinks&&num(r.drinks[PLAYERS[0].name])!=null?num(r.drinks[PLAYERS[0].name]):null};
 }
@@ -471,13 +472,25 @@ function renderCrowd(list){
 }
 
 // ---------- match log ----------
+// Opponent ranks aren't in the game's data, so link each opponent to their tracker.gg profile.
+// PrimaryId looks like "Epic|<id>|0" or "Steam|<steamid>|0"; Steam profiles go by id, the rest by name.
+function trackerUrl(p){
+  const [plat,id]=String(p.primary_id||'').split('|'),k=(plat||'').toLowerCase();
+  const base='https://rocketleague.tracker.network/rocket-league/profile/';
+  const by=(seg,v)=>base+seg+'/'+encodeURIComponent(v)+'/overview';
+  if(k==='steam'&&id&&id!=='0')return by('steam',id);
+  if(k.startsWith('ps'))return by('psn',p.name);
+  if(k.startsWith('xbox'))return by('xbl',p.name);
+  if(k==='switch')return by('switch',p.name);
+  return by('epic',p.name);
+}
 function renderLog(list){
   const rows=[...list].reverse().slice(0,15);
   $('logCount').textContent=list.length?'Latest '+rows.length+' of '+list.length:'';
   const line=L=>L?`${L.goals}·${L.assists}·${L.saves}`:'–';
-  $('matchLog').innerHTML=`<thead><tr><th>When</th><th>Result</th><th>Score</th><th>Arena</th><th>${esc(PLAYERS[0].short)} G·A·Sv</th><th>${esc(PLAYERS[1].short)} G·A·Sv</th><th>Top score</th><th>Notes</th></tr></thead><tbody>`+
+  $('matchLog').innerHTML=`<thead><tr><th>When</th><th>Result</th><th>Score</th><th>Arena</th><th>${esc(PLAYERS[0].short)} G·A·Sv</th><th>${esc(PLAYERS[1].short)} G·A·Sv</th><th>Top score</th><th>Opponents</th><th>Notes</th></tr></thead><tbody>`+
     rows.map(m=>{const L=m.lines;const top=L[0]&&L[1]?(L[0].score>=L[1].score?0:1):L[0]?0:L[1]?1:-1;
-      return `<tr><td>${fmtDate(m.when)} ${fmtTime(m.when)}</td><td><span class="pill ${m.win?'w':'l'}">${m.win?'W':'L'}</span></td><td>${m.us}–${m.them}${m.ot?' <span class="muted">OT</span>':''}</td><td>${esc(m.arena)}</td><td>${line(L[0])}</td><td>${line(L[1])}</td><td>${top<0?'–':`<span class="tag p${top+1}" style="padding:0 7px"><i></i>${esc(PLAYERS[top].short)} ${L[top].score}</span>`}</td><td class="notes">${notes(m)}</td></tr>`;}).join('')+'</tbody>';
+      return `<tr><td>${fmtDate(m.when)} ${fmtTime(m.when)}</td><td><span class="pill ${m.win?'w':'l'}">${m.win?'W':'L'}</span></td><td>${m.us}–${m.them}${m.ot?' <span class="muted">OT</span>':''}</td><td>${esc(m.arena)}</td><td>${line(L[0])}</td><td>${line(L[1])}</td><td>${top<0?'–':`<span class="tag p${top+1}" style="padding:0 7px"><i></i>${esc(PLAYERS[top].short)} ${L[top].score}</span>`}</td><td class="opps">${m.opps.length?m.opps.map(o=>`<a href="${esc(o.url)}" target="_blank" rel="noopener" title="View ${esc(o.name)} on tracker.gg">${esc(o.name)}</a>`).join('<br>'):'–'}</td><td class="notes">${notes(m)}</td></tr>`;}).join('')+'</tbody>';
 }
 
 function notes(m){
