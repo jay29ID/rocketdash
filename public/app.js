@@ -1266,9 +1266,12 @@ function sinceSet(el,txt){
 setInterval(tickSince,1000);
 if(document.fonts)document.fonts.ready.then(()=>{document.querySelectorAll('#playerTags .since').forEach(el=>el._len=null);tickSince();});
 
+let BUILD0=null;
 async function load(){
   let data=null;
   try{const r=await fetch('/api/data',{cache:'no-store'});if(r.ok)data=await r.json();}catch(e){}
+  // A new version was deployed since this tab opened: reload so nobody is left on old code.
+  if(data&&data.build){if(!BUILD0)BUILD0=data.build;else if(data.build!==BUILD0&&!document.querySelector('input:focus,textarea:focus,select:focus')){location.reload();return;}}
   // Never swap real stats for sample data because a request failed: keep what's on screen,
   // or on first load keep the loading screen up and retry.
   if(!data){
@@ -1823,6 +1826,7 @@ $('matchLog').addEventListener('click',e=>{const a=e.target.closest('a.mlink');i
 // Add a release at the top whenever something visible changes (dashboard or widget).
 const CHANGELOG=[
   {v:'1.7',date:'2026-10-14',items:[
+    'Open dashboards reload themselves when a new version goes live, so nobody is left looking at old colours or features.',
     'Goal map Night: blue-tinted field and blue heat scale; picking a look on the goal map now sets its 3D view too, and 3D redirect markers follow Night and Midnight instead of staying red.',
     'Night theme is now blacks, greys and shades of blue (no red): Kobra and wins in blue, Jay light grey, losses dim grey; heatmap and 3D map follow.',
     'Midnight theme is about 25% darker: dimmer greys, panels and maps, text still readable.',

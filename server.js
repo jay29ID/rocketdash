@@ -210,6 +210,9 @@ const LOCKED = `<!doctype html><meta charset="utf-8"><meta name="viewport" conte
 <p style="max-width:40ch;text-align:center">This dashboard is private. Open it with the share link you were sent.</p></body>`;
 
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.webp': 'image/webp', '.jpg': 'image/jpeg', '.png': 'image/png' };
+// Changes whenever a deploy ships new page code, so open tabs know to reload themselves.
+const BUILD = require('crypto').createHash('sha1').update(['index.html', 'app.js'].map(f => { try { return fs.readFileSync(path.join(PUBLIC, f)); } catch (e) { return ''; } }).join('|')).digest('hex').slice(0, 12);
+
 function serveFile(res, name) {
   const file = path.join(PUBLIC, name);
   if (!file.startsWith(PUBLIC + path.sep)) return send(res, 404, { error: 'not found' });
@@ -288,7 +291,7 @@ const server = http.createServer(async (req, res) => {
     if (!canView(req)) return p.startsWith('/api/') ? send(res, 401, { error: 'private' }) : send(res, 403, LOCKED, 'text/html; charset=utf-8');
 
     if (p === '/api/data' && req.method === 'GET') {
-      return send(res, 200, { players: PLAYERS, matches: Object.values(store.matches), mmr: Object.values(store.mmr), avatars: avatarUrls() });
+      return send(res, 200, { build: BUILD, players: PLAYERS, matches: Object.values(store.matches), mmr: Object.values(store.mmr), avatars: avatarUrls() });
     }
     if (p === '/api/avatar' && req.method === 'POST') {
       const b = await readJson(req);
