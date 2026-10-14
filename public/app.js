@@ -101,9 +101,9 @@ function makeSample(names){
       const pos=(s,flip)=>({shot_from:{X:Math.round(flip*s.x),Y:Math.round(flip*s.y),Z:93},impact:{X:Math.round(flip*s.ix),Y:Math.round(flip*5120),Z:Math.round(s.iz)}});
       for(let g=0;g<us;g++){
         const who=rnd()<.55?0:1;lines[who].goals++;const as=rnd()<.55;if(as)lines[1-who].assists++;
-        goals.push({team:my,ours:true,goal_time:rnd()<.08?3+Math.floor(rnd()*3):8+Math.floor(rnd()*120),scorer:names[who],assister:as?names[1-who]:null,speed:Math.round(clamp(norm(prof[who].gs,18),35,140)),...pos(spot(who?.8:1),f)});
+        goals.push({team:my,ours:true,goal_time:rnd()<.08?9+Math.floor(rnd()*3):14+Math.floor(rnd()*120),scorer:names[who],assister:as?names[1-who]:null,speed:Math.round(clamp(norm(prof[who].gs,18),35,140)),...pos(spot(who?.8:1),f)});
       }
-      for(let g=0;g<them;g++)goals.push({team:1-my,ours:false,goal_time:rnd()<.08?3+Math.floor(rnd()*3):8+Math.floor(rnd()*120),scorer:'Opponent',speed:Math.round(clamp(norm(86,18),35,140)),...pos(spot(1.1),-f)});
+      for(let g=0;g<them;g++)goals.push({team:1-my,ours:false,goal_time:rnd()<.08?9+Math.floor(rnd()*3):14+Math.floor(rnd()*120),scorer:'Opponent',speed:Math.round(clamp(norm(86,18),35,140)),...pos(spot(1.1),-f)});
       const players=prof.map((p,j)=>{
         const L=lines[j],shots=L.goals+pois(Math.max(.4,p.sh-p.g)),saves=pois(p.sv*(them>2?1.25:1)),demos=pois(p.d),touches=Math.max(8,Math.round(norm(p.t,5)));
         const air=+clamp(norm(p.air,1.8),1,20).toFixed(1),wall=+clamp(norm(p.wall,2.5),3,25).toFixed(1);
@@ -141,8 +141,15 @@ function forfeit(r){
   if(us==null||them==null||us===them)return r;
   return {...r,result:us>them?'Win':'Loss',ff:true};
 }
-// A goal within this many seconds of the kickoff counts as a kickoff goal (goal_time is time since kickoff).
-const KICKOFF_SECS=6;
+// A goal within this many seconds of play after a kickoff counts as a kickoff goal.
+// Newer recordings carry since_kickoff, read off the game clock. Older ones only have the game's
+// goal_time, which never goes below 9 in our games: it seems to include the countdown and
+// a few seconds more, so up to 11 there is roughly the same as 6 seconds of play.
+const KICKOFF_SECS=6, KICKOFF_GOAL_TIME=11;
+function isKickoffGoal(g){
+  const s=num(g.since_kickoff);if(s!=null)return s<=KICKOFF_SECS;
+  const t=num(g.goal_time);return t!=null&&t>0&&t<=KICKOFF_GOAL_TIME;
+}
 function toMatch(r){
   const rows=r.players||[];
   const lines=PLAYERS.map(p=>{
@@ -163,7 +170,7 @@ function toMatch(r){
     const ours=g.ours!=null?!!g.ours:(myTeam!=null&&team===myTeam);
     // Credit the goal to whoever the game credits; the last hit can be an opponent's deflection.
     const who=ours?PLAYERS.findIndex(p=>p.name===(PLAYERS.some(q=>q.name===g.scorer)?g.scorer:g.shot_from_player)):-1;
-    return {ours,who,ko:num(g.goal_time)!=null&&+g.goal_time>0&&+g.goal_time<=KICKOFF_SECS,spd:num(g.speed)!=null?Math.round(+g.speed):null,
+    return {ours,who,ko:isKickoffGoal(g),spd:num(g.speed)!=null?Math.round(+g.speed):null,
       x:co(s,'X')!=null?f*co(s,'X'):null,y:co(s,'Y')!=null?f*co(s,'Y'):null,
       ix:co(i,'X')!=null?f*co(i,'X'):null,iz:co(i,'Z')};
   });
@@ -461,7 +468,7 @@ function renderPlay(list){
   const teamRows=[['Win % when we score first',pct(list.filter(m=>m.first==='us'))],['Win % when they score first',pct(list.filter(m=>m.first==='them'))],
     ['Kickoff goals for',String(koFor)],['Kickoff goals against',String(koAgainst)]];
   $('teamKv').innerHTML=list.length?'<div class="h">Team</div><div class="h v"></div>'+teamRows.map(r=>`<div>${r[0]}</div><div class="v">${r[1]}</div>`).join(''):'';
-  $('koNote').textContent=list.length?`A kickoff goal is scored within ${KICKOFF_SECS}s of the kickoff.`:'';
+  $('koNote').textContent=list.length?`A kickoff goal is scored within about ${KICKOFF_SECS}s of play after the kickoff.`:'';
   $('playKv').innerHTML=`<div class="h">Stat</div><div class="h v">${esc(PLAYERS[0].short)}</div><div class="h v">${esc(PLAYERS[1].short)}</div>`+rows.map(r=>`<div>${r[0]}</div><div class="v">${r[1](A[0])}</div><div class="v">${r[1](A[1])}</div>`).join('');
 }
 

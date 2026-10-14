@@ -275,13 +275,6 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  try { // TEMP goal time check
-    const ms = Object.values(store.matches).filter(m => m.result === 'Win' || m.result === 'Loss').sort((a, b) => String(a.started_at).localeCompare(String(b.started_at)));
-    const t = []; for (const m of ms) for (const g of m.goals || []) if (g && +g.goal_time > 0) t.push(+g.goal_time);
-    t.sort((a, b) => a - b);
-    console.log('gt check: n=' + t.length + ' min10=' + JSON.stringify(t.slice(0, 15)) + ' max=' + t[t.length - 1] + ' keys=' + Object.keys((ms[ms.length - 1].goals || [])[0] || {}).join(','));
-    const h = {}; for (const v of t) if (v <= 30) h[Math.floor(v)] = (h[Math.floor(v)] || 0) + 1; console.log('gt check hist: ' + JSON.stringify(h));
-  } catch (e) { console.log('gt check failed ' + e.message); }
   console.log(`rocketdash listening on ${PORT}, data in ${DATA_DIR}`);
   if (process.env.GIPHY_KEY) {
     gifList(GIF_QUERY, 3, 0).then(l => console.log(l.length ? `goal GIFs ready: ${l.length} for "${GIF_QUERY}"` : 'goal GIFs: GIPHY returned nothing (check GIPHY_KEY)'));

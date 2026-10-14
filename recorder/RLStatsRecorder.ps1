@@ -154,7 +154,12 @@ function Get-Pct($Part, $Whole) { if ($Whole -gt 0) { [math]::Round(100.0 * $Par
 function Add-Sample($M, $Data) {
   $game = Get-Prop $Data 'Game'
   $ot = [bool](Get-Prop $game 'bOvertime' $false)
-  if ($ot -ne [bool]$M.WasOvertime) { $M.WasOvertime = $ot; foreach ($ag in $M.Agg.Values) { $ag.LastBoost = $null } }
+  if ($ot -ne [bool]$M.WasOvertime) { $M.WasOvertime = $ot; $M.NeedKickoff = $true; foreach ($ag in $M.Agg.Values) { $ag.LastBoost = $null } }
+  # Game clock when play (re)starts: the match start, after each goal and at overtime. The clock
+  # sits still through the countdown, so the first value after a goal's replay is the kickoff clock.
+  $clock = [double](Get-Prop $game 'TimeSeconds' 0)
+  if ($null -eq $M.KickoffClock -or $M.NeedKickoff) { $M.KickoffClock = $clock; $M.KickoffOt = $ot; $M.NeedKickoff = $false }
+  $M.Clock = $clock
   $ballTeam = Get-Prop (Get-Prop $game 'Ball') 'TeamNum'
   if ($null -ne $ballTeam -and [int]$ballTeam -ge 0 -and [int]$ballTeam -le 1) { $M.BallTeam[[int]$ballTeam] = 1 + [int]$M.BallTeam[[int]$ballTeam] }
   foreach ($p in @(Get-Prop $Data 'Players' @())) {
@@ -388,6 +393,13 @@ function Invoke-Message($Msg) {
       # The game also sends an empty GoalScored (no goal time, no scorer) around most goals; skip it.
       $gt = Get-Prop $data 'GoalTime'
       if ($null -eq $gt -or [double]$gt -le 0) { break }
+      # Seconds of play since the last kickoff: regulation counts down, overtime counts up.
+      $since = $null
+      if ($null -ne $m.KickoffClock -and $null -ne $m.Clock) {
+        if ($m.KickoffOt) { $since = $m.Clock - $m.KickoffClock } else { $since = $m.KickoffClock - $m.Clock }
+        if ($since -lt 0) { $since = $null }
+      }
+      $m.NeedKickoff = $true
       $last = Get-Prop $data 'BallLastTouch'
       # Shot origin: where the ball was when the last toucher hit it (from BallHit events).
       $shot = $m.LastHitBy[[string](Get-Prop (Get-Prop $last 'Player') 'Name')]
@@ -401,6 +413,7 @@ function Invoke-Message($Msg) {
         last_touch = Get-Prop (Get-Prop $last 'Player') 'Name'; last_touch_speed = Get-Prop $last 'Speed'
         impact = Get-Prop $data 'ImpactLocation'
         shot_from = $shot.location; shot_from_player = $shot.player; shot_speed = $shot.speed
+        since_kickoff = $since
         ours = $null
       })
       if ($script:OnGoal) { try { & $script:OnGoal $m.Goals[$m.Goals.Count - 1] } catch { } }
