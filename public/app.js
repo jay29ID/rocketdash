@@ -514,7 +514,7 @@ function renderMaps(list){
 // A hand-rolled perspective view of the pitch (uu, z up). Each goal is an arc from where it was shot
 // to where it crossed the goal line. The big view orbits on drag; hovering a ball on the flat maps
 // plays that goal back in a small "replay" view and highlights it in the big one.
-const G3={goals:[],side:'us',yaw:-0.5,pitch:0.42,zoom:1,auto:true,t0:performance.now(),focus:null,ft:0};
+const G3={T:[0,3300,300],goals:[],side:'us',yaw:-0.5,pitch:0.42,zoom:1,auto:true,t0:performance.now(),focus:null,ft:0};
 const RP={k:null,t:0};
 function arcOf(g){
   const a=[g.x,g.y,g.z!=null?g.z:93],b=[g.ix,5120,g.iz],d=Math.hypot(b[0]-a[0],b[1]-a[1]);
@@ -582,9 +582,15 @@ function render3D(cv,V){
   }
 }
 function draw3D(){const cv=$('map3d');if(!cv)return;
-  render3D(cv,{goals:G3.goals,side:G3.side,T:[0,3300,300],D:11500,F:Math.min(cv.clientWidth,cv.clientHeight*1.6)*1.45*G3.zoom,yaw:G3.yaw,pitch:G3.pitch,focus:G3.focus,ft:G3.ft});
-  $('map3dNote').textContent=G3.goals.length?`${G3.goals.length} goals with a shot and net position. Drag to turn it, scroll to zoom. Hover a ball on the flat maps for a replay.`:'No goals with positions in this period.';
+  render3D(cv,{goals:G3.goals,side:G3.side,T:G3.T,D:11500,F:Math.min(cv.clientWidth,cv.clientHeight*1.6)*1.45*G3.zoom,yaw:G3.yaw,pitch:G3.pitch,focus:G3.focus,ft:G3.ft});
+  $('map3dNote').textContent=G3.goals.length?`${G3.goals.length} goals with a shot and net position. Drag or use the knob to turn it, arrow keys to move, scroll to zoom. Hover a ball on the flat maps for a replay.`:'No goals with positions in this period.';
+  syncKnob();
 }
+// The knob: its ring turns with the camera (N = looking at the attacked goal), the needle shows tilt.
+function syncKnob(){const r=$('knobRing');if(!r)return;r.setAttribute('transform',`rotate(${(-G3.yaw*180/Math.PI).toFixed(1)} 50 50)`);
+  const t=$('knobTilt');if(t)t.setAttribute('y2',(50-30*Math.sin(G3.pitch)).toFixed(1));}
+function nudge3D(f){G3.auto=false;f();G3.pitch=Math.max(.05,Math.min(1.45,G3.pitch));G3.zoom=Math.max(.6,Math.min(3,G3.zoom));
+  G3.T[0]=Math.max(-4096,Math.min(4096,G3.T[0]));G3.T[1]=Math.max(-5120,Math.min(6000,G3.T[1]));draw3D();}
 function drawReplay(){
   const cv=$('replayCv'),g=G3.goals.find(x=>x.k===RP.k);if(!g)return;
   const mid=[(g.x+g.ix)/2,(g.y+5120)/2,300],dx=g.ix-g.x,dy=5120-g.y,span=Math.hypot(dx,dy)+1800;
@@ -610,7 +616,24 @@ function loop3D(){if(looping)return;looping=true;const step=()=>{if(RP.k==null&&
   cv.addEventListener('pointermove',e=>{if(!drag)return;G3.yaw=drag.yaw-(e.clientX-drag.x)*.008;G3.pitch=Math.max(.05,Math.min(1.45,drag.pitch+(e.clientY-drag.y)*.006));draw3D();});
   ['pointerup','pointercancel'].forEach(t=>cv.addEventListener(t,()=>{drag=null;}));
   cv.addEventListener('wheel',e=>{e.preventDefault();G3.auto=false;G3.zoom=Math.max(.6,Math.min(3,G3.zoom*Math.exp(-e.deltaY*.0015)));draw3D();},{passive:false});
-  $('map3dReset').addEventListener('click',()=>{G3.yaw=-.5;G3.pitch=.42;G3.zoom=1;draw3D();});
+  $('map3dReset').addEventListener('click',()=>{G3.yaw=-.5;G3.pitch=.42;G3.zoom=1;G3.T=[0,3300,300];draw3D();});
+  // Arrow keys move the point the camera looks at, relative to where it's facing (Shift: faster).
+  // The canvas takes focus on click or hover so the page doesn't scroll instead.
+  cv.tabIndex=0;cv.addEventListener('pointerenter',()=>cv.focus({preventScroll:true}));
+  cv.addEventListener('keydown',e=>{const st=e.shiftKey?900:300,fw=[Math.sin(G3.yaw),Math.cos(G3.yaw)],rt=[fw[1],-fw[0]];
+    const mv={ArrowUp:[fw,1],ArrowDown:[fw,-1],ArrowRight:[rt,1],ArrowLeft:[rt,-1]}[e.key];
+    if(mv){e.preventDefault();nudge3D(()=>{G3.T[0]+=mv[0][0]*mv[1]*st;G3.T[1]+=mv[0][1]*mv[1]*st;});return;}
+    if(e.key==='+'||e.key==='='){e.preventDefault();nudge3D(()=>G3.zoom*=1.15);}
+    if(e.key==='-'||e.key==='_'){e.preventDefault();nudge3D(()=>G3.zoom/=1.15);}});
+  // Knob: drag the ring to orbit; buttons tilt and zoom.
+  const kn=$('knob');let kd=null;const ang=e=>{const r=kn.getBoundingClientRect();return Math.atan2(e.clientX-(r.left+r.width/2),-(e.clientY-(r.top+r.height/2)));};
+  kn.addEventListener('pointerdown',e=>{if(e.target.closest('button'))return;kd={a:ang(e),yaw:G3.yaw};kn.setPointerCapture(e.pointerId);G3.auto=false;});
+  kn.addEventListener('pointermove',e=>{if(!kd)return;G3.yaw=kd.yaw-(ang(e)-kd.a);draw3D();});
+  ['pointerup','pointercancel'].forEach(t=>kn.addEventListener(t,()=>{kd=null;}));
+  const hold=(id,f)=>{let tm=null;const go=()=>{nudge3D(f);tm=setTimeout(go,90);};const stop=()=>{clearTimeout(tm);tm=null;};
+    $(id).addEventListener('pointerdown',e=>{e.preventDefault();go();});['pointerup','pointerleave','pointercancel'].forEach(t=>$(id).addEventListener(t,stop));};
+  hold('kTiltUp',()=>G3.pitch+=.06);hold('kTiltDn',()=>G3.pitch-=.06);hold('kRotL',()=>G3.yaw+=.08);hold('kRotR',()=>G3.yaw-=.08);
+  hold('kZoomIn',()=>G3.zoom*=1.06);hold('kZoomOut',()=>G3.zoom/=1.06);
   window.addEventListener('resize',()=>draw3D());
   G3.seen=false;new IntersectionObserver(es=>{G3.seen=es[0].isIntersecting;if(G3.seen&&G3.auto)loop3D();}).observe(cv);
   // Slow sway until someone grabs it.
@@ -956,6 +979,7 @@ const CHANGELOG=[
     'Loading screen while your stats load, instead of briefly showing sample data',
     'Goal mouth on the goal map drawn as a technical diagram with real dimensions',
     'Hover a ball on the goal map for a 3D replay of that goal',
+    '3D goal map: arrow keys move the camera, and a control knob turns, tilts and zooms it',
     '3D goal map you can drag to rotate, showing every goal from shot to net',
     'Click a match in the match log to see its full stats and goal-by-goal story',
     'Hover a ball on either goal map to light up the same goal on the other one',
