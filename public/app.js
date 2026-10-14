@@ -1044,22 +1044,41 @@ $('matchClose').addEventListener('click',()=>$('matchDlg').close());
 $('matchDlg').addEventListener('click',e=>{if(e.target===$('matchDlg'))$('matchDlg').close();});
 $('matchDlg').addEventListener('close',()=>{if(location.hash.startsWith('#m-'))history.replaceState(null,'',location.pathname+location.search);});
 $('matchLog').addEventListener('click',e=>{const a=e.target.closest('a.mlink');if(!a)return;e.preventDefault();history.replaceState(null,'',a.getAttribute('href'));matchFromHash();});
-// Hovering a ball on one goal map lights up the same goal on the other.
-['fieldMap','netMap'].forEach(id=>{
-  $(id).addEventListener('mouseover',e=>{const d=e.target.closest('.dot');if(!d)return;const k=d.dataset.g;
-    document.querySelectorAll('#fieldMap,#netMap').forEach(el=>el.classList.add('linking'));
-    document.querySelectorAll(`#fieldMap .dot[data-g="${k}"],#netMap .dot[data-g="${k}"]`).forEach(el=>{el.classList.add('lit');if(el!==d)el.parentNode.appendChild(el);});
-    if(matchMedia('(hover: hover)').matches)showReplay(k,e);});
-  $(id).addEventListener('mousemove',e=>{if(RP.k!=null&&e.target.closest('.dot'))placeReplay(e);});
-  $(id).addEventListener('mouseout',e=>{const d=e.target.closest('.dot');if(!d)return;const to=e.relatedTarget&&e.relatedTarget.closest?e.relatedTarget.closest('.dot'):null;if(to===d)return;
-    document.querySelectorAll('#fieldMap,#netMap').forEach(el=>el.classList.remove('linking'));
-    document.querySelectorAll('.dot.lit').forEach(el=>el.classList.remove('lit'));hideReplay();});
-});
+// Hovering a ball on one goal map lights up the same goal on the other. The pointer is magnetic:
+// the nearest ball within reach snaps on and leans toward the cursor, so small balls are easy to catch.
+(function(){
+  const SNAP=26,LET_GO=38,PULL=.35,MAXPULL=7;let cur=null;
+  const centres=svg=>{if(svg._c)return svg._c;svg._c=[...svg.querySelectorAll('.dot')].map(d=>{const m=/translate\(([-\d.]+) ([-\d.]+)\)/.exec(d.getAttribute('transform')||'');return m?{d,x:+m[1],y:+m[2]}:null;}).filter(Boolean);return svg._c;};
+  const release=()=>{if(!cur)return;cur.d.style.translate='';cur=null;
+    document.querySelectorAll('#fieldMap,#netMap').forEach(el=>{el.classList.remove('linking');el.style.cursor='';});
+    document.querySelectorAll('.dot.lit').forEach(el=>el.classList.remove('lit'));hideReplay();};
+  const grab=(d,host,e)=>{const k=d.dataset.g;cur={d,k};
+    document.querySelectorAll('#fieldMap,#netMap').forEach(el=>el.classList.add('linking'));host.style.cursor='pointer';
+    document.querySelectorAll(`#fieldMap .dot[data-g="${k}"],#netMap .dot[data-g="${k}"]`).forEach(el=>{el.classList.add('lit');el.parentNode.appendChild(el);});
+    if(matchMedia('(hover: hover)').matches)showReplay(k,e);};
+  ['fieldMap','netMap'].forEach(id=>{const host=$(id);
+    host.addEventListener('pointermove',e=>{if(e.pointerType!=='mouse')return;const svg=host.querySelector('svg');if(!svg)return;
+      const M=svg.getScreenCTM();if(!M)return;const sc=Math.hypot(M.a,M.b)||1;
+      let best=null,bd=1e9;for(const c of centres(svg)){const dx=M.a*c.x+M.c*c.y+M.e-e.clientX,dy=M.b*c.x+M.d*c.y+M.f-e.clientY,dd=dx*dx+dy*dy;if(dd<bd){bd=dd;best=c;}}
+      bd=Math.sqrt(bd);
+      if(cur&&cur.d.ownerSVGElement===svg){const c=centres(svg).find(x=>x.d===cur.d);
+        // Stay on the current ball until the cursor leaves its reach or is clearly closer to another.
+        const cd=c?Math.hypot(M.a*c.x+M.c*c.y+M.e-e.clientX,M.b*c.x+M.d*c.y+M.f-e.clientY):1e9;
+        if(cd<=LET_GO&&!(best&&best.d!==cur.d&&bd<cd*.6)){best=c;bd=cd;}}
+      if(!best||bd>(cur?LET_GO:SNAP)){release();return;}
+      if(!cur||cur.d!==best.d){release();grab(best.d,host,e);}else if(RP.k!=null)placeReplay(e);
+      // Lean the ball toward the cursor, in the SVG's own units.
+      const px=(e.clientX-(M.a*best.x+M.c*best.y+M.e))*PULL,py=(e.clientY-(M.b*best.x+M.d*best.y+M.f))*PULL,l=Math.hypot(px,py),k=l>MAXPULL?MAXPULL/l:1;
+      best.d.style.translate=`${(px*k/sc).toFixed(2)}px ${(py*k/sc).toFixed(2)}px`;});
+    host.addEventListener('pointerleave',release);
+  });
+})();
 
 // ---------- version and update log ----------
 // Add a release at the top whenever something visible changes (dashboard or widget).
 const CHANGELOG=[
   {v:'1.6',date:'2026-10-14',items:[
+    'Goal map balls are magnetic: the nearest one snaps on as your mouse gets close',
     'Our saves on the goal map: where we saved each shot, where it came from, where it was heading, with a 3D replay. Recorded from the next widget update on',
     'Fixed the goal maps and 3D replays being mirrored left to right',
     'Arena background: a drawn pitch with boost pads over a random wallpaper on each visit',
