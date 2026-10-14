@@ -60,6 +60,13 @@ function Get-Prop($Obj, [string]$Name, $Default = $null) {
 
 function Get-Int($Obj, [string]$Name) { [int](Get-Prop $Obj $Name 0) }
 
+# A player's team. The game leaves out fields that are zero, so a missing TeamNum on a known player is team 0.
+function Get-TeamOf($M, [string]$Name, $Team) {
+  if ($null -ne $Team) { return $Team }
+  foreach ($q in @(Get-Prop $M.State 'Players' @())) { if ([string](Get-Prop $q 'Name') -eq $Name) { return [int](Get-Prop $q 'TeamNum' 0) } }
+  return $null
+}
+
 # The Stats API leaves zero and false values out of UpdateState, so an empty boost tank arrives as
 # no Boost field at all. Your own team's players always carry some car fields; opponents never do.
 $script:OwnCarFields = 'Boost', 'Speed', 'bHasCar', 'bOnGround', 'bOnWall', 'bBoosting', 'bSupersonic', 'bPowersliding', 'bDemolished'
@@ -143,6 +150,7 @@ function Get-Match([string]$Guid) {
       Recent = (New-Object System.Collections.ArrayList)   # the last 3 touches, oldest first, saved with each goal
       Saves = New-Object System.Collections.ArrayList     # each save: where it was saved and where the shot came from
       PendingSave = $null; HitSeq = 0
+      TouchLog = New-Object System.Collections.ArrayList  # every touch: seconds since match start, who, where (for the timelapse)
       Loadouts = @{}     # per-player car and cosmetics, from UpdateState
       Pickups = @{}      # per-player boost pad pickups (BoostPickup events)
       Left = New-Object System.Collections.ArrayList   # players who quit before the end (PlayerLeft)
@@ -332,6 +340,7 @@ function Save-Match($M, [string]$Result, $WinnerTeamNum) {
     mmr_at_queue = $null; mmr_party_size = $null
     goals = @($M.Goals)
     saves = @($M.Saves)
+    touch_log = @($M.TouchLog)
     players = @($rows)
     players_left = @($M.Left)
     replay_created = $M.Replay
@@ -465,6 +474,7 @@ function Invoke-Message($Msg) {
         assist_from = $(if ($assistHit) { $assistHit.location } else { $null })
         touches = @($m.Recent | ForEach-Object { [ordered]@{ player = $_.player; team = $_.team; location = $_.location; speed = $_.speed } })
         since_kickoff = $since
+        at = [math]::Round(((Get-Date).ToUniversalTime() - $m.StartedAt).TotalSeconds, 1)
         since_save = Get-Since $m.SaveAt[[int](Get-Prop (Get-Prop $data 'Scorer') 'TeamNum' -1)]
         ours = $null
       })
@@ -478,7 +488,12 @@ function Invoke-Message($Msg) {
         $m.Hits[$name].Count++
         $spd = Get-Prop (Get-Prop $data 'Ball') 'PostHitSpeed'
         $m.HitSeq++
-        $hitInfo = @{ player = $name; team = Get-Prop $p 'TeamNum'; speed = $spd; location = Get-Prop (Get-Prop $data 'Ball') 'Location'; seq = $m.HitSeq }
+        $hitInfo = @{ player = $name; team = (Get-TeamOf $m $name (Get-Prop $p 'TeamNum')); speed = $spd; location = Get-Prop (Get-Prop $data 'Ball') 'Location'; seq = $m.HitSeq }
+        $loc = $hitInfo.location
+        if ($loc -and $m.TouchLog.Count -lt 3000) {
+          [void]$m.TouchLog.Add([ordered]@{ t = [math]::Round(((Get-Date).ToUniversalTime() - $m.StartedAt).TotalSeconds, 1); p = $name; k = $hitInfo.team
+            x = [math]::Round([double](Get-Prop $loc 'X' 0)); y = [math]::Round([double](Get-Prop $loc 'Y' 0)); z = [math]::Round([double](Get-Prop $loc 'Z' 0)) })
+        }
         $m.LastHitBy[$name] = $hitInfo; $m.LastHit = $hitInfo
         [void]$m.Recent.Add($hitInfo); while ($m.Recent.Count -gt 3) { $m.Recent.RemoveAt(0) }
         if ($m.PendingSave -and $m.PendingSave.saver -eq $name) { Complete-Save $m $hitInfo }

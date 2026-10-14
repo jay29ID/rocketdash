@@ -69,6 +69,14 @@ function rankOf(v){
 function makeSample(names){
   let a=2929;const rnd=()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296};
   const pois=l=>{let L=Math.exp(-l),k=0,p=1;do{k++;p*=rnd()}while(p>L);return k-1};
+  // Sample touches: a wandering ball, touched by whoever, with each goal finished near the right net.
+  const sampleTouches=(pl,goals,dur,my)=>{const f=my===1?-1:1,out=[];let bx=0,by=0,t=3;const ns=pl.map(p=>p.name);
+    const gs=goals.map(g=>({t:+g.goal_time,ours:g.ours,who:g.scorer})).sort((a,b)=>a.t-b.t);goals.forEach(g=>g.at=g.goal_time);let gi=0;
+    while(t<dur){const g=gs[gi];if(g&&t>=g.t-2){const sgn=g.ours?1:-1,who=ns.includes(g.who)?g.who:ns[g.ours?0:2+(gi%2)]||ns[0];
+        out.push({t:+(g.t-1.2).toFixed(1),p:who,k:g.ours?my:1-my,x:Math.round(-f*norm(0,700)),y:Math.round(f*sgn*norm(3900,500)),z:93});bx=0;by=0;t=g.t+4;gi++;continue;}
+      bx=clamp(bx+norm(0,1300),-3900,3900);by=clamp(by+norm(0,1800),-4900,4900);const j=Math.floor(rnd()*ns.length);
+      out.push({t:+t.toFixed(1),p:ns[j],k:pl[j].team,x:Math.round(bx),y:Math.round(by),z:Math.round(clamp(norm(150,200),93,1500))});t+=.4+rnd()*2.2;}
+    return out;};
   const norm=(m,s)=>{let u=0,v=0;while(!u)u=rnd();while(!v)v=rnd();return m+s*Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)};
   const pick=arr=>arr[Math.floor(rnd()*arr.length)];
   const base=[{g:.95,sh:3.2,sv:1.25,d:.85,t:28,boost:44,ss:17,air:9,wall:12,gs:91,bump:2.6},{g:.78,sh:2.7,sv:1.75,d:1.45,t:30,boost:39,ss:13,air:6,wall:15,gs:84,bump:3.8}],prof=names.map((n,j)=>base[j%base.length]);
@@ -135,7 +143,7 @@ function makeSample(names){
       matches.push({match_guid:'sample-'+si+'-'+k,started_at:new Date(t).toISOString(),duration_seconds:dur,playlist:warm?'Casual Doubles':'Ranked Doubles',arena:pick(arenas),
         overtime:ot,my_team:my,result:win?'Win':'Loss',team_score:us,opponent_score:them,goals,saves,players,
         replay_created:rnd()<.2?new Date(t+dur*1000).toISOString():null,
-        kickoffs:us+them+1,players_left:rnd()<.08?[{name:'Opponent',team:1-my}]:[],spectators:crowd,drinks:{[names[0]]:Math.floor(k*.7)}});
+        kickoffs:us+them+1,touch_log:sampleTouches(players,goals,dur,my),players_left:rnd()<.08?[{name:'Opponent',team:1-my}]:[],spectators:crowd,drinks:{[names[0]]:Math.floor(k*.7)}});
       t+=(dur+60+Math.floor(rnd()*90))*1000;
     }
     rating=rating.map((v,j)=>Math.round(v+w*(8.5+j)+norm(0,6)));
@@ -266,6 +274,9 @@ function toMatch(r){
     ourGoals:goals.filter(g=>g.ours),theirGoals:goals.filter(g=>!g.ours),ourSaves:saves.filter(g=>g.ours),defSaves,
     oppShots:opp.length?opp.reduce((a,x)=>a+(num(x.shots)||0),0):null,oppGoals:opp.reduce((a,x)=>a+(num(x.goals)||0),0),
     replay:!!r.replay_created,left,opps,ff:!!r.ff,
+    // Every ball touch (recorders from 2026-10-14), turned so our team attacks +Y, for the timelapse.
+    tl:Array.isArray(r.touch_log)&&r.touch_log.length>4?(f=>r.touch_log.filter(t=>t&&t.t!=null).map(t=>({t:+t.t,p:String(t.p||''),k:num(t.k),x:-f*(+t.x||0),y:f*(+t.y||0),z:+t.z||0})).sort((a,b)=>a.t-b.t))(myTeam===1?-1:1):null,
+    goalAt:rawGoals.filter(g=>g&&+g.goal_time>0&&g.at!=null).map(g=>({t:+g.at,ours:g.ours!=null?!!g.ours:(myTeam!=null&&num(g.team)===myTeam),who:g.scorer||''})),
     spectators:Array.isArray(r.spectators)?r.spectators.map(String):null,
     drinks:r.drinks&&num(r.drinks[PLAYERS[0].name])!=null?num(r.drinks[PLAYERS[0].name]):null};
 }
@@ -1248,10 +1259,53 @@ function openMatch(guid){
     (m.ff||m.replay||m.left.length?`<div class="mnotes">${notes(m)}</div>`:'')+
     `<table class="lines mtable num"><thead>${head}</thead><tbody>${body}</tbody></table>`+
     `<h3>Goals</h3>${story?`<ol class="story">${story}</ol>`:'<p class="muted">No goal details for this match.</p>'}`+
+    (m.tl?`<h3>Timelapse</h3><div class="tlapse"><canvas id="tlCv"></canvas><div class="tlbar"><button type="button" id="tlPlay" class="chipbtn">Pause</button><input type="range" id="tlPos" min="0" max="1000" value="0" aria-label="Match time"><span id="tlTime" class="num muted"></span><div class="seg" id="tlSpeed"><button type="button" data-x="10">10×</button><button type="button" data-x="30" aria-pressed="true">30×</button><button type="button" data-x="60">60×</button></div></div><p class="muted" style="margin:4px 0 0">Each car is drawn where it touched the ball, gliding between its touches, since the game doesn't send positions in between. We attack to the right.</p></div>`:'')+
     `<h3>Opponents</h3><p>${m.opps.length?m.opps.map(o=>`<a href="${esc(o.url)}" target="_blank" rel="noopener">${esc(o.name)}</a>`).join(' · '):'<span class="muted">Not recorded</span>'}</p>`;
   const d=$('matchDlg');if(!d.open){if(d.showModal)d.showModal();else d.setAttribute('open','');}
+  if(m.tl)startTimelapse(m);
   return true;
 }
+// ---------- touch timelapse ----------
+// The Stats API has no car positions, only where each touch happened. Each car glides from one of
+// its touches to the next; if it went a long time without touching the ball it fades until the next one.
+const TL={m:null,t:0,x:30,play:true,last:0,raf:0};
+function startTimelapse(m){TL.m=m;TL.t=m.tl[0].t;TL.play=true;TL.last=performance.now();
+  $('tlPlay').onclick=()=>{TL.play=!TL.play;$('tlPlay').textContent=TL.play?'Pause':'Play';TL.last=performance.now();};
+  $('tlPos').oninput=e=>{const a=m.tl[0].t,b=m.tl[m.tl.length-1].t;TL.t=a+(b-a)*e.target.value/1000;drawTimelapse();};
+  $('tlSpeed').onclick=e=>{const b=e.target.closest('button');if(!b)return;TL.x=+b.dataset.x;$('tlSpeed').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));};
+  cancelAnimationFrame(TL.raf);const step=now=>{if(!$('matchDlg').open||TL.m!==m||!$('tlCv'))return;
+    if(TL.play){TL.t+=(now-TL.last)/1000*TL.x;const end=m.tl[m.tl.length-1].t+2;if(TL.t>end)TL.t=m.tl[0].t;}
+    TL.last=now;drawTimelapse();TL.raf=requestAnimationFrame(step);};TL.raf=requestAnimationFrame(step);}
+function drawTimelapse(){const m=TL.m,cv=$('tlCv');if(!m||!cv)return;
+  const W=cv.clientWidth,H=cv.clientHeight,dpr=window.devicePixelRatio||1;if(!W||!H)return;
+  if(cv.width!==Math.round(W*dpr)){cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);}
+  const c=cv.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,W,H);
+  const css=getComputedStyle(document.documentElement),tok=n=>css.getPropertyValue(n).trim();
+  // Landscape pitch: our attack runs left to right, so the shooter's right (+x) is down the screen.
+  const sc=Math.min((W-20)/12000,(H-20)/8192),X=y=>W/2+y*sc,Y=x=>H/2+x*sc,ch=1152;
+  c.fillStyle=tok('--pitch');c.strokeStyle=tok('--pitch-line');c.lineWidth=1.5;
+  const fl=[[-4096,-5120+ch],[-4096+ch,-5120],[4096-ch,-5120],[4096,-5120+ch],[4096,5120-ch],[4096-ch,5120],[-4096+ch,5120],[-4096,5120-ch]];
+  c.beginPath();fl.forEach(([x,y],i)=>i?c.lineTo(X(y),Y(x)):c.moveTo(X(y),Y(x)));c.closePath();c.fill();c.stroke();
+  c.beginPath();c.moveTo(X(0),Y(-4096));c.lineTo(X(0),Y(4096));c.stroke();c.beginPath();c.arc(X(0),Y(0),1000*sc,0,7);c.stroke();
+  [[1,tok('--win')],[-1,tok('--muted')]].forEach(([sd,col])=>{c.strokeStyle=col;c.lineWidth=2;c.strokeRect(Math.min(X(5120*sd),X(6000*sd)),Y(-893),880*sc,1786*sc);});
+  const t=TL.t,tl=m.tl,col=p=>{const j=PLAYERS.findIndex(q=>q.name===p);return j>=0?tok('--p'+(j+1)):tok('--opp');};
+  // Ball: along the touches in order.
+  let i=0;while(i<tl.length-1&&tl[i+1].t<=t)i++;const a=tl[i],b=tl[Math.min(i+1,tl.length-1)],u=b.t>a.t?Math.min(1,Math.max(0,(t-a.t)/(b.t-a.t))):0;
+  // Cars: each player's previous and next touch.
+  const names=[...new Set(tl.map(x=>x.p))];c.font='600 11px '+(tok('--display')||'sans-serif');c.textAlign='center';
+  names.forEach(p=>{const mine=tl.filter(x=>x.p===p);let k=-1;for(let q=0;q<mine.length;q++)if(mine[q].t<=t)k=q;
+    if(k<0)return;const A=mine[k],B=mine[k+1]||A,gap=B.t-A.t,w=gap>0?Math.min(1,(t-A.t)/gap):0,cx=A.x+(B.x-A.x)*w,cy=A.y+(B.y-A.y)*w,cc=col(p);
+    const fade=gap>12&&w>.15&&w<.85?.35:1;
+    c.globalAlpha=.35*fade;c.strokeStyle=cc;c.lineWidth=1.5;c.beginPath();mine.slice(Math.max(0,k-4),k+1).forEach((q,n)=>n?c.lineTo(X(q.y),Y(q.x)):c.moveTo(X(q.y),Y(q.x)));c.lineTo(X(cy),Y(cx));c.stroke();
+    c.globalAlpha=fade;c.fillStyle=cc;c.beginPath();c.arc(X(cy),Y(cx),6,0,7);c.fill();c.strokeStyle=tok('--surface');c.lineWidth=1.5;c.stroke();
+    const j=PLAYERS.findIndex(q=>q.name===p);c.fillStyle=tok('--ink');c.fillText(j>=0?PLAYERS[j].short:p.slice(0,10),X(cy),Y(cx)-10);c.globalAlpha=1;});
+  const bx=a.x+(b.x-a.x)*u,by=a.y+(b.y-a.y)*u;c.fillStyle='#f4f6f8';c.strokeStyle='#7d8692';c.lineWidth=1;c.beginPath();c.arc(X(by),Y(bx),4,0,7);c.fill();c.stroke();
+  const sc0=m.goalAt.filter(g=>g.t<=t);const us=sc0.filter(g=>g.ours).length,them=sc0.length-us,last=sc0[sc0.length-1];
+  c.textAlign='left';c.font='600 13px '+(tok('--mono')||'monospace');c.fillStyle=tok('--ink');c.fillText(`${us}–${them}`,10,18);
+  if(last&&t-last.t<6){c.globalAlpha=1-(t-last.t)/6;c.textAlign='center';c.font='700 22px '+(tok('--display')||'sans-serif');c.fillStyle=last.ours?tok('--win'):tok('--loss');
+    const j=PLAYERS.findIndex(q=>q.name===last.who);c.fillText('GOAL'+(j>=0?' · '+PLAYERS[j].short.toUpperCase():''),W/2,H/2-30);c.globalAlpha=1;}
+  const a0=tl[0].t,b0=tl[tl.length-1].t;$('tlPos').value=Math.round(1000*Math.min(1,(t-a0)/((b0-a0)||1)));
+  $('tlTime').textContent=fmtDur(Math.max(0,Math.round(t-a0)))+' / '+fmtDur(Math.round(b0-a0));}
 function matchFromHash(){const h=location.hash;if(h.startsWith('#m-'))openMatch(decodeURIComponent(h.slice(3)));}
 window.addEventListener('hashchange',matchFromHash);
 $('matchClose').addEventListener('click',()=>$('matchDlg').close());
@@ -1345,6 +1399,7 @@ $('matchLog').addEventListener('click',e=>{const a=e.target.closest('a.mlink');i
 // Add a release at the top whenever something visible changes (dashboard or widget).
 const CHANGELOG=[
   {v:'1.7',date:'2026-10-14',items:[
+    'Match timelapse: open a match to watch the cars move between their ball touches on the overhead field (new games)',
     'A live timer under each name at the top: time since that player last scored',
     'Player pictures: click your name at the top to upload one, and it shows next to your name across the dashboard',
     'Neon or Classic look for the whole dashboard, switched at the top (each map can still have its own)',
