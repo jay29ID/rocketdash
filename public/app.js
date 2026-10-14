@@ -169,10 +169,10 @@ document.documentElement.style.setProperty('--wall',`url(/bg/${WALLPAPERS[Math.f
 let PLAYERS=[], RAW={matches:[],mmr:[]}, SAMPLE=false;
 let ALL=[], DONE=[], sessions=[], NOW=Date.now(), FACED={};
 const SPECTATORS=['Morgan','Chance','Nick'];
-let period='30', mode='avg', metric='winpct', playlist=null, units='metric', mapSide='us', mapWho='all';
+let party='duo', period='30', mode='avg', metric='winpct', playlist=null, units='metric', mapSide='us', mapWho='all';
 let hmTheme='classic',g3Theme='classic',look='classic';
-try{const s=JSON.parse(localStorage.getItem('rl-duo-ui')||'{}');if(s.hm)hmTheme=s.hm;if(s.g3)g3Theme=s.g3;if(s.look)look=s.look;if(s.period)period=s.period;if(s.mode)mode=s.mode;if(s.metric)metric=s.metric;if(s.playlist)playlist=s.playlist;if(s.units)units=s.units;}catch(e){}
-const saveUi=()=>{try{localStorage.setItem('rl-duo-ui',JSON.stringify({period,mode,metric,playlist,units,hm:hmTheme,g3:g3Theme,look}))}catch(e){}};
+try{const s=JSON.parse(localStorage.getItem('rl-duo-ui')||'{}');if(s.hm)hmTheme=s.hm;if(s.g3)g3Theme=s.g3;if(s.look)look=s.look;if(s.period)period=s.period;if(s.mode)mode=s.mode;if(s.metric)metric=s.metric;if(s.playlist)playlist=s.playlist;if(s.units)units=s.units;if(s.party)party=s.party;}catch(e){}
+const saveUi=()=>{try{localStorage.setItem('rl-duo-ui',JSON.stringify({party,period,mode,metric,playlist,units,hm:hmTheme,g3:g3Theme,look}))}catch(e){}};
 
 // A forfeit never sends the game's "match ended" event, so the recorder saves it as Incomplete.
 // When one side was ahead, that side won (the team behind forfeited, or quit, which is a loss too).
@@ -285,6 +285,11 @@ function toMatch(r){
 function build(){
   const done=RAW.matches.map(forfeit).filter(r=>r&&(r.result==='Win'||r.result==='Loss')&&r.started_at).map(toMatch).filter(m=>!isNaN(m.when));
   done.sort((a,b)=>a.when-b.when);
+  // Duo: at least two of us in the game. Solo: just one of us (solo queue, 1v1, or with someone else).
+  const withUs=m=>m.lines.filter(Boolean).length;
+  const kept=party==='all'?done:done.filter(m=>party==='solo'?withUs(m)===1:withUs(m)>=2);
+  done.length=0;kept.forEach(m=>done.push(m));
+  document.querySelectorAll('#party button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.p===party)));
   const counts={};done.forEach(m=>counts[m.playlist]=(counts[m.playlist]||0)+1);
   const lists=Object.keys(counts).sort((a,b)=>counts[b]-counts[a]);
   if(playlist!=='All'&&!counts[playlist])playlist=counts['Ranked Doubles']?'Ranked Doubles':'All';
@@ -1123,7 +1128,8 @@ function renderCal(){const el=$('hcal');if(!el)return;const now=new Date(NOW),y=
   el.innerHTML=h;el.setAttribute('aria-label',`${now.toLocaleDateString('en-US',{month:'long'})}: played on ${Object.keys(played).filter(k=>{const d=new Date(k);return d.getMonth()===mo&&d.getFullYear()===y;}).length} days`);}
 function renderAll(){
   build();
-  if(!ALL.length){$('banner').hidden=false;$('banner').textContent='No finished matches for this playlist yet.';return;}
+  if(!ALL.length){$('banner').hidden=false;$('banner').textContent=party==='solo'&&!DONE.length?'No solo games yet. The widget saves every game it sees, so games with just one of us show up here from now on.':party==='duo'&&!DONE.length?'No games with both of us yet.':'No finished matches for this playlist yet.';return;}
+  $('banner').hidden=!SAMPLE;if(!SAMPLE)$('banner').textContent='';
   renderCal();renderPeriod();renderLastSession();renderStrip();renderTrend();renderMMR();renderWarmups();renderMotion();
 }
 $('units').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;units=b.dataset.u;saveUi();syncUnits();renderAll();});
@@ -1133,6 +1139,7 @@ $('period').addEventListener('click',e=>{const b=e.target.closest('button');if(!
 $('mode').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;mode=b.dataset.m;saveUi();renderCmp(inPeriod());syncButtons();});
 $('metric').innerHTML=METRICS.map(m=>`<button type="button" data-k="${m.k}">${m.label}</button>`).join('');
 $('metric').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;metric=b.dataset.k;saveUi();syncButtons();renderTrend();});
+$('party').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;party=b.dataset.p;saveUi();renderAll();});
 $('playlist').addEventListener('change',e=>{playlist=e.target.value;saveUi();renderAll();});
 // Look of the heatmaps and of the 3D maps, each picked on its own and remembered.
 function applyThemes(){document.documentElement.classList.toggle('neon',look==='neon');document.documentElement.classList.toggle('night',look==='night');
@@ -1813,6 +1820,7 @@ $('matchLog').addEventListener('click',e=>{const a=e.target.closest('a.mlink');i
 // Add a release at the top whenever something visible changes (dashboard or widget).
 const CHANGELOG=[
   {v:'1.7',date:'2026-10-14',items:[
+    'Duo / Solo / All switch at the top: Duo (the default) counts only games with both of us, Solo shows games with just one of us, All shows everything',
     'All-time records: most days played in a row, longest break between game days, and the current run or days since we last played',
     'Night theme: mellow greyscale with red accents. The look switch is now a theme icon that opens a round picker (Classic, Neon, Night, and one slot saved for later); the heatmap and 3D map can also be set to Night on their own',
     'Small calendar at the top right of the header: this month, with the days we played lit up (hover a day for the game count)',
