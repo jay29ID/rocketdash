@@ -975,7 +975,25 @@ function renderRecords(){
     `<div class="v${leads(rs.map(x=>x&&x.v),j)?' best':''}" title="${esc(r.m.arena)}, ${r.m.us}–${r.m.them} ${r.m.win?'win':'loss'}">${fmt(r.v)}<small>${fmtDate(r.m.when)}</small></div>`;};
   $('recKv').innerHTML='<div class="h">Record</div>'+PLAYERS.map(p=>`<div class="h v">${esc(p.short)}</div>`).join('')+
     recs.map(([name,get,fmt])=>{const rs=PLAYERS.map((p,j)=>get(j));return `<div>${name}</div>`+rs.map((r,j)=>cell(rs,j,fmt)).join('');}).join('');
+  renderDayStreaks();
 }
+// Days played in a row, and the longest break, across every playlist.
+function renderDayStreaks(){const el=$('dayStreaks');if(!el)return;
+  const key=d=>new Date(d.getFullYear(),d.getMonth(),d.getDate()).getTime();
+  const days=[...new Set(DONE.map(m=>key(m.when)))].sort((a,b)=>a-b);
+  if(!days.length){el.innerHTML='';return;}
+  const diff=(a,b)=>Math.round((b-a)/DAY);   // whole days (rounding absorbs daylight-saving hours)
+  let run=1,best={n:1,a:days[0],b:days[0]},gap={n:0,a:null,b:null},s=days[0];
+  for(let i=1;i<days.length;i++){const d=diff(days[i-1],days[i]);
+    if(d===1){run++;}else{run=1;s=days[i];if(d-1>gap.n)gap={n:d-1,a:days[i-1],b:days[i]};}
+    if(run>best.n)best={n:run,a:s,b:days[i]};}
+  const today=key(new Date(NOW)),last=days[days.length-1],since=diff(last,today);
+  let cur=0;if(since<=1){cur=1;for(let i=days.length-1;i>0&&diff(days[i-1],days[i])===1;i--)cur++;}
+  const f=t=>fmtDate(new Date(t)),pl=n=>n+' day'+(n===1?'':'s');
+  el.innerHTML=[['Most days in a row',pl(best.n),best.n>1?`${f(best.a)} to ${f(best.b)}`:f(best.a)],
+    ['Longest break',gap.n?pl(gap.n):'–',gap.n?`${f(gap.a)} to ${f(gap.b)}`:'never missed a day'],
+    since<=1?['Current run',pl(cur),since===0?'played today':'played yesterday']:['Days since we played',pl(since),'last on '+f(last)]]
+    .map(c=>`<div class="callout"><span class="k">${c[0]}</span><span class="v num">${c[1]}</span><span class="muted small">${c[2]}</span></div>`).join('');}
 
 // Seconds as 45s, 12m 05s or 3h 04m.
 function fmtDur(s){s=Math.round(s);if(s<60)return s+'s';const m=Math.floor(s/60);if(m<60)return m+'m '+String(s%60).padStart(2,'0')+'s';return Math.floor(m/60)+'h '+String(m%60).padStart(2,'0')+'m';}
@@ -1795,6 +1813,7 @@ $('matchLog').addEventListener('click',e=>{const a=e.target.closest('a.mlink');i
 // Add a release at the top whenever something visible changes (dashboard or widget).
 const CHANGELOG=[
   {v:'1.7',date:'2026-10-14',items:[
+    'All-time records: most days played in a row, longest break between game days, and the current run or days since we last played',
     'Night theme: mellow greyscale with red accents. The look switch is now a theme icon that opens a round picker (Classic, Neon, Night, and one slot saved for later); the heatmap and 3D map can also be set to Night on their own',
     'Small calendar at the top right of the header: this month, with the days we played lit up (hover a day for the game count)',
     'Since-last-goal timer restyled: the width of the name card, time in a green pill, "since last goal" in purple digital type underneath',
