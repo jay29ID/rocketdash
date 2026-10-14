@@ -277,7 +277,7 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`rocketdash listening on ${PORT}, data in ${DATA_DIR}`);
-  try{const c={};for(const r of Object.values(store.matches))for(const g of (r.goals||[])){if(!g||!(+g.goal_time>0)||!g.impact)continue;const k='t'+g.team+(g.ours?'us':'them')+'_impY'+(g.impact.Y>0?'+':'-')+'_shotY'+(g.shot_from&&g.shot_from.Y>0?'+':'-');c[k]=(c[k]||0)+1;}console.log('DIAG axes '+JSON.stringify(c));}catch(e){console.log('DIAG err '+e.message);}
+  try{const rows=[];for(const r of Object.values(store.matches)){let a=0,b=0,ex=[];const tm={};(r.players||[]).forEach(p=>{if(p&&p.name)tm[p.name]=p.team;});for(const g of (r.goals||[])){if(!g||!(+g.goal_time>0)||!g.impact)continue;const ok=(g.team===1?-1:1)*g.impact.Y>0;ok?a++:b++;if(ex.length<3)ex.push([g.team,tm[g.scorer],g.last_touch&&tm[g.last_touch],Math.round(g.impact.Y),g.shot_from&&Math.round(g.shot_from.Y),Math.round(+g.goal_time),g.since_kickoff!=null?Math.round(+g.since_kickoff):null,g.ours?1:0]);}if(a+b)rows.push([String(r.started_at).slice(5,16),r.arena,r.my_team,a,b,ex]);}rows.sort((x,y)=>x[0]<y[0]?-1:1);for(let k=0;k<rows.length;k+=12)console.log('DIAG m '+JSON.stringify(rows.slice(k,k+12)));}catch(e){console.log('DIAG err '+e.message);}
   if (process.env.GIPHY_KEY) {
     gifList(GIF_QUERY, 3, 0).then(l => console.log(l.length ? `goal GIFs ready: ${l.length} for "${GIF_QUERY}"` : 'goal GIFs: GIPHY returned nothing (check GIPHY_KEY)'));
     gifList(AGAINST_GIF_QUERY, 1, 6, WHOOPS).then(l => console.log(`goals-against GIFs: ${l.map(g => g.title).join(' | ') || 'none'}`));
