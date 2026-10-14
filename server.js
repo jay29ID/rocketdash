@@ -168,7 +168,7 @@ const LOCKED = `<!doctype html><meta charset="utf-8"><meta name="viewport" conte
 <body style="font:15px system-ui,sans-serif;background:#0b1017;color:#eef2f7;display:grid;place-items:center;min-height:100vh;margin:0;padding:16px">
 <p style="max-width:40ch;text-align:center">This dashboard is private. Open it with the share link you were sent.</p></body>`;
 
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml' };
+const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.webp': 'image/webp', '.jpg': 'image/jpeg', '.png': 'image/png' };
 function serveFile(res, name) {
   const file = path.join(PUBLIC, name);
   if (!file.startsWith(PUBLIC + path.sep)) return send(res, 404, { error: 'not found' });
@@ -268,6 +268,7 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'GET' && (p === '/' || p === '/index.html')) return serveFile(res, 'index.html');
     if (req.method === 'GET' && p === '/app.js') return serveFile(res, 'app.js');
+    if (req.method === 'GET' && /^\/bg\/[\w-]+\.(webp|jpg|png)$/.test(p)) return serveFile(res, p.slice(1));
     return send(res, 404, { error: 'not found' });
   } catch (e) {
     return send(res, 400, { error: String(e.message || e) });
