@@ -721,7 +721,7 @@ function miniLoop(){if(MINI.on)return;MINI.on=true;const step=()=>{if(!MINI.seen
 function draw3D(){const cv=$('map3d');if(!cv)return;
   render3D(cv,{goals:G3.goals,side:G3.side,T:G3.T,D:11500,F:Math.min(cv.clientWidth,cv.clientHeight*1.6)*1.45*G3.zoom,yaw:G3.yaw,pitch:G3.pitch,focus:G3.focus,ft:G3.ft});
   const nm=G3.side==='saves'?'saves with a position':'goals with a shot and net position';
-  $('map3dNote').textContent=G3.goals.length?`${G3.goals.length} ${nm}. Drag or use the knob to turn it, arrow keys to move, scroll to zoom. Hover a goal here or a ball on the flat maps for a replay.`+(G3.pad&&G3.pad()?' Controller: left stick moves, right stick turns, triggers zoom, A or RB next goal, LB previous, B stops, Y resets.':''):`No ${G3.side==='saves'?'saves':'goals'} with positions in this period.`;
+  $('map3dNote').textContent=G3.goals.length?`${G3.goals.length} ${nm}. Drag or use the knob to turn it, arrow keys to move, scroll to zoom. Hover a goal here or a ball on the flat maps for a replay.`+(G3.pad&&G3.pad()?` Controller found: ${G3.pad().id.replace(/\s*\(.*$/,'').slice(0,40)}${G3.pad().std?'':' (non-standard layout)'}. Left stick moves, right stick turns, triggers zoom, A or RB next goal, LB previous, B stops, Y resets.`:''):`No ${G3.side==='saves'?'saves':'goals'} with positions in this period.`;
   syncKnob();if(MINI.still||!MINI.on)drawMini();
 }
 // The knob: its ring turns with the camera (N = looking at the attacked goal), the needle shows tilt.
@@ -793,27 +793,45 @@ function loop3D(){if(looping)return;looping=true;const step=()=>{if(RP.k==null&&
   // Game controller (any pad the browser maps to the standard layout): left stick moves the camera,
   // right stick turns and tilts, triggers zoom, A / RB next goal, LB previous, B stops, Y resets.
   // Browsers only reveal a pad after a button is pressed while the page is open.
-  const PAD={on:false,prev:[],k:-1};
-  const dz=v=>Math.abs(v)<.15?0:(v-Math.sign(v)*.15)/.85;
+  const PAD={on:false,prev:[],k:-1,miss:0,id:'',std:true};
+  const dz=v=>Math.abs(v)<.18?0:(v-Math.sign(v)*.18)/.82;
   const focusGoal=step=>{const n=G3.goals.length;if(!n)return;PAD.k=((PAD.k+step)%n+n)%n;const g=G3.goals[PAD.k];
     G3.auto=false;G3.focus=g.k;G3.ft=performance.now();
     const w=waypoints(g),p0=w.length?w[0].p:[g.x,g.y,93];G3.T=[(p0[0]+g.ix)/2,(p0[1]+5120)/2,300];};
-  const padLoop=()=>{const gp=[...(navigator.getGamepads?navigator.getGamepads():[])].find(x=>x&&x.connected);
-    if(!gp){PAD.on=false;draw3D();return;}
-    const ax=gp.axes,bt=gp.buttons.map(b=>b&&(b.pressed||b.value>.5)),val=i=>gp.buttons[i]?gp.buttons[i].value:0,hit=i=>bt[i]&&!PAD.prev[i];
-    if(G3.seen&&document.visibilityState==='visible'){
-      const lx=dz(ax[0]||0)+(bt[15]?1:0)-(bt[14]?1:0),ly=dz(ax[1]||0)+(bt[13]?1:0)-(bt[12]?1:0),rx=dz(ax[2]||0),ry=dz(ax[3]||0),zm=val(7)-val(6);
+  // Wireless pads and adapters often show up as extra entries (a headset, a dongle with no axes) or
+  // without the standard layout, so pick the most controller-like one and map loosely when needed.
+  const pickPad=()=>{const all=[...(navigator.getGamepads?navigator.getGamepads():[])].filter(x=>x&&x.connected!==false&&x.axes&&x.axes.length>=2&&x.buttons&&x.buttons.length>=4);
+    return all.sort((a,b)=>(b.mapping==='standard')-(a.mapping==='standard')||b.timestamp-a.timestamp)[0]||null;};
+  const read=gp=>{const ax=gp.axes,B=gp.buttons,v=i=>B[i]?(B[i].value||(B[i].pressed?1:0)):0,bt=B.map(b=>!!b&&(b.pressed||b.value>.5));
+    if(gp.mapping==='standard')return {ax:[ax[0],ax[1],ax[2],ax[3]],bt,lt:v(6),rt:v(7)};
+    // Non-standard: right stick is usually axes 2/3, or 3/4 when a trigger sits on axis 2, or 2/5 (PlayStation pads).
+    const n=ax.length,trig=x=>x!=null&&Math.abs(x+1)<.05;let r=[2,3],lt=0,rt=0;
+    if(n>=6&&trig(ax[3])&&trig(ax[4])){r=[2,5];lt=(ax[3]+1)/2;rt=(ax[4]+1)/2;}
+    else if(n>=5&&trig(ax[2])){r=[3,4];lt=(ax[2]+1)/2;rt=n>5?(ax[5]+1)/2:0;}
+    return {ax:[ax[0],ax[1],ax[r[0]]||0,ax[r[1]]||0],bt,lt:Math.max(lt,v(6)),rt:Math.max(rt,v(7))};};
+  const padLoop=()=>{const gp=pickPad();
+    if(!gp){if(++PAD.miss>120){PAD.on=false;draw3D();return;}requestAnimationFrame(padLoop);return;}   // ride out brief Bluetooth drop-outs
+    PAD.miss=0;if(gp.id!==PAD.id||(gp.mapping==='standard')!==PAD.std){PAD.id=gp.id;PAD.std=gp.mapping==='standard';draw3D();}
+    const {ax,bt,lt,rt}=read(gp),hit=i=>bt[i]&&!PAD.prev[i];
+    if(document.visibilityState==='visible'){
+      // Any button while the 3D map is off screen brings it into view.
+      if(!G3.seen){if(bt.some((b,i)=>b&&!PAD.prev[i]))$('map3d').scrollIntoView({behavior:'smooth',block:'center'});}
+      else{
+      const lx=dz(ax[0]||0)+(bt[15]?1:0)-(bt[14]?1:0),ly=dz(ax[1]||0)+(bt[13]?1:0)-(bt[12]?1:0),rx=dz(ax[2]||0),ry=dz(ax[3]||0),zm=rt-lt;
       const moved=lx||ly||rx||ry||Math.abs(zm)>.05;
-      if(moved){G3.auto=false;const fw=[Math.sin(G3.yaw),Math.cos(G3.yaw)],rt=[fw[1],-fw[0]],st=bt[10]?110:45;
-        G3.T[0]+=(rt[0]*lx-fw[0]*ly)*st;G3.T[1]+=(rt[1]*lx-fw[1]*ly)*st;G3.yaw-=rx*.04;G3.pitch+=ry*.025;G3.zoom*=Math.exp(zm*.03);}
+      if(moved){G3.auto=false;const fw=[Math.sin(G3.yaw),Math.cos(G3.yaw)],rgt=[fw[1],-fw[0]],st=bt[10]?110:45;
+        G3.T[0]+=(rgt[0]*lx-fw[0]*ly)*st;G3.T[1]+=(rgt[1]*lx-fw[1]*ly)*st;G3.yaw-=rx*.04;G3.pitch+=ry*.025;G3.zoom*=Math.exp(zm*.03);}
       if(hit(0)||hit(5))focusGoal(1);if(hit(4))focusGoal(-1);
       if(hit(1)){G3.focus=null;PAD.k=-1;}
       if(hit(3)){G3.yaw=-.5;G3.pitch=.42;G3.zoom=1;G3.T=[0,3300,300];G3.focus=null;PAD.k=-1;}
-      if(moved||G3.focus!=null||bt.some(Boolean))nudge3D(()=>{});
+      if(moved||G3.focus!=null||bt.some(Boolean))nudge3D(()=>{});}
     }
     PAD.prev=bt;requestAnimationFrame(padLoop);};
-  window.addEventListener('gamepadconnected',()=>{if(PAD.on)return;PAD.on=true;draw3D();requestAnimationFrame(padLoop);});
-  G3.pad=()=>PAD.on;
+  const startPad=()=>{if(PAD.on||!pickPad())return;PAD.on=true;PAD.miss=0;draw3D();requestAnimationFrame(padLoop);};
+  window.addEventListener('gamepadconnected',startPad);
+  // Some browsers never fire the event for a pad that was already paired, so also check now and then.
+  setInterval(startPad,1000);
+  G3.pad=()=>PAD.on?PAD:null;
   // Slow sway until someone grabs it.
   const sway=t=>{if(!G3.auto)return;G3.yaw=-.5+Math.sin((t-G3.t0)/6000)*.6;requestAnimationFrame(sway);};
   requestAnimationFrame(sway);
@@ -1202,6 +1220,7 @@ $('matchLog').addEventListener('click',e=>{const a=e.target.closest('a.mlink');i
 // Add a release at the top whenever something visible changes (dashboard or widget).
 const CHANGELOG=[
   {v:'1.6',date:'2026-10-14',items:[
+    'Controller support works with more wireless and PlayStation pads, survives Bluetooth drop-outs, and any button jumps to the 3D map',
     'Mini spinning 3D goal map under the goal mouth; click it for the full view',
     'Hover a goal in the 3D view to play its replay',
     'Up to four players: pick the names you track from the widget\'s Players... menu (it asks the first time)',
