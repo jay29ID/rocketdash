@@ -1149,6 +1149,35 @@ $('importForm').addEventListener('submit',async e=>{
 
 let rt;window.addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(()=>{if(ALL.length){renderTrend();renderMMR();}},150);});
 
+// ---------- player pictures ----------
+// Each player's picture replaces the colour square in their tags, ringed in their colour.
+let AV={};
+function applyAvatars(){const root=document.documentElement;
+  PLAYERS.forEach((p,j)=>{const u=AV[p.name];if(u)root.style.setProperty('--av'+(j+1),`url("${u}")`);else root.style.removeProperty('--av'+(j+1));root.classList.toggle('has-av'+(j+1),!!u);});
+  for(let j=PLAYERS.length;j<4;j++){root.classList.remove('has-av'+(j+1));root.style.removeProperty('--av'+(j+1));}}
+// Crop to a square and shrink to 256 px in the browser, so uploads stay small.
+function squareImage(file){return new Promise((ok,fail)=>{const u=URL.createObjectURL(file),im=new Image();
+  im.onload=()=>{const n=Math.min(im.naturalWidth,im.naturalHeight),c=document.createElement('canvas');c.width=c.height=256;
+    c.getContext('2d').drawImage(im,(im.naturalWidth-n)/2,(im.naturalHeight-n)/2,n,n,0,0,256,256);URL.revokeObjectURL(u);
+    let d=c.toDataURL('image/webp',.86);if(!d.startsWith('data:image/webp'))d=c.toDataURL('image/jpeg',.88);ok(d);};
+  im.onerror=()=>{URL.revokeObjectURL(u);fail(new Error('That file isn\'t a picture this browser can read.'));};im.src=u;});}
+async function postAvatar(body){const r=await fetch('/api/avatar',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||'Upload failed');AV=j.avatars||{};applyAvatars();}
+(function(){const menu=document.createElement('div');menu.className='avmenu';menu.hidden=true;document.body.appendChild(menu);
+  const pick=document.createElement('input');pick.type='file';pick.accept='image/png,image/jpeg,image/webp,image/gif';pick.hidden=true;document.body.appendChild(pick);
+  let who=null;const close=()=>{menu.hidden=true;};
+  document.addEventListener('click',e=>{const b=e.target.closest('#playerTags .avbtn');
+    if(b){e.stopPropagation();who=PLAYERS[+b.dataset.j];const r=b.getBoundingClientRect();
+      menu.innerHTML=`<b>${esc(who.name)}</b><button type="button" data-a="up">${AV[who.name]?'Change picture':'Upload picture'}</button>`+(AV[who.name]?'<button type="button" data-a="rm">Remove picture</button>':'')+'<span class="avmsg"></span>';
+      menu.style.left=Math.max(8,Math.min(innerWidth-220,r.left))+'px';menu.style.top=(r.bottom+6+scrollY)+'px';menu.hidden=false;return;}
+    if(!menu.contains(e.target))close();});
+  menu.addEventListener('click',async e=>{const a=e.target.closest('button[data-a]');if(!a||!who)return;
+    if(a.dataset.a==='up')pick.click();
+    if(a.dataset.a==='rm'){try{await postAvatar({player:who.name,remove:true});close();}catch(x){menu.querySelector('.avmsg').textContent=x.message;}}});
+  pick.addEventListener('change',async()=>{const f=pick.files[0];pick.value='';if(!f||!who)return;const msg=menu.querySelector('.avmsg');
+    try{if(msg)msg.textContent='Uploading…';await postAvatar({player:who.name,image:await squareImage(f)});close();}catch(x){if(msg)msg.textContent=x.message;}});
+})();
+
 async function load(){
   let data=null;
   try{const r=await fetch('/api/data',{cache:'no-store'});if(r.ok)data=await r.json();}catch(e){}
@@ -1165,7 +1194,8 @@ async function load(){
   const shorts=PLAYERS.map(p=>p.short);
   $('title').textContent=shorts.length>1?shorts.slice(0,-1).join(', ')+' & '+shorts[shorts.length-1]:shorts[0];
   document.title=$('title').textContent+' Stats';
-  $('playerTags').innerHTML=PLAYERS.map(p=>`<span class="tag ${p.tag}"><i></i>${esc(p.name)}</span>`).join('');
+  $('playerTags').innerHTML=PLAYERS.map((p,j)=>`<button type="button" class="tag ${p.tag} avbtn" data-j="${j}" title="Set ${esc(p.short)}'s picture"><i></i>${esc(p.name)}</button>`).join('');
+  AV=data.avatars||{};applyAvatars();
   $('drinkWho').textContent=`How many drinks ${PLAYERS[0].short} had`;
   const who=$('mmrWho').value;
   $('mmrWho').innerHTML=PLAYERS.map((p,j)=>`<option value="${j}">${esc(p.name)}</option>`).join('');
@@ -1300,6 +1330,7 @@ $('matchLog').addEventListener('click',e=>{const a=e.target.closest('a.mlink');i
 // Add a release at the top whenever something visible changes (dashboard or widget).
 const CHANGELOG=[
   {v:'1.7',date:'2026-10-14',items:[
+    'Player pictures: click your name at the top to upload one, and it shows next to your name across the dashboard',
     'Neon or Classic look for the whole dashboard, switched at the top (each map can still have its own)',
     'Customize your dashboard: drag panels into any order, make them half or full width, or hide them (saved in your browser)',
     'Neon look (black, fluorescent green and purple) for the heatmaps and the 3D maps, each switched on its own',

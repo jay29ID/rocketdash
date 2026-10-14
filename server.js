@@ -34,8 +34,41 @@ if (!VIEW_KEY || !UPLOAD_KEY) console.warn('VIEW_KEY and UPLOAD_KEY should both 
 
 // ---------- storage ----------
 fs.mkdirSync(DATA_DIR, { recursive: true });
-let store = { matches: {}, mmr: {} };
+let store = { matches: {}, mmr: {}, avatars: {} };
 try { store = Object.assign(store, JSON.parse(fs.readFileSync(STORE, 'utf8'))); } catch (e) { if (e.code !== 'ENOENT') throw e; }
+
+// Player pictures: small square images the page resizes before upload, one per player name.
+const AVATARS = path.join(DATA_DIR, 'avatars');
+fs.mkdirSync(AVATARS, { recursive: true });
+const AV_TYPES = { png: 'image/png', jpeg: 'image/jpeg', webp: 'image/webp' };
+const avKey = name => crypto.createHash('sha1').update(String(name)).digest('hex').slice(0, 16);
+function avatarUrls() {
+  const out = {};
+  for (const [name, a] of Object.entries(store.avatars || {})) out[name] = `/api/avatar/${a.key}?v=${a.v}`;
+  return out;
+}
+function setAvatar(name, dataUrl) {
+  name = String(name || '').trim();
+  if (!name || name.length > 64) throw new Error('player name required');
+  const m = /^data:image\/(png|jpeg|webp);base64,([A-Za-z0-9+/=]+)$/.exec(String(dataUrl || ''));
+  if (!m) throw new Error('picture must be a PNG, JPEG or WebP');
+  const buf = Buffer.from(m[2], 'base64');
+  if (buf.length > 400 * 1024) throw new Error('picture too large');
+  // Check the file really is the image type it claims to be.
+  const ok = m[1] === 'png' ? buf.slice(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+    : m[1] === 'jpeg' ? buf[0] === 0xff && buf[1] === 0xd8
+    : buf.slice(0, 4).toString() === 'RIFF' && buf.slice(8, 12).toString() === 'WEBP';
+  if (!ok) throw new Error('not a valid picture');
+  const key = avKey(name), old = store.avatars[name];
+  if (old && old.ext !== m[1]) { try { fs.unlinkSync(path.join(AVATARS, old.key + '.' + old.ext)); } catch (e) {} }
+  fs.writeFileSync(path.join(AVATARS, key + '.' + m[1]), buf);
+  store.avatars[name] = { key, ext: m[1], v: Date.now().toString(36) };
+}
+function removeAvatar(name) {
+  const a = store.avatars[name]; if (!a) return;
+  try { fs.unlinkSync(path.join(AVATARS, a.key + '.' + a.ext)); } catch (e) {}
+  delete store.avatars[name];
+}
 
 function save() {
   const tmp = STORE + '.tmp';
@@ -255,7 +288,22 @@ const server = http.createServer(async (req, res) => {
     if (!canView(req)) return p.startsWith('/api/') ? send(res, 401, { error: 'private' }) : send(res, 403, LOCKED, 'text/html; charset=utf-8');
 
     if (p === '/api/data' && req.method === 'GET') {
-      return send(res, 200, { players: PLAYERS, matches: Object.values(store.matches), mmr: Object.values(store.mmr) });
+      return send(res, 200, { players: PLAYERS, matches: Object.values(store.matches), mmr: Object.values(store.mmr), avatars: avatarUrls() });
+    }
+    if (p === '/api/avatar' && req.method === 'POST') {
+      const b = await readJson(req);
+      if (b.remove) removeAvatar(String(b.player || '')); else setAvatar(b.player, b.image);
+      save();
+      return send(res, 200, { ok: true, avatars: avatarUrls() });
+    }
+    {
+      const m = /^\/api\/avatar\/([0-9a-f]{16})$/.exec(p);
+      if (m && req.method === 'GET') {
+        const a = Object.values(store.avatars || {}).find(x => x.key === m[1]);
+        if (!a) return send(res, 404, { error: 'not found' });
+        return fs.readFile(path.join(AVATARS, a.key + '.' + a.ext), (err, buf) => err ? send(res, 404, { error: 'not found' })
+          : send(res, 200, buf, AV_TYPES[a.ext], { 'Cache-Control': 'private, max-age=31536000, immutable' }));
+      }
     }
     // Typed MMR from the page
     if (p === '/api/mmr' && req.method === 'POST') {
