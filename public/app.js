@@ -454,6 +454,31 @@ function renderPlay(list){
   $('playKv').innerHTML=`<div class="h">Stat</div><div class="h v">${esc(PLAYERS[0].short)}</div><div class="h v">${esc(PLAYERS[1].short)}</div>`+rows.map(r=>`<div>${r[0]}</div><div class="v">${r[1](A[0])}</div><div class="v">${r[1](A[1])}</div>`).join('');
 }
 
+// ---------- all-time records ----------
+// Best single game or goal per player, across every playlist and the whole history.
+function renderRecords(){
+  const ms=DONE;
+  const best=(j,val)=>{let b=null;ms.forEach(m=>{const v=val(m,j);if(v!=null&&(!b||v>b.v))b={v,m};});return b;};
+  const goalBest=(j,val)=>{let b=null;ms.forEach(m=>m.ourGoals.filter(g=>g.who===j).forEach(g=>{const v=val(g);if(v!=null&&(!b||v>b.v))b={v,m};}));return b;};
+  const line=k=>(m,j)=>m.lines[j]?m.lines[j][k]:null;
+  const recs=[
+    ['Longest goal',j=>goalBest(j,g=>g.x!=null&&g.y!=null?Math.hypot(g.x,5120-g.y)/100:null),v=>v.toFixed(0)+' m'],
+    ['Hardest goal',j=>goalBest(j,g=>g.spd),v=>v.toFixed(0)+' km/h'],
+    ['Hardest hit',j=>best(j,line('hardest')),v=>v.toFixed(0)+' km/h'],
+    ['Top speed',j=>best(j,line('topSpeed')),v=>v.toFixed(0)+' km/h'],
+    ['Most goals',j=>best(j,line('goals')),v=>v],
+    ['Most assists',j=>best(j,line('assists')),v=>v],
+    ['Most saves',j=>best(j,line('saves')),v=>v],
+    ['Most shots',j=>best(j,line('shots')),v=>v],
+    ['Most demos',j=>best(j,line('demos')),v=>v],
+    ['Most bumps',j=>best(j,line('bumps')),v=>v],
+    ['Highest score',j=>best(j,line('score')),v=>v]];
+  const cell=(r,o,fmt)=>!r||!r.v?'<div class="v">–</div>':
+    `<div class="v${o&&o.v!=null&&r.v>o.v?' best':''}" title="${esc(r.m.arena)}, ${r.m.us}–${r.m.them} ${r.m.win?'win':'loss'}">${fmt(r.v)}<small>${fmtDate(r.m.when)}</small></div>`;
+  $('recKv').innerHTML=`<div class="h">Record</div><div class="h v">${esc(PLAYERS[0].short)}</div><div class="h v">${esc(PLAYERS[1].short)}</div>`+
+    recs.map(([name,get,fmt])=>{const a=get(0),b=get(1);return `<div>${name}</div>${cell(a,b,fmt)}${cell(b,a,fmt)}`;}).join('');
+}
+
 // Seconds as 45s, 12m 05s or 3h 04m.
 function fmtDur(s){s=Math.round(s);if(s<60)return s+'s';const m=Math.floor(s/60);if(m<60)return m+'m '+String(s%60).padStart(2,'0')+'s';return Math.floor(m/60)+'h '+String(m%60).padStart(2,'0')+'m';}
 
@@ -521,7 +546,7 @@ function syncButtons(){
   document.querySelectorAll('#mode button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.m===mode));
   document.querySelectorAll('#metric button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.k===metric));
 }
-function renderPeriod(){const list=inPeriod();renderSummary(list);renderCmp(list);renderMaps(list);renderPlay(list);renderCrowd(list);renderLog(list);syncButtons();}
+function renderPeriod(){renderRecords();const list=inPeriod();renderSummary(list);renderCmp(list);renderMaps(list);renderPlay(list);renderCrowd(list);renderLog(list);syncButtons();}
 // ---------- warm-ups ----------
 // A night is every match with gaps under 90 minutes. Its warm-ups are the Casual Doubles games
 // played before the first Ranked Doubles game; the ranked games that night are what follows.
