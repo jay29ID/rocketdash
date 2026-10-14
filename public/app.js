@@ -1094,10 +1094,17 @@ function renderWarmups(){
     :'<tr><td colspan="4" class="muted">No nights with warm-ups and ranked games yet.</td></tr>')+'</tbody>';
 }
 
+// Header calendar: this month, Monday first, days with a game lit. No numbers, just the marks.
+function renderCal(){const el=$('hcal');if(!el)return;const now=new Date(NOW),y=now.getFullYear(),mo=now.getMonth();
+  const played={};DONE.forEach(m=>{const k=m.when.toDateString();played[k]=(played[k]||0)+1;});
+  const first=(new Date(y,mo,1).getDay()+6)%7,days=new Date(y,mo+1,0).getDate();let h='<i class="x"></i>'.repeat(first);
+  for(let d=1;d<=days;d++){const dt=new Date(y,mo,d),n=played[dt.toDateString()];
+    h+=`<i class="${n?'on':''}${dt.toDateString()===now.toDateString()?' today':''}"${n?` title="${esc(fmtDay(dt))}: ${n} game${n>1?'s':''}"`:''}></i>`;}
+  el.innerHTML=h;el.setAttribute('aria-label',`${now.toLocaleDateString('en-US',{month:'long'})}: played on ${Object.keys(played).filter(k=>{const d=new Date(k);return d.getMonth()===mo&&d.getFullYear()===y;}).length} days`);}
 function renderAll(){
   build();
   if(!ALL.length){$('banner').hidden=false;$('banner').textContent='No finished matches for this playlist yet.';return;}
-  renderPeriod();renderLastSession();renderStrip();renderTrend();renderMMR();renderWarmups();renderMotion();
+  renderCal();renderPeriod();renderLastSession();renderStrip();renderTrend();renderMMR();renderWarmups();renderMotion();
 }
 $('units').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;units=b.dataset.u;saveUi();syncUnits();renderAll();});
 function syncUnits(){$('units').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.u===units)));}
@@ -1779,6 +1786,7 @@ $('matchLog').addEventListener('click',e=>{const a=e.target.closest('a.mlink');i
 // Add a release at the top whenever something visible changes (dashboard or widget).
 const CHANGELOG=[
   {v:'1.7',date:'2026-10-14',items:[
+    'Small calendar at the top right of the header: this month, with the days we played lit up (hover a day for the game count)',
     'Since-last-goal timer restyled: the width of the name card, time in a green pill, "since last goal" in purple digital type underneath',
     'Played before: opponents we have met before get a badge with how many games and our record against them, in the match log and match details; the widget shows it on its MMR line during a live match',
     'Eleven new panels: shot map with misses and scoring % by zone, demo rivalries, kickoff battles, touch heatmaps, momentum graph, trophy case, post and crossbar hits, MMR by session with streaks, boost at goals against, duo synergy, and hardest shots with a 3D replay button',

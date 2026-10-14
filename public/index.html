@@ -68,7 +68,7 @@ button,input,select{font:inherit;color:inherit}
 :focus-visible{outline:2px solid var(--focus);outline-offset:2px}
 
 /* header */
-header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px 24px;padding-bottom:4px}
+header.top{position:relative;display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px 24px;padding-bottom:4px}
 .duo{display:flex;flex-direction:column;gap:6px}
 .duo .names{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
 .tag{display:inline-flex;align-items:center;gap:6px;font-family:var(--display);font-weight:600;font-size:13px;padding:3px 10px;border-radius:4px}
@@ -348,6 +348,10 @@ body.editing .editbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;bac
 .tlbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px}
 .tlbar input[type=range]{flex:1 1 160px;min-width:0}
 .small{font-size:12px}
+.hcal{position:absolute;top:6px;right:0;display:grid;grid-template-columns:repeat(7,9px);gap:3px;padding:7px;background:var(--surface);border:1px solid var(--line);border-radius:8px}
+.hcal i{width:9px;height:9px;border-radius:2px;background:var(--surface-2)}.hcal i.x{visibility:hidden}
+.hcal i.on{background:var(--win);box-shadow:0 0 5px color-mix(in srgb,var(--win) 60%,transparent)}.hcal i.today{outline:1.5px solid var(--ink-2);outline-offset:1px}
+@media (max-width:700px){.hcal{position:static;order:-1;margin-left:auto}}
 .faced{display:inline-block;font-size:11px;font-weight:600;padding:0 5px;border-radius:4px;background:var(--surface-2);color:var(--ink-2);white-space:nowrap;cursor:help}.faced.up{color:var(--win)}.faced.down{color:var(--loss)}
 .panel-tools{display:flex;justify-content:flex-end;margin:-4px 0 8px}
 .ztxt{font-size:12px;font-weight:700;fill:var(--ink);paint-order:stroke;stroke:var(--surface);stroke-width:3px;stroke-linejoin:round}.ztxt .muted{fill:var(--muted);font-weight:400}
@@ -379,6 +383,7 @@ body.editing .editbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;bac
 
 <div class="wrap">
   <header class="top">
+    <div class="hcal" id="hcal" role="img" aria-label="This month, with the days we played marked"></div>
     <div class="duo">
       <div class="names">
         <h1 id="title">Jay &amp; Kobra</h1>
