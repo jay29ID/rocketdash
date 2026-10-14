@@ -262,6 +262,8 @@ function agg(list){
     const nb=L.map(l=>l.noBoost).filter(v=>v!=null);t.noBoost=nb.length?nb.reduce((a,b)=>a+b,0):null;t.noBoostGames=nb.length;
     const hh=L.map(l=>l.hardest).filter(v=>v!=null);t.hardest=hh.length?Math.max(...hh):null;
     const ht=list.filter(m=>m.lines[j]&&m.lines[j].goals>=3);t.hat=ht.length;t.hatWins=ht.filter(m=>m.win).length;
+    // Win record by how many goals this player scored in the game (index 5 = 5 or more).
+    t.byGoals=[1,2,3,4,5].map(n=>{const g=list.filter(m=>m.lines[j]&&(n<5?m.lines[j].goals===n:m.lines[j].goals>=5));return {n:g.length,w:g.filter(m=>m.win).length};});
     t.kickoff=list.reduce((s,m)=>s+m.ourGoals.filter(g=>g.ko&&g.who===j).length,0);
     const dd=L.map(l=>l.dist).filter(v=>v!=null);t.dist=dd.length?dd.reduce((a,b)=>a+b,0):null;t.distGames=dd.length;
     const ts=L.map(l=>l.topSpeed).filter(v=>v!=null);t.topSpeed=ts.length?Math.max(...ts):null;
@@ -513,7 +515,8 @@ function renderPlay(list){
     PLAYERS.map((p,j)=>{const a=A[j];if(a.ground==null)return `<div class="split-row"><span class="tag p${j+1}" style="padding:1px 8px"><i></i>${esc(p.short)}</span><span class="note">No movement data yet</span></div>`;
       return `<div class="split-row"><span class="tag p${j+1}" style="padding:1px 8px"><i></i>${esc(p.short)}</span><div class="stack" title="Ground ${f(a.ground)}%, wall ${f(a.wall)}%, air ${f(a.air)}%">
       <div style="width:${a.ground}%;background:var(--ink-2)">${f(a.ground)}%</div><div style="width:${a.wall}%;background:var(--muted)">${f(a.wall)}%</div><div style="width:${a.air}%;background:${p.color}">${f(a.air)}%</div></div></div>`;}).join('');
-  const rows=[['Hat tricks',a=>a.games?String(a.hat):'–'],['Win % with a hat trick',a=>a.hat?`<span title="${a.hatWins} won of ${a.hat}">${Math.round(100*a.hatWins/a.hat)}%</span>`:'–'],['Kickoff goals',a=>a.games?String(a.kickoff):'–'],['Avg speed',a=>fSpd(a.speed)],['Top speed',a=>fSpd(a.topSpeed)],['Distance driven',a=>fDist(a.dist,a.dist>=100?0:1)],['Distance / game',a=>a.dist==null?'–':fDist(a.dist/a.distGames,2)],['Avg boost held',a=>f(a.boost)],['Time supersonic',a=>f(a.ss,1,'%')],['Avg goal speed',a=>fSpd(a.gsAvg)],['Hardest goal',a=>fSpd(a.gsMax)],['Hardest hit',a=>fSpd(a.hardest)],['Bumps / game',a=>f(a.bumps,1)],['Boost pads / game',a=>f(a.pickups,1)],['Main car',a=>a.car?esc(a.car):'–'],['I Got No Boost',a=>a.noBoost==null?'–':`<span title="${fmtDur(a.noBoost/a.noBoostGames)} a game">${fmtDur(a.noBoost)}</span>`]];
+  const rows=[['Hat tricks',a=>a.games?String(a.hat):'–'],['Win % with a hat trick',a=>a.hat?`<span title="${a.hatWins} won of ${a.hat}">${Math.round(100*a.hatWins/a.hat)}%</span>`:'–'],['Kickoff goals',a=>a.games?String(a.kickoff):'–'],
+    ...[1,2,3,4,5].map((n,i)=>[`Win % scoring ${n}${n<5?'':'+'} goal${n>1?'s':''}`,a=>{const b=a.byGoals&&a.byGoals[i];return b&&b.n?`<span title="${b.w} won of ${b.n}">${Math.round(100*b.w/b.n)}%</span> <small class="muted">${b.n}</small>`:'–';}]),['Avg speed',a=>fSpd(a.speed)],['Top speed',a=>fSpd(a.topSpeed)],['Distance driven',a=>fDist(a.dist,a.dist>=100?0:1)],['Distance / game',a=>a.dist==null?'–':fDist(a.dist/a.distGames,2)],['Avg boost held',a=>f(a.boost)],['Time supersonic',a=>f(a.ss,1,'%')],['Avg goal speed',a=>fSpd(a.gsAvg)],['Hardest goal',a=>fSpd(a.gsMax)],['Hardest hit',a=>fSpd(a.hardest)],['Bumps / game',a=>f(a.bumps,1)],['Boost pads / game',a=>f(a.pickups,1)],['Main car',a=>a.car?esc(a.car):'–'],['I Got No Boost',a=>a.noBoost==null?'–':`<span title="${fmtDur(a.noBoost/a.noBoostGames)} a game">${fmtDur(a.noBoost)}</span>`]];
   const koFor=list.reduce((s,m)=>s+m.ourGoals.filter(g=>g.ko).length,0),koAgainst=list.reduce((s,m)=>s+m.theirGoals.filter(g=>g.ko).length,0);
   const pct=ms=>ms.length?`<span title="${ms.filter(m=>m.win).length} won of ${ms.length}">${Math.round(100*ms.filter(m=>m.win).length/ms.length)}%</span> <small class="muted">${ms.length} games</small>`:'–';
   const teamRows=[['Win % when we score first',pct(list.filter(m=>m.first==='us'))],['Win % when they score first',pct(list.filter(m=>m.first==='them'))],
@@ -800,6 +803,7 @@ const CHANGELOG=[
     'Goal map pins are now little Rocket League balls',
     'Loading screen while your stats load, instead of briefly showing sample data',
     'Goal mouth on the goal map drawn as a technical diagram with real dimensions',
+    'Win % for each of you by goals scored in the game: 1, 2, 3, 4 and 5+',
     'Comebacks: wins after being 1, 2, 3 or 4+ goals down',
     'Blown leads: losses after being 1, 2, 3 or 4+ goals up',
     'km/h or mph toggle at the top switches every unit: speeds to mph, distances to miles, lengths to yards',
