@@ -845,7 +845,8 @@ function Import-History {
       $o = $line | ConvertFrom-Json
       $st = $null; try { $st = [datetime]::Parse($o.started_at).ToLocalTime() } catch { }
       [void]$script:History.Add(@{ ended = [datetime]::Parse($o.ended_at).ToLocalTime(); started = $st; result = $o.result
-        playlist = $o.playlist; us = $o.team_score; them = $o.opponent_score; players = (Get-HistPlayers $o.players) })
+        playlist = $o.playlist; us = $o.team_score; them = $o.opponent_score; players = (Get-HistPlayers $o.players)
+        opps = @(Get-HistOpps $o.players $o.my_team) })
     } catch { }
   }
 }
@@ -860,6 +861,36 @@ function Get-HistPlayers($Players) {
   }
   return $h
 }
+# Names of the other team, kept with each match so the widget can say who we've played before.
+function Get-HistOpps($Players, $MyTeam) {
+  if ($null -eq $MyTeam) { return @() }
+  foreach ($p in @($Players)) {
+    if ($p -is [System.Collections.IDictionary]) { $p = [pscustomobject]$p }
+    $n = [string](Get-Prop $p 'name'); $t = Get-Prop $p 'team'
+    if ($n -and $null -ne $t -and [int]$t -ne [int]$MyTeam -and -not ($TrackedPlayers -contains $n)) { $n }
+  }
+}
+
+# During a match: opponents we've met before, with our record against them, on the MMR line.
+$script:FacedKey = $null
+function Update-Faced($Players) {
+  $mine = $null
+  foreach ($p in $Players) { if ($TrackedPlayers -contains [string](Get-Prop $p 'Name')) { $mine = Get-Prop $p 'TeamNum' 0; break } }
+  if ($null -eq $mine) { return }
+  $opps = @($Players | Where-Object { [int](Get-Prop $_ 'TeamNum' 0) -ne [int]$mine } | ForEach-Object { [string](Get-Prop $_ 'Name') } | Where-Object { $_ } | Sort-Object)
+  $key = $opps -join '|'
+  if ($key -eq $script:FacedKey) { return }
+  $script:FacedKey = $key
+  $bits = foreach ($n in $opps) {
+    $games = @($script:History | Where-Object { ($_.result -eq 'Win' -or $_.result -eq 'Loss') -and $_.opps -contains $n })
+    if ($games.Count) {
+      $w = @($games | Where-Object { $_.result -eq 'Win' }).Count
+      '{0} {1}x ({2}-{3})' -f $n, $games.Count, $w, ($games.Count - $w)
+    }
+  }
+  if ($bits) { $script:mmrLabel.Text = 'Played before: ' + (@($bits) -join ', '); $script:mmrLabel.ForeColor = $script:C.Amber }
+}
+
 # A session is every game with less than 90 minutes between them (the dashboard uses the same rule).
 # Returns the latest session and whether it is still going (last game within 90 minutes).
 function Get-LatestSession {
@@ -910,6 +941,7 @@ function Update-Session {
 }
 
 function Update-Mmr {
+  $script:mmrLabel.ForeColor = $script:C.Muted
   # Follow the playlist of the last match played; before any match, the latest value logged.
   $pl = $null
   if ($script:History.Count -gt 0) { $pl = $script:History[$script:History.Count - 1].playlist }
@@ -932,7 +964,7 @@ function Update-Mmr {
     try { $text += ' (from ' + ([datetime]::Parse($latest.logged_at).ToLocalTime().ToString('d MMM')) + ')' } catch { }
   }
   if ($latest.party_size -gt 1) { $text += '  [party queue]' }
-  $script:mmrLabel.Text = $text
+  $script:mmrLabel.Text = $text; $script:mmrLabel.ForeColor = $script:C.Muted
 }
 
 # Small pop-up for entering an MMR by hand (the game only logs it on the party leader's PC).
@@ -1136,6 +1168,7 @@ $script:OnState = {
   $script:sub.Text = (@($pl, (Format-Clock (Get-Prop $game 'TimeSeconds') ([bool](Get-Prop $game 'bOvertime' $false)))) | Where-Object { $_ }) -join '   '
   $script:sub.ForeColor = $script:C.Muted
   Set-PlayerRows @(Get-Prop $Data 'Players' @()) 'live'
+  try { Update-Faced @(Get-Prop $Data 'Players' @()) } catch { }
   $script:gauge.Invalidate()
   if (-not $script:InMatch) { $script:InMatch = $true; Set-Status 'In a match' $script:C.Blue }
 }
@@ -1145,7 +1178,9 @@ $script:OnMatchSaved = {
   $script:InMatch = $false
   $st = $null; try { $st = [datetime]::Parse($Record.started_at).ToLocalTime() } catch { }
   [void]$script:History.Add(@{ ended = (Get-Date); started = $st; result = $Record.result; playlist = $Record.playlist
-    us = $Record.team_score; them = $Record.opponent_score; players = (Get-HistPlayers $Record.players) })
+    us = $Record.team_score; them = $Record.opponent_score; players = (Get-HistPlayers $Record.players)
+    opps = @(Get-HistOpps $Record.players $Record.my_team) })
+  $script:FacedKey = $null
   $color = $script:C.Muted
   if ($Record.result -eq 'Win') { $color = $script:C.Win } elseif ($Record.result -eq 'Loss') { $color = $script:C.Loss }
   $script:sub.Text = ('{0}  {1}' -f $Record.result.ToUpper(), $Record.playlist)

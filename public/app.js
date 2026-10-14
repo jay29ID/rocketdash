@@ -167,7 +167,7 @@ document.documentElement.style.setProperty('--wall',`url(/bg/${WALLPAPERS[Math.f
 
 // ---------- model ----------
 let PLAYERS=[], RAW={matches:[],mmr:[]}, SAMPLE=false;
-let ALL=[], DONE=[], sessions=[], NOW=Date.now();
+let ALL=[], DONE=[], sessions=[], NOW=Date.now(), FACED={};
 const SPECTATORS=['Morgan','Chance','Nick'];
 let period='30', mode='avg', metric='winpct', playlist=null, units='metric', mapSide='us', mapWho='all';
 let hmTheme='classic',g3Theme='classic',look='classic';
@@ -291,6 +291,8 @@ function build(){
   $('playlist').innerHTML=`<option value="All">All playlists (${done.length})</option>`+lists.map(l=>`<option value="${esc(l)}">${esc(plName(l))} (${counts[l]})</option>`).join('');
   $('playlist').value=playlist;
   DONE=done;
+  // Every opponent we've played, across all playlists, with our record against them.
+  FACED={};done.forEach(m=>m.opps.forEach(o=>{const k=o.name.toLowerCase(),f=FACED[k]||(FACED[k]={n:0,w:0,list:[]});f.n++;if(m.win)f.w++;f.list.push(m);}));
   ALL=playlist==='All'?done:done.filter(m=>m.playlist===playlist);
   sessions=[];
   ALL.forEach(m=>{const s=sessions[sessions.length-1];
@@ -1031,9 +1033,13 @@ function renderLog(list){
   const line=L=>L?`${L.goals}·${L.assists}·${L.saves}`:'–';
   $('matchLog').innerHTML=`<thead><tr><th>When</th><th>Result</th><th>Score</th><th>Arena</th>`+PLAYERS.map(p=>`<th>${esc(p.short)} G·A·Sv</th>`).join('')+`<th>Top score</th><th>Opponents</th><th>Notes</th></tr></thead><tbody>`+
     rows.map(m=>{const L=m.lines;const top=L.reduce((b,l,j)=>l&&(b<0||l.score>L[b].score)?j:b,-1);
-      return `<tr><td><a href="#m-${esc(m.guid)}" class="mlink" title="Open this match">${fmtDate(m.when)} ${fmtTime(m.when)}</a></td><td><span class="pill ${m.win?'w':'l'}">${m.win?'W':'L'}</span></td><td>${m.us}–${m.them}${m.ot?' <span class="muted">OT</span>':''}</td><td>${esc(m.arena)}</td>${L.map(l=>`<td>${line(l)}</td>`).join('')}<td>${top<0?'–':`<span class="tag ${PLAYERS[top].tag}" style="padding:0 7px"><i></i>${esc(PLAYERS[top].short)} ${L[top].score}</span>`}</td><td class="opps">${m.opps.length?m.opps.map(o=>`<a href="${esc(o.url)}" target="_blank" rel="noopener" title="View ${esc(o.name)} on tracker.gg">${esc(o.name)}</a>`).join('<br>'):'–'}</td><td class="notes">${notes(m)}</td></tr>`;}).join('')+'</tbody>';
+      return `<tr><td><a href="#m-${esc(m.guid)}" class="mlink" title="Open this match">${fmtDate(m.when)} ${fmtTime(m.when)}</a></td><td><span class="pill ${m.win?'w':'l'}">${m.win?'W':'L'}</span></td><td>${m.us}–${m.them}${m.ot?' <span class="muted">OT</span>':''}</td><td>${esc(m.arena)}</td>${L.map(l=>`<td>${line(l)}</td>`).join('')}<td>${top<0?'–':`<span class="tag ${PLAYERS[top].tag}" style="padding:0 7px"><i></i>${esc(PLAYERS[top].short)} ${L[top].score}</span>`}</td><td class="opps">${m.opps.length?m.opps.map(o=>`<a href="${esc(o.url)}" target="_blank" rel="noopener" title="View ${esc(o.name)} on tracker.gg">${esc(o.name)}</a>${facedBadge(o.name)}`).join('<br>'):'–'}</td><td class="notes">${notes(m)}</td></tr>`;}).join('')+'</tbody>';
 }
 
+// "Played before" badge: how many games against this opponent and our record, shown from the 2nd meeting.
+function facedBadge(name,long){const f=FACED[String(name).toLowerCase()];if(!f||f.n<2)return '';const l=f.n-f.w;
+  const tip=`Played ${f.n} times: ${f.w} won, ${l} lost. Last: ${f.list.slice(-3).reverse().map(m=>`${m.win?'W':'L'} ${m.us}–${m.them} ${fmtDate(m.when)}`).join(', ')}`;
+  return ` <span class="faced ${f.w>l?'up':f.w<l?'down':''}" title="${esc(tip)}">${long?`played ${f.n}×, `:`×${f.n} `}${f.w}–${l}</span>`;}
 function notes(m){
   const out=[];
   if(m.ff)out.push(`<span class="chip" title="Ended early: ${m.win?'they':'we'} forfeited or quit">${m.win?'They forfeited':'Forfeit'}</span>`);
@@ -1261,7 +1267,7 @@ function openMatch(guid){
     `<table class="lines mtable num"><thead>${head}</thead><tbody>${body}</tbody></table>`+
     `<h3>Goals</h3>${story?`<ol class="story">${story}</ol>`:'<p class="muted">No goal details for this match.</p>'}`+
     (m.tl?`<h3>Timelapse</h3>${tlMarkup('tl')}<p class="muted" style="margin:4px 0 0">Each car is drawn where it touched the ball, gliding between its touches, since the game doesn't send positions in between. We attack to the right.</p>`:'')+
-    `<h3>Opponents</h3><p>${m.opps.length?m.opps.map(o=>`<a href="${esc(o.url)}" target="_blank" rel="noopener">${esc(o.name)}</a>`).join(' · '):'<span class="muted">Not recorded</span>'}</p>`;
+    `<h3>Opponents</h3><p>${m.opps.length?m.opps.map(o=>`<a href="${esc(o.url)}" target="_blank" rel="noopener">${esc(o.name)}</a>${facedBadge(o.name,true)}`).join(' · '):'<span class="muted">Not recorded</span>'}</p>`;
   const d=$('matchDlg');if(!d.open){if(d.showModal)d.showModal();else d.setAttribute('open','');}
   if(m.tl)startTimelapse(m,'tl',()=>$('matchDlg').open);
   return true;
@@ -1758,6 +1764,7 @@ $('matchLog').addEventListener('click',e=>{const a=e.target.closest('a.mlink');i
 // Add a release at the top whenever something visible changes (dashboard or widget).
 const CHANGELOG=[
   {v:'1.7',date:'2026-10-14',items:[
+    'Played before: opponents we have met before get a badge with how many games and our record against them, in the match log and match details; the widget shows it on its MMR line during a live match',
     'Eleven new panels: shot map with misses and scoring % by zone, demo rivalries, kickoff battles, touch heatmaps, momentum graph, trophy case, post and crossbar hits, MMR by session with streaks, boost at goals against, duo synergy, and hardest shots with a 3D replay button',
     'Widget update: records shots, demos, kickoffs, post hits, momentum and everyone\'s boost when a goal goes in (click Check updates)',
     'Timelapse and Spirograph panels on the dashboard: pick a game to replay its touches, or watch it drawn as trippy spirograph loops from the ball and every car',
