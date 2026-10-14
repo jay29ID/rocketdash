@@ -560,7 +560,7 @@ function render3D(cv,V){
   if(cv.width!==Math.round(W*dpr)||cv.height!==Math.round(H*dpr)){cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);}
   const c=cv.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,W,H);
   const css=getComputedStyle(document.documentElement),tok=n=>css.getPropertyValue(n).trim();
-  const ink=V.hud?'#8fdcff':tok('--ink-2'),muted=V.hud?'rgba(120,200,255,.55)':tok('--muted'),line=V.hud?'rgba(90,180,255,.28)':tok('--line'),pcol=[tok('--p1'),tok('--p2')],opp=tok('--opp')||muted;
+  const ink=V.hud?'#8fdcff':tok('--ink-2'),muted=V.hud?'rgba(120,200,255,.55)':tok('--muted'),line=V.hud?'rgba(90,180,255,.28)':tok('--line'),pcol=PLAYERS.map((p,j)=>tok('--p'+(j+1))),opp=tok('--opp')||muted;
   const T=V.T,D=V.D,F=V.F,ca=Math.cos(V.yaw),sa=Math.sin(V.yaw),cb=Math.cos(V.pitch),sb=Math.sin(V.pitch);
   const P=([x,y,z])=>{x-=T[0];y-=T[1];z-=T[2];const x1=x*ca-y*sa,y1=x*sa+y*ca;const up=z*cb+y1*sb,dp=Math.max(300,y1*cb-z*sb+D);return [W/2+F*x1/dp,H*.55-F*up/dp,dp];};
   const path=(pts,close)=>{c.beginPath();pts.forEach((p,i)=>{const q=P(p);i?c.lineTo(q[0],q[1]):c.moveTo(q[0],q[1]);});if(close)c.closePath();};
