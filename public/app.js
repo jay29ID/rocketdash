@@ -511,59 +511,111 @@ function renderMaps(list){
 }
 
 // ---------- 3D goal map ----------
-// A hand-rolled perspective view of the pitch (uu, z up) that you drag to orbit. Each goal is an arc
-// from where it was shot to where it crossed the goal line. No library: a few hundred lines would be overkill.
-const G3={goals:[],side:'us',yaw:-0.5,pitch:0.42,zoom:1,auto:true,t0:performance.now()};
-function draw3D(){
-  const cv=$('map3d');if(!cv)return;
-  const W=cv.clientWidth,H=cv.clientHeight,dpr=window.devicePixelRatio||1;
+// A hand-rolled perspective view of the pitch (uu, z up). Each goal is an arc from where it was shot
+// to where it crossed the goal line. The big view orbits on drag; hovering a ball on the flat maps
+// plays that goal back in a small "replay" view and highlights it in the big one.
+const G3={goals:[],side:'us',yaw:-0.5,pitch:0.42,zoom:1,auto:true,t0:performance.now(),focus:null,ft:0};
+const RP={k:null,t:0};
+function arcOf(g){
+  const a=[g.x,g.y,g.z!=null?g.z:93],b=[g.ix,5120,g.iz],d=Math.hypot(b[0]-a[0],b[1]-a[1]);
+  const lift=Math.max(a[2],b[2])+Math.min(900,d*.09);
+  return Array.from({length:41},(_,i)=>{const t=i/40,u=1-t;return [u*a[0]+t*b[0],u*a[1]+t*b[1],u*u*a[2]+2*u*t*lift+t*t*b[2]];});
+}
+// Flight time for the replay: real distance over the goal's speed, squeezed into 0.9 to 2.2 s.
+function flightMs(g,pts){let d=0;for(let i=1;i<pts.length;i++)d+=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1],pts[i][2]-pts[i-1][2]);
+  const v=g.spd?g.spd/0.036:2000;return Math.max(900,Math.min(2200,d/v*1000*1.6));}
+function render3D(cv,V){
+  const W=cv.clientWidth,H=cv.clientHeight,dpr=window.devicePixelRatio||1;if(!W||!H)return;
   if(cv.width!==Math.round(W*dpr)||cv.height!==Math.round(H*dpr)){cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);}
   const c=cv.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,W,H);
   const css=getComputedStyle(document.documentElement),tok=n=>css.getPropertyValue(n).trim();
-  const ink=tok('--ink-2'),muted=tok('--muted'),line=tok('--line'),pcol=[tok('--p1'),tok('--p2')],opp=tok('--opp')||muted;
-  const T=[0,3300,300],D=11500,F=Math.min(W,H*1.6)*1.45*G3.zoom,ca=Math.cos(G3.yaw),sa=Math.sin(G3.yaw),cb=Math.cos(G3.pitch),sb=Math.sin(G3.pitch);
-  const P=([x,y,z])=>{x-=T[0];y-=T[1];z-=T[2];const x1=x*ca-y*sa,y1=x*sa+y*ca;const up=z*cb+y1*sb,dp=y1*cb-z*sb+D;return [W/2+F*x1/dp,H*.55-F*up/dp,dp];};
+  const ink=V.hud?'#8fdcff':tok('--ink-2'),muted=V.hud?'rgba(120,200,255,.55)':tok('--muted'),line=V.hud?'rgba(90,180,255,.28)':tok('--line'),pcol=[tok('--p1'),tok('--p2')],opp=tok('--opp')||muted;
+  const T=V.T,D=V.D,F=V.F,ca=Math.cos(V.yaw),sa=Math.sin(V.yaw),cb=Math.cos(V.pitch),sb=Math.sin(V.pitch);
+  const P=([x,y,z])=>{x-=T[0];y-=T[1];z-=T[2];const x1=x*ca-y*sa,y1=x*sa+y*ca;const up=z*cb+y1*sb,dp=Math.max(300,y1*cb-z*sb+D);return [W/2+F*x1/dp,H*.55-F*up/dp,dp];};
   const path=(pts,close)=>{c.beginPath();pts.forEach((p,i)=>{const q=P(p);i?c.lineTo(q[0],q[1]):c.moveTo(q[0],q[1]);});if(close)c.closePath();};
-  // Pitch floor and markings.
   const ch=1152,floor=[[-4096,-5120+ch],[-4096+ch,-5120],[4096-ch,-5120],[4096,-5120+ch],[4096,5120-ch],[4096-ch,5120],[-4096+ch,5120],[-4096,5120-ch]].map(([x,y])=>[x,y,0]);
-  path(floor,true);c.fillStyle=tok('--pitch')||'rgba(40,80,50,.3)';c.globalAlpha=.55;c.fill();c.globalAlpha=1;c.strokeStyle=line;c.lineWidth=1.2;c.stroke();
+  if(V.hud){c.fillStyle='#050b14';c.fillRect(0,0,W,H);}
+  path(floor,true);c.fillStyle=V.hud?'rgba(20,60,110,.35)':(tok('--pitch')||'rgba(40,80,50,.3)');c.globalAlpha=V.hud?1:.55;c.fill();c.globalAlpha=1;c.strokeStyle=line;c.lineWidth=1.2;c.stroke();
+  if(V.hud){c.lineWidth=.6;for(let x=-4096;x<=4096;x+=512){path([[x,-5120,0],[x,5120,0]]);c.stroke();}for(let y=-5120;y<=5120;y+=512){path([[-4096,y,0],[4096,y,0]]);c.stroke();}c.lineWidth=1.2;}
   path([[-4096,0,0],[4096,0,0]]);c.stroke();
   path(Array.from({length:49},(_,i)=>{const a=i/48*Math.PI*2;return [1000*Math.cos(a),1000*Math.sin(a),0];}));c.stroke();
-  // Back wall behind the attacked goal, faint, for a sense of height (ceiling 2044 uu).
-  c.strokeStyle=line;c.globalAlpha=.5;path([[-4096+ch,5120,0],[-4096+ch,5120,2044],[4096-ch,5120,2044],[4096-ch,5120,0]]);c.stroke();c.globalAlpha=1;
-  // Both goals: posts, crossbar and the net box behind the goal line.
+  c.globalAlpha=.5;path([[-4096+ch,5120,0],[-4096+ch,5120,2044],[4096-ch,5120,2044],[4096-ch,5120,0]]);c.stroke();c.globalAlpha=1;
   [1,-1].forEach(sd=>{const g=5120*sd,b=6000*sd;c.strokeStyle=sd>0?ink:muted;c.lineWidth=sd>0?2:1.2;
     path([[-893,g,0],[-893,g,642],[893,g,642],[893,g,0]]);c.stroke();
     c.lineWidth=.8;path([[-893,g,642],[-893,b,642],[893,b,642],[893,g,642]]);c.stroke();path([[-893,b,0],[-893,b,642]]);c.stroke();path([[893,b,0],[893,b,642]]);c.stroke();path([[-893,b,0],[893,b,0]]);c.stroke();});
-  c.fillStyle=muted;c.font='11px '+(tok('--body')||'sans-serif');c.textAlign='center';
-  const lab=(t,p)=>{const q=P(p);c.fillText(t,q[0],q[1]);};
-  lab(G3.side==='us'?'Their goal':'Our goal',[0,5120,800]);
-  // Goals, far ones first so near arcs sit on top.
-  const arcs=G3.goals.map(g=>{const a=[g.x,g.y,g.z!=null?g.z:93],b=[g.ix,5120,g.iz],d=Math.hypot(b[0]-a[0],b[1]-a[1]);
-    const lift=Math.max(a[2],b[2])+Math.min(900,d*.09);
-    const pts=Array.from({length:21},(_,i)=>{const t=i/20,u=1-t;return [u*a[0]+t*b[0],u*a[1]+t*b[1],u*u*a[2]+2*u*t*lift+t*t*b[2]];});
-    return {g,pts,depth:P(pts[10])[2]};}).sort((p,q)=>q.depth-p.depth);
-  arcs.forEach(({g,pts})=>{const col=g.who>=0?pcol[g.who]:opp;
-    c.strokeStyle=col;c.globalAlpha=.55;c.lineWidth=1.3;path(pts);c.stroke();c.globalAlpha=1;
+  c.font='11px '+(tok('--mono')||'monospace');c.textAlign='center';c.fillStyle=muted;
+  if(!V.hud){const q=P([0,5120,800]);c.fillText(V.side==='us'?'Their goal':'Our goal',q[0],q[1]);}
+  const ball=(x,y,r,col)=>{const gr=c.createRadialGradient(x-r*.35,y-r*.4,r*.1,x,y,r);gr.addColorStop(0,'#f4f6f8');gr.addColorStop(.6,'#c3cad2');gr.addColorStop(1,'#7d8692');
+    c.fillStyle=gr;c.beginPath();c.arc(x,y,r,0,7);c.fill();c.strokeStyle=col;c.lineWidth=1.5;c.stroke();};
+  const list=V.goals.map(g=>{const pts=arcOf(g);return {g,pts,depth:P(pts[20])[2]};}).sort((p,q)=>q.depth-p.depth);
+  const fk=V.focus;
+  list.forEach(({g,pts})=>{if(g.k===fk)return;const col=g.who>=0?pcol[g.who]:opp;
+    c.globalAlpha=fk==null?.55:.1;c.strokeStyle=col;c.lineWidth=1.3;path(pts);c.stroke();
     const s=P(pts[0]);c.fillStyle=col;c.beginPath();c.arc(s[0],s[1],2,0,7);c.fill();
-    const e=P(pts[20]),r=Math.max(2.5,F*92/e[2]*.6);const gr=c.createRadialGradient(e[0]-r*.35,e[1]-r*.4,r*.1,e[0],e[1],r);
-    gr.addColorStop(0,'#f4f6f8');gr.addColorStop(.6,'#c3cad2');gr.addColorStop(1,'#7d8692');c.fillStyle=gr;c.beginPath();c.arc(e[0],e[1],r,0,7);c.fill();
-    c.strokeStyle=col;c.lineWidth=1.5;c.stroke();});
-  $('map3dNote').textContent=G3.goals.length?`${G3.goals.length} goals with a shot and net position. Drag to turn it, scroll to zoom.`:'No goals with positions in this period.';
+    const e=P(pts[40]);c.globalAlpha=fk==null?1:.15;ball(e[0],e[1],Math.max(2.5,F*92/e[2]*.6),col);c.globalAlpha=1;});
+  const it=fk==null?null:list.find(a=>a.g.k===fk);
+  if(it){
+    // Replay of one goal: dashed ghost path, glowing trail, ball at the head, drop line to the floor,
+    // a crosshair where it was struck and a ring pulse where it went in.
+    const {g,pts}=it,col=g.who>=0?pcol[g.who]:opp,dur=flightMs(g,pts),el=(performance.now()-V.ft)%(dur+900),p=Math.min(1,el/dur),n=Math.max(1,Math.round(p*40));
+    c.setLineDash([4,5]);c.strokeStyle=V.hud?'rgba(140,220,255,.45)':muted;c.lineWidth=1;path(pts);c.stroke();c.setLineDash([]);
+    const s0=P(pts[0]),sp=P([pts[0][0],pts[0][1],0]);c.strokeStyle='#5fe1ff';c.lineWidth=1.2;
+    c.beginPath();c.arc(sp[0],sp[1],9,0,7);c.moveTo(sp[0]-14,sp[1]);c.lineTo(sp[0]+14,sp[1]);c.moveTo(sp[0],sp[1]-8);c.lineTo(sp[0],sp[1]+8);c.stroke();
+    c.save();c.shadowColor=col;c.shadowBlur=14;c.lineCap='round';
+    for(let i=1;i<=n;i++){const a=P(pts[i-1]),b=P(pts[i]);c.globalAlpha=.25+.75*(i/n);c.strokeStyle=col;c.lineWidth=1+3*(i/n);c.beginPath();c.moveTo(a[0],a[1]);c.lineTo(b[0],b[1]);c.stroke();}
+    c.restore();c.globalAlpha=1;
+    const fi=p*40,i0=Math.floor(fi),i1=Math.min(40,i0+1),tt=fi-i0,hp=[0,1,2].map(d=>pts[i0][d]*(1-tt)+pts[i1][d]*tt),h=P(hp),fl=P([hp[0],hp[1],0]);
+    c.setLineDash([2,3]);c.strokeStyle='rgba(95,225,255,.6)';c.beginPath();c.moveTo(h[0],h[1]);c.lineTo(fl[0],fl[1]);c.stroke();c.setLineDash([]);
+    c.strokeStyle='rgba(95,225,255,.7)';c.beginPath();c.ellipse(fl[0],fl[1],7,3,0,0,7);c.stroke();
+    c.save();c.shadowColor='#5fe1ff';c.shadowBlur=18;ball(h[0],h[1],Math.max(4,F*92/h[2]*.75),col);c.restore();
+    if(p>=1){const e=P(pts[40]),q=(el-dur)/900;c.strokeStyle=col;c.globalAlpha=1-q;c.lineWidth=2;c.beginPath();c.arc(e[0],e[1],6+q*28,0,7);c.stroke();c.globalAlpha=1;}
+    if(V.hud){
+      const kmh=g.spd,d=Math.hypot(g.ix-g.x,5120-g.y)/100,lbl=g.who>=0?PLAYERS[g.who].short.toUpperCase():(V.side==='us'?'US':'OPPONENT');
+      const rows=[[`GOAL`,lbl],['SPEED',kmh!=null?fSpd(kmh).toUpperCase():'—'],['RANGE',fLen(d).toUpperCase()],['IMPACT H',IMP()?(g.iz/100*3.28084).toFixed(1)+' FT':(g.iz/100).toFixed(2)+' M'],['T',(Math.min(el,dur)/1000).toFixed(2)+' S']];
+      c.textAlign='left';c.font='10px '+(tok('--mono')||'monospace');
+      rows.forEach(([k,v],i)=>{c.fillStyle='rgba(95,225,255,.6)';c.fillText(k,12,20+i*14);c.fillStyle='#d8f6ff';c.fillText(v,78,20+i*14);});
+      c.strokeStyle='rgba(95,225,255,.7)';c.lineWidth=1.5;const br=(x,y,dx,dy)=>{c.beginPath();c.moveTo(x+dx*12,y);c.lineTo(x,y);c.lineTo(x,y+dy*12);c.stroke();};
+      br(4,4,1,1);br(W-4,4,-1,1);br(4,H-4,1,-1);br(W-4,H-4,-1,-1);
+      c.fillStyle='rgba(95,225,255,.07)';const sy=(performance.now()/12)%H;c.fillRect(0,sy,W,2);
+      c.textAlign='right';c.fillStyle='rgba(95,225,255,.6)';c.fillText(fmtDate(g.m.when)+' · '+g.m.us+'–'+g.m.them+(g.m.win?' W':' L'),W-12,H-10);
+    }
+  }
 }
+function draw3D(){const cv=$('map3d');if(!cv)return;
+  render3D(cv,{goals:G3.goals,side:G3.side,T:[0,3300,300],D:11500,F:Math.min(cv.clientWidth,cv.clientHeight*1.6)*1.45*G3.zoom,yaw:G3.yaw,pitch:G3.pitch,focus:G3.focus,ft:G3.ft});
+  $('map3dNote').textContent=G3.goals.length?`${G3.goals.length} goals with a shot and net position. Drag to turn it, scroll to zoom. Hover a ball on the flat maps for a replay.`:'No goals with positions in this period.';
+}
+function drawReplay(){
+  const cv=$('replayCv'),g=G3.goals.find(x=>x.k===RP.k);if(!g)return;
+  const mid=[(g.x+g.ix)/2,(g.y+5120)/2,300],dx=g.ix-g.x,dy=5120-g.y,span=Math.hypot(dx,dy)+1800;
+  const yaw=Math.atan2(dx,dy)+0.75+Math.sin((performance.now()-RP.t)/2500)*.12;
+  render3D(cv,{hud:true,goals:[g],side:G3.side,T:mid,D:span*1.25,F:cv.clientWidth*1.05,yaw,pitch:.38,focus:g.k,ft:RP.t});
+}
+function showReplay(k,ev){
+  if(!G3.goals.some(x=>x.k===+k))return;
+  if(RP.k===+k){placeReplay(ev);return;}
+  RP.k=+k;RP.t=performance.now();G3.focus=+k;G3.ft=RP.t;
+  const r=$('replay');r.hidden=false;placeReplay(ev);loop3D();
+}
+function placeReplay(ev){const r=$('replay'),w=r.offsetWidth,h=r.offsetHeight;let x=ev.clientX+18,y=ev.clientY+18;
+  if(x+w>innerWidth-8)x=ev.clientX-w-18;if(y+h>innerHeight-8)y=ev.clientY-h-18;r.style.left=Math.max(8,x)+'px';r.style.top=Math.max(8,y)+'px';}
+function hideReplay(){RP.k=null;G3.focus=null;$('replay').hidden=true;draw3D();}
+let looping=false;
+function loop3D(){if(looping)return;looping=true;const step=()=>{if(RP.k==null&&!G3.auto){looping=false;return;}
+  if(RP.k!=null)drawReplay();if(G3.seen&&document.visibilityState==='visible')draw3D();requestAnimationFrame(step);};requestAnimationFrame(step);}
 (function(){
   const cv=$('map3d');if(!cv)return;let drag=null;
-  const still=matchMedia('(prefers-reduced-motion: reduce)').matches;if(still)G3.auto=false;
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches)G3.auto=false;
   cv.addEventListener('pointerdown',e=>{drag={x:e.clientX,y:e.clientY,yaw:G3.yaw,pitch:G3.pitch};G3.auto=false;cv.setPointerCapture(e.pointerId);});
   cv.addEventListener('pointermove',e=>{if(!drag)return;G3.yaw=drag.yaw-(e.clientX-drag.x)*.008;G3.pitch=Math.max(.05,Math.min(1.45,drag.pitch+(e.clientY-drag.y)*.006));draw3D();});
   ['pointerup','pointercancel'].forEach(t=>cv.addEventListener(t,()=>{drag=null;}));
   cv.addEventListener('wheel',e=>{e.preventDefault();G3.auto=false;G3.zoom=Math.max(.6,Math.min(3,G3.zoom*Math.exp(-e.deltaY*.0015)));draw3D();},{passive:false});
   $('map3dReset').addEventListener('click',()=>{G3.yaw=-.5;G3.pitch=.42;G3.zoom=1;draw3D();});
   window.addEventListener('resize',()=>draw3D());
+  G3.seen=false;new IntersectionObserver(es=>{G3.seen=es[0].isIntersecting;if(G3.seen&&G3.auto)loop3D();}).observe(cv);
   // Slow sway until someone grabs it.
-  let seen=false;new IntersectionObserver(es=>{seen=es[0].isIntersecting;}).observe(cv);
-  const tick=t=>{if(G3.auto&&seen&&document.visibilityState==='visible'){G3.yaw=-.5+Math.sin((t-G3.t0)/6000)*.6;draw3D();}if(G3.auto)requestAnimationFrame(tick);};
-  requestAnimationFrame(tick);
+  const sway=t=>{if(!G3.auto)return;G3.yaw=-.5+Math.sin((t-G3.t0)/6000)*.6;requestAnimationFrame(sway);};
+  requestAnimationFrame(sway);
 })();
 
 // ---------- playstyle ----------
@@ -887,10 +939,12 @@ $('matchLog').addEventListener('click',e=>{const a=e.target.closest('a.mlink');i
 ['fieldMap','netMap'].forEach(id=>{
   $(id).addEventListener('mouseover',e=>{const d=e.target.closest('.dot');if(!d)return;const k=d.dataset.g;
     document.querySelectorAll('#fieldMap,#netMap').forEach(el=>el.classList.add('linking'));
-    document.querySelectorAll(`#fieldMap .dot[data-g="${k}"],#netMap .dot[data-g="${k}"]`).forEach(el=>{el.classList.add('lit');if(el!==d)el.parentNode.appendChild(el);});});
-  $(id).addEventListener('mouseout',e=>{if(!e.target.closest('.dot'))return;
+    document.querySelectorAll(`#fieldMap .dot[data-g="${k}"],#netMap .dot[data-g="${k}"]`).forEach(el=>{el.classList.add('lit');if(el!==d)el.parentNode.appendChild(el);});
+    if(matchMedia('(hover: hover)').matches)showReplay(k,e);});
+  $(id).addEventListener('mousemove',e=>{if(RP.k!=null&&e.target.closest('.dot'))placeReplay(e);});
+  $(id).addEventListener('mouseout',e=>{const d=e.target.closest('.dot');if(!d)return;const to=e.relatedTarget&&e.relatedTarget.closest?e.relatedTarget.closest('.dot'):null;if(to===d)return;
     document.querySelectorAll('#fieldMap,#netMap').forEach(el=>el.classList.remove('linking'));
-    document.querySelectorAll('.dot.lit').forEach(el=>el.classList.remove('lit'));});
+    document.querySelectorAll('.dot.lit').forEach(el=>el.classList.remove('lit'));hideReplay();});
 });
 
 // ---------- version and update log ----------
@@ -901,6 +955,7 @@ const CHANGELOG=[
     'Goal map pins are now little Rocket League balls',
     'Loading screen while your stats load, instead of briefly showing sample data',
     'Goal mouth on the goal map drawn as a technical diagram with real dimensions',
+    'Hover a ball on the goal map for a 3D replay of that goal',
     '3D goal map you can drag to rotate, showing every goal from shot to net',
     'Click a match in the match log to see its full stats and goal-by-goal story',
     'Hover a ball on either goal map to light up the same goal on the other one',
