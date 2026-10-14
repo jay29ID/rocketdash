@@ -348,6 +348,26 @@ body.hm-night .maps .map-col{--pitch:#0b0b0d;--pitch-line:#2e2e33;--opp:#6c6c72;
 body.hm-night .heat-key .ramp{background:linear-gradient(90deg,rgb(38,38,42),rgb(120,120,126),rgb(214,52,48))}
 body.g3-night .mini3d{border-color:#3a3a40;background:#070708}
 body.g3-night .mini3d span{color:rgba(224,68,62,.75)}
+/* Dark: pure, very dark monotone. No colour at all; players differ by shade. */
+:root.dark{color-scheme:dark;
+  --bg:#000; --veil:rgba(0,0,0,.94); --glow-a:0; --surface:#0a0a0a; --surface-2:#111;
+  --ink:#e8e8e8; --ink-2:#a6a6a6; --muted:#6b6b6b; --line:#1f1f1f; --grid:#161616;
+  --p1:#ededed; --p2:#8c8c8c; --p3:#bdbdbd; --p4:#5e5e5e;
+  --p1-soft:#ededed1a; --p2-soft:#8c8c8c22; --p3-soft:#bdbdbd1a; --p4-soft:#5e5e5e26;
+  --win:#e8e8e8; --loss:#6b6b6b; --win-soft:#e8e8e814; --loss-soft:#6b6b6b1f;
+  --focus:#e8e8e8; --heat:#bdbdbd; --opp:#4a4a4a; --pitch:#050505; --pitch-line:#222}
+:root.dark body::before{filter:grayscale(1) brightness(.35)}
+:root.dark .panel{box-shadow:none}
+:root.dark h2{color:#cfcfcf}
+:root.dark .seg button[aria-pressed="true"]{background:#e8e8e8;color:#000}
+:root.dark .since .sp{background:#e8e8e8;color:#000;box-shadow:none}
+:root.dark .since .sl{color:#8c8c8c;text-shadow:none}
+:root.dark .hcal i.on{background:#e8e8e8;box-shadow:none}
+:root.dark .pill.w{color:#000;background:#e8e8e8}:root.dark .pill.l{color:#e8e8e8;background:#2a2a2a}
+body.hm-dark .maps .map-col{--pitch:#030303;--pitch-line:#222;--opp:#4a4a4a;--p1:#ededed;--p2:#8c8c8c;--p3:#bdbdbd;--p4:#5e5e5e}
+body.hm-dark .heat-key .ramp{background:linear-gradient(90deg,rgb(22,22,22),rgb(96,96,96),rgb(236,236,236))}
+body.g3-dark .mini3d{border-color:#262626;background:#000;box-shadow:none}
+body.g3-dark .mini3d span{color:#777}
 /* Global neon look: black, fluorescent green and purple. Set on <html> by the Look switch. */
 :root.neon{color-scheme:dark;
   --bg:#030304; --veil:rgba(3,3,6,.86); --surface:#09070e; --surface-2:#110c1a;
@@ -448,7 +468,7 @@ body.g3-night .mini3d span{color:rgba(224,68,62,.75)}
         <button type="button" class="q tl" data-t="classic" aria-pressed="true"><i style="background:linear-gradient(135deg,#3987e5,#d95926)"></i>Classic</button>
         <button type="button" class="q tr" data-t="neon"><i style="background:linear-gradient(135deg,#39ff14,#c04dff)"></i>Neon</button>
         <button type="button" class="q bl" data-t="night"><i style="background:linear-gradient(135deg,#d4d4d6,#e0443e)"></i>Night</button>
-        <button type="button" class="q br" disabled title="Coming soon"><i style="background:repeating-linear-gradient(45deg,#555 0 3px,#333 3px 6px)"></i>Soon</button>
+        <button type="button" class="q br" data-t="dark"><i style="background:linear-gradient(135deg,#000,#5a5a5a);box-shadow:0 0 0 2px var(--surface),0 0 0 3px #666"></i>Dark</button>
       </div><span class="hub" aria-hidden="true"></span></div></div>
     <button type="button" class="chipbtn" id="layoutBtn" aria-pressed="false">Customize</button>
     </div>
@@ -556,7 +576,7 @@ body.g3-night .mini3d span{color:rgba(224,68,62,.75)}
           <button type="button" data-s="saves">Our saves</button>
         </div>
         <div class="seg" role="group" aria-label="Scorer" id="mapWho"></div>
-        <div class="seg" role="group" aria-label="Heatmap look" id="hmTheme"><button type="button" data-t="classic" aria-pressed="true">Classic</button><button type="button" data-t="neon">Neon</button><button type="button" data-t="night">Night</button></div>
+        <div class="seg" role="group" aria-label="Heatmap look" id="hmTheme"><button type="button" data-t="classic" aria-pressed="true">Classic</button><button type="button" data-t="neon">Neon</button><button type="button" data-t="night">Night</button><button type="button" data-t="dark">Dark</button></div>
       </div>
     </div>
     <div class="maps">
@@ -577,7 +597,7 @@ body.g3-night .mini3d span{color:rgba(224,68,62,.75)}
 
   <section class="panel" aria-labelledby="map3dTitle">
     <div class="map3d-wrap">
-      <div class="map3d-head"><h3 id="map3dTitle">In 3D: every goal from shot to net</h3><div style="display:flex;gap:8px;align-items:center"><div class="seg" role="group" aria-label="3D look" id="g3Theme"><button type="button" data-t="classic" aria-pressed="true">Classic</button><button type="button" data-t="neon">Neon</button><button type="button" data-t="night">Night</button></div><button type="button" class="chipbtn" id="map3dReset">Reset view</button></div></div>
+      <div class="map3d-head"><h3 id="map3dTitle">In 3D: every goal from shot to net</h3><div style="display:flex;gap:8px;align-items:center"><div class="seg" role="group" aria-label="3D look" id="g3Theme"><button type="button" data-t="classic" aria-pressed="true">Classic</button><button type="button" data-t="neon">Neon</button><button type="button" data-t="night">Night</button><button type="button" data-t="dark">Dark</button></div><button type="button" class="chipbtn" id="map3dReset">Reset view</button></div></div>
       <div class="map3d-stage">
       <div class="knob" id="knob" aria-label="Camera controls">
         <svg viewBox="0 0 100 100" aria-hidden="true">
