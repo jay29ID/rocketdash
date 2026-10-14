@@ -19,7 +19,7 @@ function carKmh(v){v=num(v);return v==null||v<=0?null:v>300?v*0.036:v;}
 function toKmh(v){return v==null?null:v>300?Math.round(v*0.036):v;}
 // The Stats API sends a loadout as a list of item codes with the car body first ("body_grain").
 // Codes we know the in-game name of go here; anything else is shown tidied up.
-const CAR_NAMES={};
+const CAR_NAMES={body_grain:'Fennec'};   // confirmed by Jason; add others as they turn up
 function carName(l){
   if(!l||typeof l!=='object')return null;
   let v=Array.isArray(l)?(l.find(x=>/^body_/i.test(x))||l[0]):l.Car!=null?l.Car:l.Body!=null?l.Body:l.car;
@@ -686,6 +686,7 @@ async function load(){
 const CHANGELOG=[
   {v:'1.6',date:'2026-10-14',items:[
     'Version number and this update log',
+    'Main car shows Fennec instead of the game\'s internal name "Grain"',
     'Kickoff goals fixed: they showed 0 because the game\'s goal timer includes the countdown. New games are timed from the kickoff exactly',
     'Win % when we score first vs when they score first',
     'Hat tricks and win % with a hat trick',
