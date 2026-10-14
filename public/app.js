@@ -130,6 +130,15 @@ let period='30', mode='avg', metric='winpct', playlist=null, mapSide='us', mapWh
 try{const s=JSON.parse(localStorage.getItem('rl-duo-ui')||'{}');if(s.period)period=s.period;if(s.mode)mode=s.mode;if(s.metric)metric=s.metric;if(s.playlist)playlist=s.playlist;}catch(e){}
 const saveUi=()=>{try{localStorage.setItem('rl-duo-ui',JSON.stringify({period,mode,metric,playlist}))}catch(e){}};
 
+// A forfeit never sends the game's "match ended" event, so the recorder saves it as Incomplete.
+// When one side was ahead, that side won (the team behind forfeited, or quit, which is a loss too).
+// Level or 0-0 games that never finished stay out.
+function forfeit(r){
+  if(!r||r.result!=='Incomplete'||num(r.my_team)==null)return r;
+  const us=num(r.team_score),them=num(r.opponent_score);
+  if(us==null||them==null||us===them)return r;
+  return {...r,result:us>them?'Win':'Loss',ff:true};
+}
 function toMatch(r){
   const rows=r.players||[];
   const lines=PLAYERS.map(p=>{
@@ -160,13 +169,13 @@ function toMatch(r){
   return {guid:r.match_guid,when:new Date(r.started_at),win:r.result==='Win',us:num(r.team_score)||0,them:num(r.opponent_score)||0,
     ot:!!r.overtime,dur,arena:arenaName(r.arena),playlist:r.playlist||'Unknown playlist',lines,
     ourGoals:goals.filter(g=>g.ours),theirGoals:goals.filter(g=>!g.ours),
-    replay:!!r.replay_created,left,opps,
+    replay:!!r.replay_created,left,opps,ff:!!r.ff,
     spectators:Array.isArray(r.spectators)?r.spectators.map(String):null,
     drinks:r.drinks&&num(r.drinks[PLAYERS[0].name])!=null?num(r.drinks[PLAYERS[0].name]):null};
 }
 
 function build(){
-  const done=RAW.matches.filter(r=>r&&(r.result==='Win'||r.result==='Loss')&&r.started_at).map(toMatch).filter(m=>!isNaN(m.when));
+  const done=RAW.matches.map(forfeit).filter(r=>r&&(r.result==='Win'||r.result==='Loss')&&r.started_at).map(toMatch).filter(m=>!isNaN(m.when));
   done.sort((a,b)=>a.when-b.when);
   const counts={};done.forEach(m=>counts[m.playlist]=(counts[m.playlist]||0)+1);
   const lists=Object.keys(counts).sort((a,b)=>counts[b]-counts[a]);
@@ -495,6 +504,7 @@ function renderLog(list){
 
 function notes(m){
   const out=[];
+  if(m.ff)out.push(`<span class="chip" title="Ended early: ${m.win?'they':'we'} forfeited or quit">${m.win?'They forfeited':'Forfeit'}</span>`);
   if(m.replay)out.push('<span class="chip">Replay</span>');
   const us=m.left.filter(x=>x.ours).length,them=m.left.length-us;
   if(them)out.push(`<span class="chip" title="${esc(m.left.filter(x=>!x.ours).map(x=>x.name).join(', '))}">Opponent quit</span>`);

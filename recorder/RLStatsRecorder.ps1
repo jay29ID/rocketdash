@@ -263,6 +263,13 @@ function Save-Match($M, [string]$Result, $WinnerTeamNum) {
     $myScore = $score[[int]$myTeam]; $oppScore = $score[1 - [int]$myTeam]
     $possession = Get-Pct ([int]$M.BallTeam[[int]$myTeam]) ([int]$M.BallTeam[0] + [int]$M.BallTeam[1])
   }
+  # A forfeit never sends MatchEnded, so it arrives here as Incomplete. Whoever was ahead won
+  # (the side behind forfeited or quit). Level games that never finished stay Incomplete.
+  $forfeit = $false
+  if ($Result -eq 'Incomplete' -and $null -ne $myScore -and $null -ne $oppScore -and $myScore -ne $oppScore) {
+    $forfeit = $true
+    if ($myScore -gt $oppScore) { $Result = 'Win' } else { $Result = 'Loss' }
+  }
 
   $record = [ordered]@{
     match_guid = $M.Guid
@@ -272,7 +279,7 @@ function Save-Match($M, [string]$Result, $WinnerTeamNum) {
     playlist_id = $playlistId; playlist = $playlist
     arena = Get-Prop $game 'Arena'
     overtime = [bool](Get-Prop $game 'bOvertime' $false)
-    my_team = $myTeam; result = $Result
+    my_team = $myTeam; result = $Result; ff = $forfeit
     team_score = $myScore; opponent_score = $oppScore
     blue_score = $score[0]; orange_score = $score[1]
     possession_pct = $possession
