@@ -276,8 +276,8 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`rocketdash listening on ${PORT}, data in ${DATA_DIR}`);
-  try { const ms=Object.values(store.matches); const sp=ms.map(m=>(new Date(m.ended_at)-new Date(m.started_at))/1000).filter(x=>!isNaN(x)).sort((a,b)=>a-b);
-    console.log('DIAG span', ms.length, sp.length, sp[0], sp[Math.floor(sp.length/4)], sp[Math.floor(sp.length/2)], sp[Math.floor(3*sp.length/4)], sp[sp.length-1]); } catch (e) { console.log('DIAG err', e.message); }
+  try { Object.values(store.matches).sort((a,b)=>String(a.started_at).localeCompare(String(b.started_at))).slice(-4).forEach(m => console.log('DIAG', JSON.stringify({ g: String(m.match_guid).slice(0,8), keys: Object.keys(m).join(','), dur: m.duration_seconds, ff: m.ff, res: m.result,
+    pl: (m.players||[]).filter(p=>p.tracked).map(p=>({ n: p.name, avg: p.avg_speed, max: p.max_speed, keys: Object.keys(p).filter(k=>/speed|time|dur|sec/i.test(k)).join('|') })) }))); } catch (e) { console.log('DIAG err', e.message); }
   if (process.env.GIPHY_KEY) {
     gifList(GIF_QUERY, 3, 0).then(l => console.log(l.length ? `goal GIFs ready: ${l.length} for "${GIF_QUERY}"` : 'goal GIFs: GIPHY returned nothing (check GIPHY_KEY)'));
     gifList(AGAINST_GIF_QUERY, 1, 6, WHOOPS).then(l => console.log(`goals-against GIFs: ${l.map(g => g.title).join(' | ') || 'none'}`));
