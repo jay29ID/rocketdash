@@ -156,9 +156,22 @@ function Get-Match([string]$Guid) {
       Left = New-Object System.Collections.ArrayList   # players who quit before the end (PlayerLeft)
       Replay = $null     # set when the game sends ReplayCreated
       Kickoffs = 0; SaveAt = @{}   # kickoffs so far, and when each team's latest save happened
+      ShotLog = New-Object System.Collections.ArrayList   # each shot (statfeed Shot): who, and where they hit it from
+      DemoLog = New-Object System.Collections.ArrayList   # each demo: who demoed whom
+      KickLog = New-Object System.Collections.ArrayList   # each kickoff: who touched first, how long it took
+      PostLog = New-Object System.Collections.ArrayList   # each post or crossbar hit: where
+      Momentum = New-Object System.Collections.ArrayList  # once a second: which team last touched the ball, ball speed
+      KickPending = $null
     }
   }
   return $script:OpenMatches[$Guid]
+}
+
+# Seconds since the match started, by the clock on this PC (same scale as the touch log).
+function Get-T($M) { [math]::Round(((Get-Date).ToUniversalTime() - $M.StartedAt).TotalSeconds, 1) }
+function Get-Xyz($Loc) {
+  if (-not $Loc) { return $null }
+  [ordered]@{ x = [math]::Round([double](Get-Prop $Loc 'X' 0)); y = [math]::Round([double](Get-Prop $Loc 'Y' 0)); z = [math]::Round([double](Get-Prop $Loc 'Z' 0)) }
 }
 
 function Add-Count([hashtable]$Table, [string]$Key, [string]$Sub) {
@@ -198,6 +211,8 @@ function Add-Sample($M, $Data) {
     }
     $a = $M.Agg[$name]
     $demoed = [bool](Get-Prop $p 'bDemolished' $false)
+    # Boost right now (-1 while demolished), kept through goal replays for the goals-against boost check.
+    if ($demoed) { $a.Cur = -1 } else { $a.Cur = [math]::Round($boost) }
     if ($demoed -and -not $a.DemoedNow) { $a.Demoed++ }
     $a.DemoedNow = $demoed
     if ($demoed -or -not [bool](Get-Prop $p 'bHasCar' $true)) { $a.LastBoost = $null; continue }
@@ -222,6 +237,11 @@ function Add-Sample($M, $Data) {
   if ($null -eq $M.ClockStart -and $null -ne $sec -and -not $ot) { $M.ClockStart = [int]$sec }
   if ($null -ne $sec -and $sec -ne $M.LastSecond) {
     $M.LastSecond = $sec
+    $ball = Get-Prop $game 'Ball'
+    if ($null -ne $ball -and $M.Momentum.Count -lt 1500) {
+      $bt = Get-Prop $ball 'TeamNum'; if ($null -eq $bt) { $bt = 0 }   # zero fields are left out
+      if ([int]$bt -le 1) { [void]$M.Momentum.Add([ordered]@{ t = Get-T $M; k = [int]$bt; s = [math]::Round([double](Get-Prop $ball 'Speed' 0)) }) }
+    }
     $slim = foreach ($p in @(Get-Prop $Data 'Players' @())) {
       [ordered]@{ n = Get-Prop $p 'Name'; b = Get-Boost $p; s = Get-Prop $p 'Speed'; sc = Get-Prop $p 'Score' }
     }
@@ -341,6 +361,11 @@ function Save-Match($M, [string]$Result, $WinnerTeamNum) {
     goals = @($M.Goals)
     saves = @($M.Saves)
     touch_log = @($M.TouchLog)
+    shot_log = @($M.ShotLog)
+    demo_log = @($M.DemoLog)
+    kickoff_log = @($M.KickLog)
+    post_log = @($M.PostLog)
+    momentum = @($M.Momentum)
     players = @($rows)
     players_left = @($M.Left)
     replay_created = $M.Replay
@@ -462,6 +487,7 @@ function Invoke-Message($Msg) {
       $scorerHit = $m.LastHitBy[[string](Get-Prop (Get-Prop $data 'Scorer') 'Name')]
       $assistHit = $null; $an = [string](Get-Prop (Get-Prop $data 'Assister') 'Name')
       if ($an) { $assistHit = $m.LastHitBy[$an] }
+      $boosts = [ordered]@{}; foreach ($k in @($m.Agg.Keys)) { if ($null -ne $m.Agg[$k].Cur) { $boosts[$k] = $m.Agg[$k].Cur } }
       [void]$m.Goals.Add([ordered]@{
         scorer = Get-Prop (Get-Prop $data 'Scorer') 'Name'
         assister = Get-Prop (Get-Prop $data 'Assister') 'Name'
@@ -474,6 +500,7 @@ function Invoke-Message($Msg) {
         assist_from = $(if ($assistHit) { $assistHit.location } else { $null })
         touches = @($m.Recent | ForEach-Object { [ordered]@{ player = $_.player; team = $_.team; location = $_.location; speed = $_.speed } })
         since_kickoff = $since
+        boosts = $boosts
         at = [math]::Round(((Get-Date).ToUniversalTime() - $m.StartedAt).TotalSeconds, 1)
         since_save = Get-Since $m.SaveAt[[int](Get-Prop (Get-Prop $data 'Scorer') 'TeamNum' -1)]
         ours = $null
@@ -494,6 +521,11 @@ function Invoke-Message($Msg) {
           [void]$m.TouchLog.Add([ordered]@{ t = [math]::Round(((Get-Date).ToUniversalTime() - $m.StartedAt).TotalSeconds, 1); p = $name; k = $hitInfo.team
             x = [math]::Round([double](Get-Prop $loc 'X' 0)); y = [math]::Round([double](Get-Prop $loc 'Y' 0)); z = [math]::Round([double](Get-Prop $loc 'Z' 0)) })
         }
+        if ($m.KickPending -and $loc) {
+          $kx = Get-Xyz $loc; $kt = Get-T $m
+          [void]$m.KickLog.Add([ordered]@{ t = $kt; wait = [math]::Round($kt - $m.KickPending.t, 1); p = $name; k = $hitInfo.team; x = $kx.x; y = $kx.y; z = $kx.z; spd = $spd })
+          $m.KickPending = $null
+        }
         $m.LastHitBy[$name] = $hitInfo; $m.LastHit = $hitInfo
         [void]$m.Recent.Add($hitInfo); while ($m.Recent.Count -gt 3) { $m.Recent.RemoveAt(0) }
         if ($m.PendingSave -and $m.PendingSave.saver -eq $name) { Complete-Save $m $hitInfo }
@@ -503,12 +535,27 @@ function Invoke-Message($Msg) {
     'CrossbarHit'   {
       $name = [string](Get-Prop (Get-Prop (Get-Prop $data 'BallLastTouch') 'Player') 'Name')
       if ($name) { $m.Crossbars[$name] = 1 + [int]$m.Crossbars[$name] }
+      $px = Get-Xyz (Get-Prop $data 'BallLocation')
+      if ($px -and $m.PostLog.Count -lt 200) {
+        $pk = $null; if ($name) { $pk = Get-TeamOf $m $name (Get-Prop (Get-Prop (Get-Prop $data 'BallLastTouch') 'Player') 'TeamNum') }
+        [void]$m.PostLog.Add([ordered]@{ t = Get-T $m; p = $name; k = $pk; x = $px.x; y = $px.y; z = $px.z; spd = Get-Prop $data 'BallSpeed'; force = Get-Prop $data 'ImpactForce' })
+      }
     }
     'StatfeedEvent' {
       $kind = [string](Get-Prop $data 'EventName')
       if (-not $kind) { $kind = [string](Get-Prop $data 'Type') }
       Add-Count $m.Feed ([string](Get-Prop (Get-Prop $data 'MainTarget') 'Name')) $kind
       Add-Count $m.FeedAgainst ([string](Get-Prop (Get-Prop $data 'SecondaryTarget') 'Name')) $kind
+      $mt = Get-Prop $data 'MainTarget'; $mtName = [string](Get-Prop $mt 'Name')
+      if ($kind -match '^Shot' -and $mtName -and $m.ShotLog.Count -lt 300) {
+        $h = $m.LastHitBy[$mtName]; $hx = $null; if ($h) { $hx = Get-Xyz $h.location }
+        [void]$m.ShotLog.Add([ordered]@{ t = Get-T $m; p = $mtName; k = (Get-TeamOf $m $mtName (Get-Prop $mt 'TeamNum'))
+          x = $(if ($hx) { $hx.x } else { $null }); y = $(if ($hx) { $hx.y } else { $null }); z = $(if ($hx) { $hx.z } else { $null }); spd = $(if ($h) { $h.speed } else { $null }) })
+      }
+      if ($kind -match 'Demo' -and $mtName -and $m.DemoLog.Count -lt 300) {
+        $st = Get-Prop $data 'SecondaryTarget'; $stName = [string](Get-Prop $st 'Name')
+        [void]$m.DemoLog.Add([ordered]@{ t = Get-T $m; by = $mtName; bk = (Get-TeamOf $m $mtName (Get-Prop $mt 'TeamNum')); v = $stName; vk = $(if ($stName) { Get-TeamOf $m $stName (Get-Prop $st 'TeamNum') } else { $null }) })
+      }
       if ($kind -match 'Save') {
         # The save's touch can arrive just before or just after this event.
         $sv = Get-Prop $data 'MainTarget'; $svName = [string](Get-Prop $sv 'Name')
@@ -520,7 +567,7 @@ function Invoke-Message($Msg) {
         }
       }
     }
-    'RoundStarted'  { $m.Kickoffs++; $m.SaveAt = @{} }
+    'RoundStarted'  { $m.Kickoffs++; $m.SaveAt = @{}; $m.KickPending = @{ t = Get-T $m } }
     'BoostPickup'   {
       $name = [string](Get-Prop (Get-Prop $data 'Player') 'Name')
       if (-not $name) { $name = [string](Get-Prop $data 'PlayerName') }

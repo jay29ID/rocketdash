@@ -345,6 +345,23 @@ body.editing .editbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;bac
 .tlbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px}
 .tlbar input[type=range]{flex:1 1 160px;min-width:0}
 .small{font-size:12px}
+.panel-tools{display:flex;justify-content:flex-end;margin:-4px 0 8px}
+.ztxt{font-size:12px;font-weight:700;fill:var(--ink);paint-order:stroke;stroke:var(--surface);stroke-width:3px;stroke-linejoin:round}.ztxt .muted{fill:var(--muted);font-weight:400}
+.two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:10px 0}
+.rank{margin:4px 0 0;padding-left:20px}.rank li{display:flex;justify-content:space-between;gap:8px;padding:3px 0;border-bottom:1px solid var(--grid)}
+.bars{display:grid;gap:8px;margin:8px 0}.bar{display:grid;grid-template-columns:90px 1fr 46px;align-items:center;gap:8px}
+.bar .track{position:relative;height:10px;background:var(--surface-2);border-radius:5px;overflow:visible}.bar .track i{display:block;height:100%;border-radius:5px}
+.bar .track em{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--ink);border-radius:1px}.bar b{text-align:right}
+.trophies{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.trophy{background:var(--surface-2);border-radius:6px;padding:8px 10px;display:flex;flex-direction:column;gap:6px}
+.trophy .tname{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
+.tcounts{display:flex;gap:10px}.tc{display:inline-flex;align-items:center;gap:4px;opacity:.55}.tc i{width:8px;height:8px;border-radius:50%;background:var(--c)}.tc.top{opacity:1}.tc.top b{color:var(--c)}
+.fastlist{list-style:none;margin:0;padding:0}.fastlist li{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:6px 0;border-bottom:1px solid var(--grid)}
+.fastlist .rk{width:18px;color:var(--muted)}.fastlist .chipbtn{margin-left:auto}
+.momg{font-size:11px;font-weight:600}
+.skey{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--muted);margin-top:6px}.skey span{display:inline-flex;align-items:center;gap:5px}.skey i{width:9px;height:9px;border-radius:50%;border:1.5px solid var(--ink-2)}.skey i.g{background:var(--ink-2)}
+.wr{display:inline-block;min-width:56px;text-align:right;background:linear-gradient(90deg,color-mix(in srgb,var(--win) 30%,transparent) var(--w),transparent var(--w));padding:1px 6px;border-radius:4px}
+@media (max-width:520px){.two{grid-template-columns:1fr}.bar{grid-template-columns:70px 1fr 40px}}
 .mpick{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:5px 8px;color:var(--ink);font-size:13px;max-width:100%;min-width:0}
 .artwrap{position:relative;margin-top:8px;display:grid;place-items:center;background:#05030a;border-radius:10px;overflow:hidden}
 .artwrap canvas{display:block;width:min(100%,520px);aspect-ratio:1;max-width:100%;animation:artspin 240s linear infinite}
@@ -560,6 +577,67 @@ body.editing .editbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;bac
       </div>
     </div>
   </section>
+
+  <section class="panel" aria-labelledby="shotTitle">
+    <div class="panel-head"><h2 id="shotTitle">Shot map</h2><div id="shotWhoWrap"></div></div>
+    <div id="shotBody"></div>
+  </section>
+
+  <section class="grid g-2">
+    <div class="panel" aria-labelledby="demoTitle">
+      <div class="panel-head"><h2 id="demoTitle">Demo rivalries</h2><span class="muted">Period above</span></div>
+      <div id="demoBody"></div>
+    </div>
+    <div class="panel" aria-labelledby="kickTitle">
+      <div class="panel-head"><h2 id="kickTitle">Kickoff battles</h2><span class="muted">Period above</span></div>
+      <div id="kickBody"></div>
+    </div>
+  </section>
+
+  <section class="grid g-2">
+    <div class="panel" aria-labelledby="touchTitle">
+      <div class="panel-head"><h2 id="touchTitle">Touch heatmap</h2><span class="muted">Where each of us touches the ball</span></div>
+      <div id="touchBody"></div>
+    </div>
+    <div class="panel" aria-labelledby="momTitle">
+      <div class="panel-head"><h2 id="momTitle">Momentum</h2><select class="mpick" id="momMatch" aria-label="Match"></select></div>
+      <div id="momBody"></div>
+    </div>
+  </section>
+
+  <section class="grid g-2">
+    <div class="panel" aria-labelledby="mmrsTitle">
+      <div class="panel-head"><h2 id="mmrsTitle">MMR by session</h2><select class="mpick" id="mmrsPick" aria-label="Session"></select></div>
+      <div id="mmrsBody"></div>
+    </div>
+    <div class="panel" aria-labelledby="boostTitle">
+      <div class="panel-head"><h2 id="boostTitle">Boost at goals against</h2><span class="muted">Period above</span></div>
+      <div id="boostBody"></div>
+    </div>
+  </section>
+
+  <section class="grid g-2">
+    <div class="panel" aria-labelledby="duoTitle">
+      <div class="panel-head"><h2 id="duoTitle">Duo synergy</h2><span class="muted">When both of us score</span></div>
+      <div id="duoBody"></div>
+    </div>
+    <div class="panel" aria-labelledby="fastTitle">
+      <div class="panel-head"><h2 id="fastTitle">Hardest shots</h2><span class="muted">Fastest goals, period above</span></div>
+      <div id="fastBody"></div>
+    </div>
+  </section>
+
+  <section class="grid g-2">
+    <div class="panel" aria-labelledby="postTitle">
+      <div class="panel-head"><h2 id="postTitle">So close</h2><span class="muted">Post and crossbar hits</span></div>
+      <div id="postBody"></div>
+    </div>
+    <div class="panel" aria-labelledby="trophyTitle">
+      <div class="panel-head"><h2 id="trophyTitle">Trophy case</h2><span class="muted">All time</span></div>
+      <div id="trophyBody"></div>
+    </div>
+  </section>
+
 
   <section class="grid g-2b">
     <div class="panel" aria-labelledby="mmrTitle">

@@ -149,6 +149,7 @@ function makeSample(names){
     rating=rating.map((v,j)=>Math.round(v+w*(8.5+j)+norm(0,6)));
     names.forEach((nm,j)=>mmr.push({logged_at:new Date(t).toISOString(),player:nm,playlist:'Ranked Doubles',mmr:rating[j]}));
   });
+  sampleExtras(matches,mmr,names);
   return {matches,mmr};
 }
 
@@ -273,7 +274,7 @@ function toMatch(r){
     first:goals.length?(goals[0].ours?'us':'them'):null,goals,secs:matchSecs(r),deficit:maxDeficit(goals),lead:maxDeficit(goals,-1),
     ourGoals:goals.filter(g=>g.ours),theirGoals:goals.filter(g=>!g.ours),ourSaves:saves.filter(g=>g.ours),defSaves,
     oppShots:opp.length?opp.reduce((a,x)=>a+(num(x.shots)||0),0):null,oppGoals:opp.reduce((a,x)=>a+(num(x.goals)||0),0),
-    replay:!!r.replay_created,left,opps,ff:!!r.ff,
+    replay:!!r.replay_created,left,opps,ff:!!r.ff,raw:r,
     // Every ball touch (recorders from 2026-10-14), turned so our team attacks +Y, for the timelapse.
     tl:Array.isArray(r.touch_log)&&r.touch_log.length>4?(f=>r.touch_log.filter(t=>t&&t.t!=null).map(t=>({t:+t.t,p:String(t.p||''),k:num(t.k),x:-f*(+t.x||0),y:f*(+t.y||0),z:+t.z||0})).sort((a,b)=>a.t-b.t))(myTeam===1?-1:1):null,
     goalAt:rawGoals.filter(g=>g&&+g.goal_time>0&&g.at!=null).map(g=>({t:+g.at,ours:g.ours!=null?!!g.ours:(myTeam!=null&&num(g.team)===myTeam),who:g.scorer||''})),
@@ -1049,7 +1050,7 @@ function syncButtons(){
   document.querySelectorAll('#mode button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.m===mode));
   document.querySelectorAll('#metric button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.k===metric));
 }
-function renderPeriod(){renderRecords();const list=inPeriod();renderSummary(list);renderCmp(list);renderMaps(list);renderDefense(list);renderPlay(list);renderCrowd(list);renderSwing(list);renderLog(list);syncButtons();}
+function renderPeriod(){renderRecords();const list=inPeriod();renderSummary(list);renderCmp(list);renderMaps(list);renderDefense(list);renderPlay(list);renderCrowd(list);renderSwing(list);renderLog(list);syncButtons();renderInsights(list);}
 // ---------- warm-ups ----------
 // A night is every match with gaps under 90 minutes. Its warm-ups are the Casual Doubles games
 // played before the first Ranked Doubles game; the ranked games that night are what follows.
@@ -1376,6 +1377,293 @@ function artRun(){cancelAnimationFrame(ART.raf);ART.raf=0;if(!ART.m||!ART.seen)r
   const per=Math.max(1,ART.segs.length/(12*60)),step=()=>{if(!ART.seen||ART.i>=ART.segs.length){ART.raf=0;return;}
     if(ART.W!==$('artCv').clientWidth)artPaint(false);artDraw(ART.i+per);ART.raf=requestAnimationFrame(step);};
   ART.raf=requestAnimationFrame(step);}
+// ---------- insight panels ----------
+// Shot map, demo rivalries, kickoffs, touch heatmaps, momentum, trophy case, post hits, MMR per
+// session, boost at goals against, duo synergy and hardest shots. Each is its own panel in
+// index.html, so the layout system makes them movable.
+
+const IN={shotWho:'all',touchWho:0,postSide:'us',momG:null,mmrS:null,fastSide:'us'};
+const pIx=n=>PLAYERS.findIndex(p=>p.name===n);
+const pShort=n=>{const j=pIx(n);return j>=0?PLAYERS[j].short:n;};
+const ourTeam=m=>num(m.raw&&m.raw.my_team);
+// World point turned so the given team attacks +Y (left-handed axes: X turns with Y).
+const turn=(o,team)=>{const f=team===1?-1:1;return {x:-f*(+o.x||0),y:f*(+o.y||0),z:+o.z||0};};
+const iPct=(a,b)=>b?Math.round(100*a/b)+'%':'–';
+const segHtml=(id,opts,cur)=>`<div class="seg" id="${id}" role="group">${opts.map(([v,l])=>`<button type="button" data-v="${esc(v)}" aria-pressed="${String(v)===String(cur)}">${esc(l)}</button>`).join('')}</div>`;
+const needNote=what=>`<p class="note">${what} needs games recorded after you click <b>Check updates</b> on the widget.</p>`;
+const callouts=rows=>`<div class="callouts">${rows.map(c=>`<div class="callout"><span class="k">${esc(c[0])}</span><span class="v num">${c[1]}</span>${c[2]?`<span class="muted small">${c[2]}</span>`:''}</div>`).join('')}</div>`;
+const tagOf=j=>j>=0?`<span class="tag p${j+1}"><i></i>${esc(PLAYERS[j].short)}</span>`:'<span class="muted">Opponent</span>';
+
+// Half pitch, their goal at the top (y 0..5120 shown, plus the net).
+function halfPitch(W,inner){
+  const Y0=-400,Y1=6000,H=Math.round(W*(Y1-Y0)/8192),sx=x=>(x+4096)/8192*W,sy=y=>(Y1-y)/(Y1-Y0)*H,su=u=>u/8192*W,ch=1152;
+  const ln='stroke="var(--pitch-line)" stroke-width="1.5" fill="none"';
+  const out=`M${sx(-4096)},${sy(Y0)} L${sx(-4096)},${sy(5120-ch)} L${sx(-4096+ch)},${sy(5120)} L${sx(-893)},${sy(5120)} L${sx(-893)},${sy(6000)} L${sx(893)},${sy(6000)} L${sx(893)},${sy(5120)} L${sx(4096-ch)},${sy(5120)} L${sx(4096)},${sy(5120-ch)} L${sx(4096)},${sy(Y0)}`;
+  const base=`<path d="${out} Z" fill="var(--pitch)"/><path d="${out}" ${ln}/><line x1="${sx(-4096)}" x2="${sx(4096)}" y1="${sy(0)}" y2="${sy(0)}" ${ln}/><path d="M${sx(-1000)},${sy(0)} A${su(1000)},${su(1000)} 0 0 0 ${sx(1000)},${sy(0)}" ${ln}/><rect x="${sx(-1800)}" y="${sy(5120)}" width="${su(3600)}" height="${su(1100)}" ${ln}/>`;
+  return {W,H,sx,sy,su,svg:body=>`<svg viewBox="0 0 ${W} ${H}" role="img">${base}${inner||''}${body}</svg>`};
+}
+
+// 1. Shot map with misses ---------------------------------------------------------------
+function shotsOf(m){
+  const r=m.raw||{},my=ourTeam(m);if(!Array.isArray(r.shot_log)||my==null)return null;
+  const gat=(m.goalAt||[]).filter(g=>g.ours);
+  return r.shot_log.filter(s=>s&&num(s.k)===my&&s.x!=null&&s.y!=null).map(s=>{const p=turn(s,my);
+    const goal=gat.some(g=>g.who===s.p&&g.t-s.t>=-1&&g.t-s.t<=6);return {...p,who:pIx(s.p),goal,m};});
+}
+const ZONES=[['Box',4020,5200,1800],['Close',2560,4020],['Mid',0,2560],['Own half',-6000,0]];
+function renderShots(list){
+  const el=$('shotBody');if(!el)return;
+  const sl=list.filter(m=>shotsOf(m)),who=IN.shotWho;
+  let shots=sl.flatMap(shotsOf);
+  // Older games: goals only (no misses known), drawn so the map is never empty.
+  const old=list.filter(m=>!shotsOf(m)).flatMap(m=>m.ourGoals.filter(g=>g.x!=null).map(g=>({x:g.x,y:g.y,who:g.who,goal:true,m,old:true})));
+  if(who!=='all'){shots=shots.filter(s=>s.who===+who);}
+  const oldF=who==='all'?old:old.filter(s=>s.who===+who);
+  const P=halfPitch(480);
+  let z='',zl='';
+  // Zones: box (centre), then bands up the pitch; centre vs wings split at |x|=1800 except the box.
+  const zs=[];ZONES.forEach(([n,y0,y1,w])=>{if(w)zs.push({n,y0,y1,x0:-w,x1:w});else{zs.push({n:n+' centre',y0,y1,x0:-1800,x1:1800});zs.push({n:n+' left',y0,y1,x0:-4096,x1:-1800});zs.push({n:n+' right',y0,y1,x0:1800,x1:4096});}});
+  zs.forEach(q=>{const inq=shots.filter(s=>s.y>=q.y0&&s.y<q.y1&&s.x>=q.x0&&s.x<q.x1&&!(q.n!=='Box'&&s.y>=4020&&Math.abs(s.x)<=1800)),g=inq.filter(s=>s.goal).length;
+    if(!inq.length)return;const yt=Math.min(q.y1,5120),yb=Math.max(q.y0,-400);
+    z+=`<rect x="${P.sx(q.x0)}" y="${P.sy(yt)}" width="${P.su(q.x1-q.x0)}" height="${P.sy(yb)-P.sy(yt)}" fill="${heatColor(inq.length?g/inq.length*1.6:0)}" opacity=".22"><title>${esc(q.n)}: ${g} of ${inq.length} shots scored</title></rect>`;zl+=
+      `<text x="${P.sx((q.x0+q.x1)/2)}" y="${(P.sy(yt)+P.sy(yb))/2+4}" text-anchor="middle" class="ztxt">${iPct(g,inq.length)} <tspan class="muted">${g}/${inq.length}</tspan></text>`;});
+  const dot=s=>{const c=s.who>=0?PLAYERS[s.who].color:'var(--muted)';return `<circle cx="${P.sx(clamp(s.x,-4096,4096)).toFixed(1)}" cy="${P.sy(clamp(s.y,-400,5120)).toFixed(1)}" r="${s.goal?4.5:4}" fill="${s.goal?c:'none'}" stroke="${c}" stroke-width="1.6" opacity="${s.old?.45:.9}"><title>${s.who>=0?esc(PLAYERS[s.who].short):''} ${s.goal?'goal':'miss'} · ${fmtDate(s.m.when)}</title></circle>`;};
+  const shown=shots.concat(oldF).filter(s=>s.y>=-400);
+  const g=shots.filter(s=>s.goal).length;
+  el.innerHTML=`<div class="maps"><div class="map-col">${P.svg(z+shown.map(dot).join('')+zl)}<div class="skey"><span><i class="g"></i>Goal</span><span><i></i>Missed or saved</span>${PLAYERS.map(p=>`<span><i class="g" style="background:${p.color};border-color:${p.color}"></i>${esc(p.short)}</span>`).join('')}</div></div>`+
+    `<div class="map-col">${callouts([['Shots tracked',shots.length,`${sl.length} game${sl.length===1?'':'s'}`],['Scored',iPct(g,shots.length),`${g} goal${g===1?'':'s'}`],['Shots from own half',shots.filter(s=>s.y<0).length]])}`+
+    (sl.length?`<p class="map-note">Each zone shows how many of the shots from there went in. Shots are placed where the shooter hit the ball.</p>`:needNote('The miss map'))+
+    (oldF.length?`<p class="map-note">Faded dots are goals from older games, where misses weren't recorded.</p>`:'')+`</div></div>`;
+}
+
+// 2. Demo rivalries ----------------------------------------------------------------------
+function renderDemos(list){
+  const el=$('demoBody');if(!el)return;
+  const dl=list.filter(m=>Array.isArray(m.raw&&m.raw.demo_log)&&ourTeam(m)!=null);
+  const by={},on={};let revenge=0,given=0,taken=0;
+  dl.forEach(m=>{const my=ourTeam(m),owed={};m.raw.demo_log.forEach(d=>{if(!d||!d.by||!d.v)return;
+    const ours=num(d.bk)===my;
+    if(ours){given++;on[d.v]=(on[d.v]||0)+1;if(owed[d.v]){revenge++;owed[d.v]--;}}
+    else if(num(d.vk)===my){taken++;by[d.by]=(by[d.by]||0)+1;owed[d.by]=(owed[d.by]||0)+1;}});});
+  // Per player, every game: demos dealt and times demolished (recorders since boost tracking).
+  const rows=PLAYERS.map((p,j)=>{let d=0,t=0,n=0;list.forEach(m=>{const r=(m.raw.players||[]).find(x=>x&&x.name===p.name);if(!r)return;d+=num(r.demos)||0;if(num(r.times_demolished)!=null){t+=+r.times_demolished;n++;}});return {j,d,t:n?t:null};});
+  const top=(o,n)=>Object.entries(o).sort((a,b)=>b[1]-a[1]).slice(0,n);
+  const lst=(arr,empty)=>arr.length?`<ol class="rank">${arr.map(([n,c])=>`<li><span>${esc(n)}</span><b class="num">${c}</b></li>`).join('')}</ol>`:`<p class="muted small">${empty}</p>`;
+  el.innerHTML=`<table class="lines num"><thead><tr><th>Player</th><th>Demos</th><th>Demoed</th><th>Ratio</th></tr></thead><tbody>${rows.map(r=>`<tr><td>${tagOf(r.j)}</td><td>${r.d}</td><td>${r.t==null?'–':r.t}</td><td>${r.t?(r.d/r.t).toFixed(2):'–'}</td></tr>`).join('')}</tbody></table>`+
+    (dl.length?`<div class="two"><div><h3>Our favourite victims</h3>${lst(top(on,5),'No demos yet.')}</div><div><h3>Who demos us most</h3>${lst(top(by,5),'Nobody yet.')}</div></div>`+
+      callouts([['Demos dealt',given],['Demos taken',taken],['Revenge demos',revenge,'paid back in the same game']]):needNote('Who demoed whom'));
+}
+
+// 3. Kickoff battles ---------------------------------------------------------------------
+function renderKicks(list){
+  const el=$('kickBody');if(!el)return;
+  const kl=list.filter(m=>Array.isArray(m.raw&&m.raw.kickoff_log)&&ourTeam(m)!=null);
+  const ks=kl.flatMap(m=>m.raw.kickoff_log.filter(Boolean).map(k=>({...k,ours:num(k.k)===ourTeam(m),who:pIx(k.p),m})));
+  const ours=ks.filter(k=>k.ours),waits=ks.map(k=>+k.wait).filter(v=>v>0&&v<8);
+  const kg=list.flatMap(m=>m.goals.filter(g=>g.ko)),kgf=kg.filter(g=>g.ours).length;
+  const per=PLAYERS.map((p,j)=>({j,n:ks.filter(k=>k.who===j).length}));
+  // A kickoff "leads to a goal" when the next goal comes within 10 seconds of the first touch.
+  let lead=[0,0];kl.forEach(m=>m.raw.kickoff_log.forEach(k=>{if(!k)return;const g=(m.goalAt||[]).find(g=>g.t>=k.t&&g.t-k.t<=10);if(g)lead[g.ours?0:1]++;}));
+  el.innerHTML=callouts([['Kickoff goals',`${kgf}–${kg.length-kgf}`,'for and against, every game'],
+      ['First touch',ks.length?iPct(ours.length,ks.length):'–',ks.length?`${ours.length} of ${ks.length} kickoffs`:''],
+      ['Goal within 10 s',ks.length?`${lead[0]}–${lead[1]}`:'–',ks.length?'after the first touch':'']])+
+    (ks.length?`<h3>Who goes for it</h3><div class="bars">${per.map(r=>`<div class="bar"><span>${tagOf(r.j)}</span><span class="track"><i style="width:${ks.length?100*r.n/ks.length:0}%;background:${PLAYERS[r.j].color}"></i></span><b class="num">${iPct(r.n,ks.length)}</b></div>`).join('')}</div>`+
+      `<p class="map-note">Share of all kickoffs where that player touched the ball first.${waits.length?` First touch comes ${ (waits.reduce((a,b)=>a+b,0)/waits.length).toFixed(1)} s after the countdown on average.`:''}</p>`:needNote('First-touch stats'));
+}
+
+// 4. Touch heatmaps ----------------------------------------------------------------------
+function renderTouches(list){
+  const el=$('touchBody');if(!el)return;
+  const tl=list.filter(m=>m.tl);
+  if(!tl.length){el.innerHTML=needNote('The touch heatmap');return;}
+  const j=Math.min(IN.touchWho,PLAYERS.length-1),nm=PLAYERS[j].name;
+  const pts=tl.flatMap(m=>m.tl.filter(t=>t.p===nm));
+  const W=480,H=Math.round(W*12000/8192),sx=x=>(x+4096)/8192*W,sy=y=>(6000-y)/12000*H,cell=384,bins={};
+  pts.forEach(t=>{const c=Math.floor((clamp(t.x,-4096,4095)+4096)/cell),r=Math.floor((clamp(t.y,-5120,5119)+5120)/cell);bins[c+','+r]=(bins[c+','+r]||0)+1;});
+  const mx=Math.max(1,...Object.values(bins));
+  const P=fieldMapShell(W,H,sx,sy);
+  let f='';Object.entries(bins).forEach(([k,n])=>{const [c,r]=k.split(',').map(Number);f+=`<rect x="${sx(c*cell-4096)}" y="${sy(-5120+(r+1)*cell)}" width="${cell/8192*W+.6}" height="${cell/8192*W+.6}" fill="${heatColor(Math.sqrt(n/mx))}" opacity=".8" shape-rendering="crispEdges"><title>${n} touch${n>1?'es':''}</title></rect>`;});
+  const third=(a,b)=>pts.filter(t=>t.y>=a&&t.y<b).length;
+  const ax=pts.reduce((a,t)=>a+t.x,0)/(pts.length||1),ay=pts.reduce((a,t)=>a+t.y,0)/(pts.length||1);
+  const avg=pts.length?`<circle cx="${sx(ax)}" cy="${sy(ay)}" r="7" fill="none" stroke="var(--ink)" stroke-width="2"/><circle cx="${sx(ax)}" cy="${sy(ay)}" r="2" fill="var(--ink)"/>`:'';
+  el.innerHTML=`<div class="panel-tools">${segHtml('touchWho',PLAYERS.map((p,k)=>[k,p.short]),j)}</div><div class="maps"><div class="map-col">${P(f+avg)}<div class="heat-key"><span>Few</span><span class="ramp"></span><span>Many</span></div></div>`+
+    `<div class="map-col">${callouts([['Attacking third',iPct(third(1707,99999),pts.length)],['Middle third',iPct(third(-1707,1707),pts.length)],['Defensive third',iPct(third(-99999,-1707),pts.length)]])}`+
+    `<p class="map-note">${pts.length} touches by ${esc(PLAYERS[j].name)} in ${tl.length} game${tl.length===1?'':'s'}. The ring marks the average touch spot. We attack upwards.</p></div></div>`;
+}
+function fieldMapShell(W,H,sx,sy){const su=u=>u/8192*W,ch=1152,ln='stroke="var(--pitch-line)" stroke-width="1.5" fill="none"';
+  const o=`M${sx(-4096)},${sy(5120-ch)} L${sx(-4096+ch)},${sy(5120)} L${sx(4096-ch)},${sy(5120)} L${sx(4096)},${sy(5120-ch)} L${sx(4096)},${sy(-5120+ch)} L${sx(4096-ch)},${sy(-5120)} L${sx(-4096+ch)},${sy(-5120)} L${sx(-4096)},${sy(-5120+ch)} Z`;
+  return body=>`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Touch heatmap"><path d="${o}" fill="var(--pitch)"/>${body}<path d="${o}" ${ln}/><line x1="${sx(-4096)}" x2="${sx(4096)}" y1="${sy(0)}" y2="${sy(0)}" ${ln}/><circle cx="${sx(0)}" cy="${sy(0)}" r="${su(1000)}" ${ln}/>`+
+    `<rect x="${sx(-893)}" y="${sy(6000)}" width="${su(1786)}" height="${sy(5120)-sy(6000)}" stroke="var(--win)" stroke-width="2" fill="none"/><rect x="${sx(-893)}" y="${sy(-5120)}" width="${su(1786)}" height="${sy(-6000)-sy(-5120)}" stroke="var(--muted)" stroke-width="2" fill="none"/></svg>`;}
+
+// 5. Momentum ----------------------------------------------------------------------------
+function renderMomentum(list){
+  const el=$('momBody');if(!el)return;
+  const ml=ALL.filter(m=>Array.isArray(m.raw&&m.raw.momentum)&&m.raw.momentum.length>20&&ourTeam(m)!=null).slice().sort((a,b)=>b.when-a.when);
+  const sel=$('momMatch');fillPick(sel,ml);
+  if(!ml.length){el.innerHTML=needNote('The momentum graph');return;}
+  const m=ml.find(x=>String(x.guid)===sel.value)||ml[0],my=ourTeam(m),raw=m.raw.momentum.filter(Boolean).sort((a,b)=>a.t-b.t);
+  // Pressure: +1 while we touched it last, -1 while they did, weighted by ball speed, smoothed over ~8 s.
+  let e=0;const pts=raw.map(s=>{const v=(num(s.k)===my?1:-1)*(.35+.65*Math.min(1,(+s.s||0)/2300));e=e+(v-e)*.12;return [+s.t,e];});
+  const t0=pts[0][0],t1=pts[pts.length-1][0],W=640,H=200,pad=24,x=t=>pad+(t-t0)/((t1-t0)||1)*(W-2*pad),y=v=>H/2-v*(H/2-14);
+  const line=pts.map(p=>`${x(p[0]).toFixed(1)},${y(p[1]).toFixed(1)}`).join(' ');
+  const area=`M${x(t0)},${y(0)} L${line.split(' ').join(' L')} L${x(t1)},${y(0)} Z`;
+  const goals=(m.goalAt||[]).map(g=>`<line x1="${x(g.t)}" x2="${x(g.t)}" y1="10" y2="${H-10}" stroke="${g.ours?'var(--win)':'var(--loss)'}" stroke-dasharray="3 3"/><text x="${x(g.t)}" y="${g.ours?10:H-2}" text-anchor="middle" class="momg" fill="${g.ours?'var(--win)':'var(--loss)'}">${g.ours?esc(pShort(g.who)):'them'}</text>`).join('');
+  let ticks='';for(let mn=0;mn*60<=t1-t0;mn++)ticks+=`<text x="${x(t0+mn*60)}" y="${H+12}" text-anchor="middle" class="momg" fill="var(--muted)">${mn}m</text>`;
+  const share=pts.filter(p=>p[1]>0).length/pts.length;
+  el.innerHTML=`<svg viewBox="0 0 ${W} ${H+16}" role="img" aria-label="Pressure over the match"><defs><clipPath id="momUp"><rect x="0" y="0" width="${W}" height="${H/2}"/></clipPath><clipPath id="momDn"><rect x="0" y="${H/2}" width="${W}" height="${H/2}"/></clipPath></defs>`+
+    `<path d="${area}" fill="var(--win)" opacity=".35" clip-path="url(#momUp)"/><path d="${area}" fill="var(--loss)" opacity=".35" clip-path="url(#momDn)"/><line x1="${pad}" x2="${W-pad}" y1="${H/2}" y2="${H/2}" stroke="var(--grid)"/>${ticks}<polyline points="${line}" fill="none" stroke="var(--ink-2)" stroke-width="1.5"/>${goals}</svg>`+
+    `<p class="map-note">Above the line we had the ball last, below they did; faster ball means a bigger swing. We had it ${Math.round(100*share)}% of the time in ${esc(m.arena)}, ${m.us}–${m.them} ${m.win?'win':'loss'}.</p>`;
+}
+
+// 6. Trophy case -------------------------------------------------------------------------
+const TROPHIES={AerialGoal:'Aerial goal',BicycleGoal:'Bicycle goal',BicycleHit:'Bicycle hit',LongGoal:'Long goal',TurtleGoal:'Turtle goal',BackwardsGoal:'Backwards goal',PoolShot:'Pool shot',OvertimeGoal:'Overtime goal',
+  HatTrick:'Hat trick',Playmaker:'Playmaker',Savior:'Savior',EpicSave:'Epic save',Demolish:'Demolition',Demolition:'Demolition',Juggle:'Juggle',HighFive:'High five',LowFive:'Low five',FirstTouch:'First touch',
+  Center:'Centre',CenterBall:'Centre',Clear:'Clearance',ClearBall:'Clearance',MVP:'MVP',Swish:'Swish',HoopsSwishGoal:'Swish goal',BreakoutDamage:'Breakout damage',UltraDamage:'Ultra damage',Fifty:'50/50',
+  AerialHit:'Aerial hit',Shot:'Shot',Save:'Save',Goal:'Goal',Assist:'Assist',Win:'Win'};
+const BORING=new Set(['Shot','Save','Goal','Assist','Win','Shot on Goal']);
+function renderTrophies(){
+  const el=$('trophyBody');if(!el)return;
+  const tot=PLAYERS.map(()=>({}));let n=0;
+  DONE.forEach(m=>(m.raw.players||[]).forEach(r=>{const j=r&&pIx(r.name);if(j==null||j<0||!r.statfeed||typeof r.statfeed!=='object')return;n++;
+    Object.entries(r.statfeed).forEach(([k,v])=>{const key=TROPHIES[k]||k.replace(/([a-z])([A-Z])/g,'$1 $2');if(BORING.has(k)||BORING.has(key))return;tot[j][key]=(tot[j][key]||0)+(+v||0);});}));
+  const keys=[...new Set(tot.flatMap(o=>Object.keys(o)))].sort((a,b)=>PLAYERS.reduce((s,p,j)=>s+(tot[j][b]||0),0)-PLAYERS.reduce((s,p,j)=>s+(tot[j][a]||0),0));
+  if(!keys.length){el.innerHTML='<p class="note">No special plays recorded yet.</p>';return;}
+  el.innerHTML=`<div class="trophies">${keys.map(k=>{const best=Math.max(...PLAYERS.map((p,j)=>tot[j][k]||0));
+    return `<div class="trophy"><span class="tname">${esc(k)}</span><span class="tcounts">${PLAYERS.map((p,j)=>`<span class="tc${(tot[j][k]||0)===best&&best>0?' top':''}" style="--c:${p.color}"><i></i><b class="num">${tot[j][k]||0}</b></span>`).join('')}</span></div>`;}).join('')}</div>`+
+    `<p class="map-note">All time, from the game's own feed (the pop-ups you see in game). The leader on each one is lit.</p>`;
+}
+
+// 7. Post and crossbar hits --------------------------------------------------------------
+function renderPosts(list){
+  const el=$('postBody');if(!el)return;
+  const side=IN.postSide;
+  const pl=list.filter(m=>Array.isArray(m.raw&&m.raw.post_log)&&ourTeam(m)!=null);
+  const hits=pl.flatMap(m=>{const my=ourTeam(m);return m.raw.post_log.filter(h=>h&&h.x!=null).map(h=>{const ours=num(h.k)===my,att=ours?my:1-my,p=turn(h,att);return {...p,ours,who:pIx(h.p),m};});}).filter(h=>side==='us'?h.ours:!h.ours);
+  const W=480,H=230,sx=x=>W/2-x/1100*(W/2),sz=z=>H-14-z/760*(H-30);
+  let g=`<rect x="${sx(893)}" y="${sz(642)}" width="${sx(-893)-sx(893)}" height="${sz(0)-sz(642)}" fill="var(--pitch)" opacity=".6"/>`;
+  for(let i=1;i<8;i++){g+=`<line x1="${sx(893-i*223)}" x2="${sx(893-i*223)}" y1="${sz(642)}" y2="${sz(0)}" stroke="var(--grid)"/>`;}
+  for(let i=1;i<4;i++){g+=`<line x1="${sx(893)}" x2="${sx(-893)}" y1="${sz(i*160)}" y2="${sz(i*160)}" stroke="var(--grid)"/>`;}
+  g+=`<path d="M${sx(893)},${sz(0)} L${sx(893)},${sz(642)} L${sx(-893)},${sz(642)} L${sx(-893)},${sz(0)}" fill="none" stroke="var(--ink)" stroke-width="6" stroke-linejoin="round"/><line x1="0" x2="${W}" y1="${sz(0)}" y2="${sz(0)}" stroke="var(--pitch-line)" stroke-width="2"/>`;
+  g+=hits.map(h=>{const c=h.who>=0?PLAYERS[h.who].color:'var(--loss)';return `<circle cx="${sx(clamp(h.x,-1100,1100)).toFixed(1)}" cy="${sz(clamp(h.z,0,760)).toFixed(1)}" r="6" fill="${c}" stroke="var(--surface)" stroke-width="1.5" opacity=".9"><title>${h.who>=0?esc(PLAYERS[h.who].short):'Opponent'} · ${fmtDate(h.m.when)}</title></circle>`;}).join('');
+  // Every game: post/crossbar counts per player from the scoreboard rows.
+  const per=PLAYERS.map((p,j)=>({j,n:list.reduce((a,m)=>{const r=(m.raw.players||[]).find(x=>x&&x.name===p.name);return a+(r?num(r.crossbar_hits)||0:0);},0)}));
+  el.innerHTML=`<div class="panel-tools">${segHtml('postSide',[['us','Our shots'],['them','Their shots']],side)}</div><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Goal frame with post and crossbar hits">${g}</svg>`+
+    `<p class="map-note">${pl.length?`${hits.length} so-close hit${hits.length===1?'':'s'} on the frame, seen from the front. `:''}Every game: ${per.map(r=>`${esc(PLAYERS[r.j].short)} ${r.n}`).join(', ')} post or crossbar hits.</p>`+(pl.length?'':needNote('Where they hit'));
+}
+
+// 8. MMR per session ---------------------------------------------------------------------
+function renderMmrSessions(){
+  const el=$('mmrsBody');if(!el)return;
+  const ranked=sessions.filter(s=>s.matches.some(m=>/^Ranked/.test(m.playlist))).slice().reverse();
+  const sel=$('mmrsPick'),keep=sel.value;
+  sel.innerHTML=ranked.map((s,i)=>`<option value="${s.start.getTime()}">${esc(fmtDay(s.start))} · ${s.matches.filter(m=>m.win).length}–${s.matches.filter(m=>!m.win).length}</option>`).join('');
+  if(ranked.some(s=>String(s.start.getTime())===keep))sel.value=keep;
+  if(!ranked.length){el.innerHTML='<p class="note">No ranked sessions in this playlist yet.</p>';return;}
+  const s=ranked.find(x=>String(x.start.getTime())===sel.value)||ranked[0],ms=s.matches;
+  // MMR after each game = the value logged when the next game was queued (or soon after the last one).
+  const after=(j,i)=>{const t=i+1<ms.length?ms[i+1].when.getTime()+5000:ms[i].when.getTime()+ms[i].dur*1000+3*3600e3;const rows=mmrRows(j).filter(r=>r.at.getTime()>=ms[i].when.getTime()-60e3&&r.at.getTime()<=t);return rows.length?rows[rows.length-1].v:null;};
+  const start=j=>mmrAt(j,ms[0].when.getTime()+60e3);
+  const ser=PLAYERS.map((p,j)=>[start(j)].concat(ms.map((m,i)=>after(j,i))));
+  const all=ser.flat().filter(v=>v!=null);
+  if(!all.length){el.innerHTML='<p class="note">No MMR logged during this session.</p>';return;}
+  const W=640,H=230,pl=44,pr=14,pt=14,pb=40,lo=Math.min(...all)-6,hi=Math.max(...all)+6,n=ms.length;
+  const x=i=>pl+i*(W-pl-pr)/Math.max(1,n),y=v=>pt+(hi-v)*(H-pt-pb)/((hi-lo)||1);
+  let g='';const step=niceStep((hi-lo)/4);for(let v=Math.ceil(lo/step)*step;v<=hi;v+=step)g+=`<line x1="${pl}" x2="${W-pr}" y1="${y(v)}" y2="${y(v)}" stroke="var(--grid)"/><text x="${pl-6}" y="${y(v)+4}" text-anchor="end" class="small">${Math.round(v)}</text>`;
+  // Streak bands: 3 or more results in a row.
+  let i0=0;for(let i=1;i<=n;i++){if(i===n||ms[i].win!==ms[i0].win){if(i-i0>=3)g+=`<rect x="${x(i0+.5)}" y="${pt}" width="${x(i)-x(i0)}" height="${H-pt-pb}" fill="${ms[i0].win?'var(--win)':'var(--loss)'}" opacity=".1"/><text x="${(x(i0+.5)+x(i+.5))/2}" y="${pt+12}" text-anchor="middle" class="small" fill="${ms[i0].win?'var(--win)':'var(--loss)'}">${ms[i0].win?'W':'L'}${i-i0} ${ms[i0].win?'heater':'tilt'}</text>`;i0=i;}}
+  ms.forEach((m,i)=>{g+=`<rect x="${x(i+1)-7}" y="${H-pb+10}" width="14" height="14" rx="3" fill="${m.win?'var(--win)':'var(--loss)'}"><title>${m.us}–${m.them} ${m.win?'win':'loss'} · ${fmtTime(m.when)}</title></rect>`;});
+  PLAYERS.forEach((p,j)=>{const pts=ser[j].map((v,i)=>v==null?null:[x(i),y(v)]).filter(Boolean);if(!pts.length)return;
+    g+=`<polyline points="${pts.map(q=>q.join(',')).join(' ')}" fill="none" stroke="${p.color}" stroke-width="2" stroke-linejoin="round"/>`+pts.map(q=>`<circle cx="${q[0]}" cy="${q[1]}" r="3" fill="${p.color}"/>`).join('');});
+  const delta=PLAYERS.map((p,j)=>{const v=ser[j].filter(x=>x!=null);return v.length>1?`${esc(p.short)} ${sign(Math.round(v[v.length-1]-v[0]))}`:null;}).filter(Boolean).join(', ');
+  el.innerHTML=`<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="MMR through the session">${g}</svg><p class="map-note">${delta?`This session: ${delta}. `:''}Shaded runs are 3 or more wins or losses in a row.</p>`;
+}
+
+// 9. Boost at goals against --------------------------------------------------------------
+function renderStarve(list){
+  const el=$('boostBody');if(!el)return;
+  const ga=list.flatMap(m=>(m.raw.goals||[]).filter(g=>g&&+g.goal_time>0&&g.boosts&&(g.ours===false||(g.ours==null&&num(g.team)!==ourTeam(m)))).map(g=>({g,m})));
+  if(!ga.length){el.innerHTML=needNote('Boost at goals against');return;}
+  const LOW=12,low=b=>b!=null&&b<LOW;
+  const any=ga.filter(({g})=>PLAYERS.some(p=>low(g.boosts[p.name]))).length;
+  const per=PLAYERS.map((p,j)=>{const v=ga.map(({g})=>g.boosts[p.name]).filter(b=>b!=null);
+    const z=list.map(m=>(m.raw.players||[]).find(r=>r&&r.name===p.name)).filter(r=>r&&r.zero_boost_fixed&&num(r.pct_zero_boost)!=null);
+    return {j,n:v.length,low:v.filter(low).length,demo:v.filter(b=>b<0).length,base:z.length?z.reduce((a,r)=>a+(+r.pct_zero_boost),0)/z.length:null};});
+  el.innerHTML=callouts([['Goals against checked',ga.length],['One of us starving',iPct(any,ga.length),`under ${LOW} boost or demoed`]])+
+    `<div class="bars">${per.map(r=>`<div class="bar"><span>${tagOf(r.j)}</span><span class="track"><i style="width:${r.n?100*r.low/r.n:0}%;background:${PLAYERS[r.j].color}"></i>${r.base!=null?`<em style="left:${r.base}%" title="Share of play time on an empty tank"></em>`:''}</span><b class="num">${iPct(r.low,r.n)}</b></div>`).join('')}</div>`+
+    `<p class="map-note">Bar: share of goals against where that player had under ${LOW} boost or was demoed. Tick: share of all play time they spend on empty, so a bar past its tick means starving costs goals.</p>`;
+}
+
+// 10. Duo synergy ------------------------------------------------------------------------
+function renderSynergy(list){
+  const el=$('duoBody');if(!el)return;
+  if(PLAYERS.length<2){el.innerHTML='<p class="note">Needs two players.</p>';return;}
+  const A=0,B=1,both=list.filter(m=>m.lines[A]&&m.lines[B]);
+  const grp=[['Both scored',m=>m.lines[A].goals>0&&m.lines[B].goals>0],[`Only ${PLAYERS[A].short}`,m=>m.lines[A].goals>0&&!m.lines[B].goals],[`Only ${PLAYERS[B].short}`,m=>!m.lines[A].goals&&m.lines[B].goals>0],['Neither',m=>!m.lines[A].goals&&!m.lines[B].goals]];
+  const ab=both.flatMap(m=>m.ourGoals).filter(g=>g.who===B&&g.assister===PLAYERS[A].name).length,ba=both.flatMap(m=>m.ourGoals).filter(g=>g.who===A&&g.assister===PLAYERS[B].name).length;
+  el.innerHTML=`<table class="lines num"><thead><tr><th></th><th>Games</th><th>Win rate</th><th>Goals for</th></tr></thead><tbody>${grp.map(([n,f])=>{const g=both.filter(f),w=g.filter(m=>m.win).length;
+      return `<tr><td>${esc(n)}</td><td>${g.length}</td><td>${g.length?`<span class="wr" style="--w:${100*w/g.length}%">${iPct(w,g.length)}</span>`:'–'}</td><td>${g.length?(g.reduce((a,m)=>a+m.us,0)/g.length).toFixed(1):'–'}</td></tr>`;}).join('')}</tbody></table>`+
+    callouts([[`${PLAYERS[A].short} → ${PLAYERS[B].short}`,ab,'assisted goals'],[`${PLAYERS[B].short} → ${PLAYERS[A].short}`,ba,'assisted goals'],['Assisted',iPct(ab+ba,both.reduce((a,m)=>a+m.ourGoals.length,0)),'of our goals']]);
+}
+
+// 11. Hardest shots ----------------------------------------------------------------------
+function renderFastest(list){
+  const el=$('fastBody');if(!el)return;
+  const gs=list.flatMap(m=>m.ourGoals.filter(g=>g.spd!=null).map(g=>({g,m}))).sort((a,b)=>b.g.spd-a.g.spd).slice(0,10);
+  if(!gs.length){el.innerHTML='<p class="note">No goal speeds in this period.</p>';return;}
+  el.innerHTML=`<ol class="fastlist">${gs.map(({g,m},i)=>`<li><span class="num rk">${i+1}</span>${tagOf(g.who)}<b class="num">${fSpd(g.spd)}</b><span class="muted small">${m.us}–${m.them} ${m.win?'W':'L'} · ${fmtDate(m.when)}</span>${g.ix!=null&&g.x!=null?`<button type="button" class="chipbtn" data-i="${i}">Replay 3D</button>`:''}</li>`).join('')}</ol>`;
+  el.querySelectorAll('button[data-i]').forEach(b=>b.onclick=()=>{const {g,m}=gs[+b.dataset.i];
+    if(mapSide!=='us'){const sb=document.querySelector('#mapSide button[data-s="us"]');if(sb)sb.click();}
+    if(mapWho!=='all'){const wb=document.querySelector('#mapWho button[data-w="all"],#mapWho [data-who="all"]');if(wb)wb.click();else{mapWho='all';renderMaps(inPeriod());}}
+    const hit=G3.goals.find(x=>x.m===m&&x.spd===g.spd&&x.x===g.x&&x.y===g.y);
+    const cv=$('map3d');if(cv)cv.scrollIntoView({behavior:'smooth',block:'center'});
+    if(hit){RP.k=null;showReplay(hit.k);}});
+}
+
+// Wiring ---------------------------------------------------------------------------------
+function renderInsights(list){
+  const run=f=>{try{f();}catch(e){console.error(e);}};run(syncShotWho);
+  run(()=>renderShots(list));run(()=>renderDemos(list));run(()=>renderKicks(list));run(()=>renderTouches(list));run(()=>renderMomentum(list));
+  run(()=>renderTrophies());run(()=>renderPosts(list));run(()=>renderMmrSessions());run(()=>renderStarve(list));run(()=>renderSynergy(list));run(()=>renderFastest(list));
+}
+document.addEventListener('click',e=>{const b=e.target.closest('#shotWho button,#touchWho button,#postSide button');if(!b)return;const id=b.parentElement.id,v=b.dataset.v;
+  if(id==='shotWho')IN.shotWho=v;if(id==='touchWho')IN.touchWho=+v;if(id==='postSide')IN.postSide=v;
+  b.parentElement.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));const l=inPeriod();
+  if(id==='shotWho')renderShots(l);if(id==='touchWho')renderTouches(l);if(id==='postSide')renderPosts(l);});
+['momMatch','mmrsPick'].forEach(id=>{const s=$(id);if(s)s.addEventListener('change',()=>id==='momMatch'?renderMomentum():renderMmrSessions());});
+function syncShotWho(){const el=$('shotWhoWrap');if(el)el.innerHTML=segHtml('shotWho',[['all','Both']].concat(PLAYERS.map((p,k)=>[k,p.short])),IN.shotWho);}
+
+// Sample data for the new logs, so the panels show something before real games arrive.
+function sampleExtras(matches,mmr,names){
+  let a=777;const rnd=()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296};
+  const nrm=(m,s)=>{let u=0,v=0;while(!u)u=rnd();while(!v)v=rnd();return m+s*Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)};
+  const pick=l=>l[Math.floor(rnd()*l.length)],R=Math.round;
+  const FEED=[['AerialGoal',.25],['LongGoal',.12],['BicycleHit',.08],['EpicSave',.3],['Savior',.03],['Playmaker',.03],['HatTrick',.04],['Demolish',1],['Center',1.2],['Clear',1.4],['FirstTouch',.6],['MVP',.25],['Juggle',.05],['PoolShot',.05],['BicycleGoal',.02],['TurtleGoal',.01],['HighFive',.2]];
+  matches.forEach(r=>{const my=r.my_team,f=my===1?-1:1,dur=r.duration_seconds,ours=r.players.filter(p=>p.team===my),foes=r.players.filter(p=>p.team!==my);
+    const W=(x,y,z,att)=>{const g=att===1?-1:1;return {x:R(-g*x),y:R(g*y),z:R(z)};};
+    r.shot_log=[];r.players.forEach(p=>{const gl=r.goals.filter(g=>g.scorer===p.name);
+      gl.forEach(g=>{const s=g.shot_from||{X:0,Y:f*3000,Z:93};r.shot_log.push({t:+((g.at||g.goal_time)-1.5).toFixed(1),p:p.name,k:p.team,x:s.X,y:s.Y,z:s.Z||93});});
+      for(let q=gl.length;q<(p.shots||0);q++){const y=clamp(nrm(3000,1500),-1500,5000),x=clamp(nrm(0,1700-y/8),-3900,3900);r.shot_log.push({t:R(rnd()*dur),p:p.name,k:p.team,...W(x,y,clamp(nrm(200,200),93,1200),p.team)});}});
+    r.demo_log=[];ours.forEach(p=>{for(let q=0;q<(p.demos||0);q++)r.demo_log.push({t:R(rnd()*dur),by:p.name,bk:my,v:pick(foes).name,vk:1-my});});
+    foes.forEach(p=>{const n=Math.floor(rnd()*2.4);for(let q=0;q<n;q++)r.demo_log.push({t:R(rnd()*dur),by:p.name,bk:1-my,v:pick(ours).name,vk:my});});
+    r.demo_log.sort((a,b)=>a.t-b.t);
+    const ko=[0].concat(r.goals.map(g=>(g.at||g.goal_time)+6)).filter(t=>t<dur);
+    r.kickoff_log=ko.map(t=>{const p=pick(r.players);return {t:+(t+2.6+rnd()*.6).toFixed(1),wait:+(2.6+rnd()*.6).toFixed(1),p:p.name,k:p.team,x:R(nrm(0,60)),y:R(nrm(0,80)),z:93};});
+    r.post_log=[];const np=rnd()<.45?1+Math.floor(rnd()*2):0;for(let q=0;q<np;q++){const p=pick(r.players),post=rnd()<.6,side=rnd()<.5?-1:1;
+      r.post_log.push({t:R(rnd()*dur),p:p.name,k:p.team,...W(post?side*nrm(880,25):nrm(0,450),5150,post?clamp(nrm(260,140),93,600):nrm(640,20),p.team)});}
+    let k=my,mom=[];for(let t=0;t<dur;t++){if(rnd()<.18)k=rnd()<.5+(r.result==='Win'?.05:-.05)?my:1-my;mom.push({t,k,s:R(clamp(nrm(1300,600),0,4000))});}
+    r.momentum=mom;
+    r.goals.forEach(g=>{if(g.ours)return;g.boosts={};ours.forEach(p=>{g.boosts[p.name]=rnd()<.08?-1:rnd()<.3?R(rnd()*11):R(12+rnd()*88);});});
+    ours.forEach(p=>{p.statfeed={};FEED.forEach(([n,l])=>{let L=Math.exp(-l),c=0,pp=1;do{c++;pp*=rnd();}while(pp>L);if(c-1>0)p.statfeed[n]=c-1;});p.crossbar_hits=r.post_log.filter(h=>h.p===p.name).length;p.times_demolished=r.demo_log.filter(d=>d.v===p.name).length;});
+  });
+  // MMR before each ranked game, so the per-session chart has a line to draw.
+  const ranked=matches.filter(r=>r.playlist==='Ranked Doubles').sort((x,y)=>new Date(x.started_at)-new Date(y.started_at));
+  names.forEach(nm=>{const base=mmr.filter(s=>s.player===nm).sort((x,y)=>new Date(x.logged_at)-new Date(y.logged_at));let v=null,last=0;
+    ranked.forEach(r=>{const t=new Date(r.started_at).getTime();const b=base.filter(s=>new Date(s.logged_at).getTime()<=t).pop();
+      if(b&&new Date(b.logged_at).getTime()!==last){v=b.mmr;last=new Date(b.logged_at).getTime();}if(v==null)return;
+      mmr.push({logged_at:new Date(t-30e3).toISOString(),player:nm,playlist:'Ranked Doubles',mmr:R(v)});v+=r.result==='Win'?8+rnd()*4:-(8+rnd()*4);});});
+  mmr.sort((x,y)=>new Date(x.logged_at)-new Date(y.logged_at));
+}
+
 function matchFromHash(){const h=location.hash;if(h.startsWith('#m-'))openMatch(decodeURIComponent(h.slice(3)));}
 window.addEventListener('hashchange',matchFromHash);
 $('matchClose').addEventListener('click',()=>$('matchDlg').close());
@@ -1470,6 +1758,8 @@ $('matchLog').addEventListener('click',e=>{const a=e.target.closest('a.mlink');i
 // Add a release at the top whenever something visible changes (dashboard or widget).
 const CHANGELOG=[
   {v:'1.7',date:'2026-10-14',items:[
+    'Eleven new panels: shot map with misses and scoring % by zone, demo rivalries, kickoff battles, touch heatmaps, momentum graph, trophy case, post and crossbar hits, MMR by session with streaks, boost at goals against, duo synergy, and hardest shots with a 3D replay button',
+    'Widget update: records shots, demos, kickoffs, post hits, momentum and everyone\'s boost when a goal goes in (click Check updates)',
     'Timelapse and Spirograph panels on the dashboard: pick a game to replay its touches, or watch it drawn as trippy spirograph loops from the ball and every car',
     'Match timelapse: open a match to watch the cars move between their ball touches on the overhead field (new games)',
     'A live timer under each name at the top: time since that player last scored',
