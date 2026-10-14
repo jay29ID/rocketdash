@@ -526,7 +526,7 @@ function fieldMap(pts,noun,tip,top,bottom){
   return `<svg viewBox="0 -18 ${W} ${H+36}" role="img" aria-label="Top-down field with ${pts.length} ${noun} locations">${rlBallDefs('rlb-'+noun)}${f}</svg>`;
 }
 // Cold to hot: blue, through violet, to red. t runs 0..1.
-const HEAT_C=[[47,111,214],[124,77,196],[214,51,57]],HEAT_NEON=[[52,12,100],[165,45,235],[57,255,20]],HEAT_NIGHT=[[38,38,42],[120,120,126],[214,52,48]],HEAT_DARK=[[22,22,22],[96,96,96],[236,236,236]];
+const HEAT_C=[[47,111,214],[124,77,196],[214,51,57]],HEAT_NEON=[[52,12,100],[165,45,235],[57,255,20]],HEAT_NIGHT=[[38,38,42],[120,120,126],[214,52,48]],HEAT_DARK=[[14,14,14],[72,72,72],[178,178,178]];
 function heatColor(t){const HEAT=hmTheme==='neon'?HEAT_NEON:hmTheme==='night'?HEAT_NIGHT:hmTheme==='dark'?HEAT_DARK:HEAT_C;
   t=clamp(t,0,1)*(HEAT.length-1);const i=Math.min(HEAT.length-2,Math.floor(t)),f=t-i;
   const c=HEAT[i].map((v,k)=>Math.round(v+(HEAT[i+1][k]-v)*f));
@@ -662,8 +662,8 @@ const PAL3={classic:{ink:'#8fdcff',muted:'rgba(120,200,255,.55)',line:'rgba(90,1
     pcol:['#39ff14','#c04dff','#00f0ff','#ffe600'],opp:'#ff2bd6'},
   night:{ink:'#d4d4d6',muted:'rgba(200,200,204,.5)',line:'rgba(200,200,204,.16)',bg:'#070708',floor:'rgba(60,60,66,.32)',ghost:'rgba(224,68,62,.45)',acc:'#e0443e',accA:a=>`rgba(224,68,62,${a})`,text:'#ededee',mate:'#9a9a9e',
     pcol:['#e6e6e8','#e0443e','#9a9a9e','#a83a36'],opp:'#6c6c72'},
-  dark:{ink:'#bdbdbd',muted:'rgba(170,170,170,.45)',line:'rgba(170,170,170,.12)',bg:'#000',floor:'rgba(40,40,40,.4)',ghost:'rgba(220,220,220,.35)',acc:'#e8e8e8',accA:a=>`rgba(232,232,232,${a})`,text:'#e8e8e8',mate:'#777',
-    pcol:['#ededed','#8c8c8c','#bdbdbd','#5e5e5e'],opp:'#4a4a4a'}};
+  dark:{ink:'#8e8e8e',muted:'rgba(128,128,128,.45)',line:'rgba(128,128,128,.11)',bg:'#000',floor:'rgba(30,30,30,.4)',ghost:'rgba(165,165,165,.35)',acc:'#aeaeae',accA:a=>`rgba(174,174,174,${a})`,text:'#aeaeae',mate:'#595959',
+    pcol:['#b2b2b2','#696969','#8e8e8e','#464646'],opp:'#383838'}};
 function render3D(cv,V){
   const W=cv.clientWidth,H=cv.clientHeight,dpr=window.devicePixelRatio||1;if(!W||!H)return;
   if(cv.width!==Math.round(W*dpr)||cv.height!==Math.round(H*dpr)){cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);}
@@ -1823,6 +1823,7 @@ $('matchLog').addEventListener('click',e=>{const a=e.target.closest('a.mlink');i
 // Add a release at the top whenever something visible changes (dashboard or widget).
 const CHANGELOG=[
   {v:'1.7',date:'2026-10-14',items:[
+    'Midnight theme is about 25% darker: dimmer greys, panels and maps, text still readable.',
     'Midnight theme fills the last slot of the theme wheel: pure, very dark monotone with no colour, players told apart by shade; the heatmap and 3D map can use it too',
     'Header: the Jay & Kobra headline is gone; the name cards, pictures and timers lead the page',
     'Player pictures are much bigger on the name cards at the top, and a little bigger in tables',
