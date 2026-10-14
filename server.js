@@ -275,6 +275,13 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
+  try { // TEMP result check
+    const ms = Object.values(store.matches), by = {};
+    for (const m of ms) by[m.result] = (by[m.result] || 0) + 1;
+    console.log('result check: ' + JSON.stringify(by));
+    for (const m of ms) if (m.result !== 'Win' && m.result !== 'Loss') console.log('result check odd: ' + JSON.stringify({ at: m.started_at, pl: m.playlist, res: m.result, my: m.my_team, ts: m.team_score, os: m.opponent_score, dur: m.duration_seconds, left: (m.players_left || []).length, copies: m.copies }));
+    for (const m of ms) if ((m.result === 'Win' || m.result === 'Loss') && m.duration_seconds != null && +m.duration_seconds < 280) console.log('result check short: ' + JSON.stringify({ at: m.started_at, res: m.result, ts: m.team_score, os: m.opponent_score, dur: m.duration_seconds, left: (m.players_left || []).length }));
+  } catch (e) { console.log('result check failed ' + e.message); }
   console.log(`rocketdash listening on ${PORT}, data in ${DATA_DIR}`);
   if (process.env.GIPHY_KEY) {
     gifList(GIF_QUERY, 3, 0).then(l => console.log(l.length ? `goal GIFs ready: ${l.length} for "${GIF_QUERY}"` : 'goal GIFs: GIPHY returned nothing (check GIPHY_KEY)'));
