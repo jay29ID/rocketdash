@@ -1200,12 +1200,27 @@ async function postAvatar(body){const r=await fetch('/api/avatar',{method:'POST'
 let LASTGOAL=[];
 function tickSince(){const now=Date.now();
   document.querySelectorAll('#playerTags .since').forEach(el=>{const t=LASTGOAL[+el.dataset.j];
-    if(t==null){el.textContent='No goals yet';return;}
+    if(t==null){sinceSet(el,'No goals yet');return;}
     let s=Math.max(0,Math.floor((now-t)/1000));const d=Math.floor(s/86400);s%=86400;const h=Math.floor(s/3600);s%=3600;const m=Math.floor(s/60);s%=60;
     const pad=n=>String(n).padStart(2,'0');
-    el.textContent=(d?d+'d ':'')+(d||h?pad(h)+'h ':'')+pad(m)+'m '+pad(s)+'s since last goal';
+    sinceSet(el,(d?d+'d ':'')+(d||h?pad(h)+'h ':'')+pad(m)+'m '+pad(s)+'s');
     el.title='Last goal '+new Date(t).toLocaleString();});}
+// Two lines the width of the name card: the time in a green pill, "since last goal" under it
+// in purple digital type stretched to the same width. Sizes are refit only when the length changes.
+function sinceSet(el,txt){
+  if(!el.firstChild||el.firstChild.className!=='sp')el.innerHTML='<b class="sp"></b><i class="sl">since last goal</i>';
+  const sp=el.firstChild,sl=el.lastChild;sp.textContent=txt;
+  if(el._len===txt.length&&el._w===el.clientWidth)return;el._len=txt.length;el._w=el.clientWidth;
+  const fit=(node,max)=>{node.style.fontSize='20px';const cs=getComputedStyle(node),padX=parseFloat(cs.paddingLeft)+parseFloat(cs.paddingRight);
+    const r=document.createRange();r.selectNodeContents(node);const w=r.getBoundingClientRect().width;const room=el.clientWidth-padX;
+    if(w&&room>0)node.style.fontSize=Math.min(max,20*room/w).toFixed(2)+'px';};
+  fit(sp,14);
+  // The caption matches the time's text width, not the pill's.
+  const r=document.createRange();r.selectNodeContents(sp);const tw=r.getBoundingClientRect().width;
+  sl.style.fontSize='20px';sl.style.padding='0';const r2=document.createRange();r2.selectNodeContents(sl);const cw=r2.getBoundingClientRect().width;
+  if(tw&&cw)sl.style.fontSize=(20*tw/cw).toFixed(2)+'px';}
 setInterval(tickSince,1000);
+if(document.fonts)document.fonts.ready.then(()=>{document.querySelectorAll('#playerTags .since').forEach(el=>el._len=null);tickSince();});
 
 async function load(){
   let data=null;
@@ -1764,6 +1779,7 @@ $('matchLog').addEventListener('click',e=>{const a=e.target.closest('a.mlink');i
 // Add a release at the top whenever something visible changes (dashboard or widget).
 const CHANGELOG=[
   {v:'1.7',date:'2026-10-14',items:[
+    'Since-last-goal timer restyled: the width of the name card, time in a green pill, "since last goal" in purple digital type underneath',
     'Played before: opponents we have met before get a badge with how many games and our record against them, in the match log and match details; the widget shows it on its MMR line during a live match',
     'Eleven new panels: shot map with misses and scoring % by zone, demo rivalries, kickoff battles, touch heatmaps, momentum graph, trophy case, post and crossbar hits, MMR by session with streaks, boost at goals against, duo synergy, and hardest shots with a 3D replay button',
     'Widget update: records shots, demos, kickoffs, post hits, momentum and everyone\'s boost when a goal goes in (click Check updates)',
