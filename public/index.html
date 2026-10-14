@@ -229,7 +229,7 @@ form.log button{background:var(--ink);color:var(--surface);border:0;border-radiu
 .map-col svg .dimt{font-family:var(--mono);font-size:9.5px;letter-spacing:.04em;fill:var(--muted)}
 .map-col svg .zone{font-family:var(--mono);font-size:15px;font-weight:500;fill:var(--ink)}
 .map-col svg .dot{cursor:default}
-.map-col svg .dot{transition:opacity .12s}
+.map-col svg .dot{transition:opacity .12s,translate .09s ease-out}
 #fieldMap.linking .dot,#netMap.linking .dot{opacity:.2}
 #fieldMap.linking .dot.lit,#netMap.linking .dot.lit{opacity:1;filter:drop-shadow(0 0 2px #ffd23f) drop-shadow(0 0 5px #ffd23f) drop-shadow(0 0 9px #ffb300)}
 .log-table a.mlink{color:var(--ink);text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px}
@@ -414,6 +414,7 @@ footer{font-size:12px;color:var(--muted);max-width:70ch}
         <div class="seg" role="group" aria-label="Whose goals" id="mapSide">
           <button type="button" data-s="us" aria-pressed="true">Our goals</button>
           <button type="button" data-s="them">Goals against</button>
+          <button type="button" data-s="saves">Our saves</button>
         </div>
         <div class="seg" role="group" aria-label="Scorer" id="mapWho"></div>
       </div>
@@ -432,7 +433,7 @@ footer{font-size:12px;color:var(--muted);max-width:70ch}
       </div>
     </div>
     <div class="map3d-wrap">
-      <div class="map3d-head"><h3>In 3D: every goal from shot to net</h3><button type="button" class="chipbtn" id="map3dReset">Reset view</button></div>
+      <div class="map3d-head"><h3 id="map3dTitle">In 3D: every goal from shot to net</h3><button type="button" class="chipbtn" id="map3dReset">Reset view</button></div>
       <div class="map3d-stage">
       <div class="knob" id="knob" aria-label="Camera controls">
         <svg viewBox="0 0 100 100" aria-hidden="true">

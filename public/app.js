@@ -115,14 +115,18 @@ function makeSample(names){
           car_touches:pois(p.bump),boost_pickups:Math.round(clamp(norm(j?34:29,6),8,70)),loadout:{Car:j?'Fennec':'Octane'},avg_boost:Math.round(clamp(norm(p.boost,5),20,70)),pct_supersonic:+clamp(norm(p.ss,3),3,35).toFixed(1),pct_zero_boost:+clamp(norm(j?9:7,3),1,25).toFixed(1),zero_boost_fixed:true,
           avg_speed:Math.round(clamp(norm(j?1380:1320,60),1100,1600)),max_speed:2300,pct_air:air,pct_wall:wall,pct_ground:+(100-air-wall).toFixed(1),hardest_hit:Math.round(clamp(norm(p.gs+25,15),60,160))};
       });
-      const saves=lineup.flatMap(p=>Array.from({length:p.saves},()=>{const x=clamp(norm(0,1300),-3900,3900),y=-clamp(norm(4200,700),1500,5100);
-        return {player:p.name,team:my,ours:true,epic:rnd()<.12,location:{X:Math.round(f*x),Y:Math.round(f*y),Z:93}};}));
       // Two opponents, and now and then one of them redirects one of our shots on its way in.
       const foes=[pick(['Zephyr','BallChaser99','nxtLvl','Mochi','RocketRalph','ghostpepper']),pick(['Tidal','Vex','sir_flips','Kiwi','B0ost','Nova'])];
       const opp=foes.map(n=>({name:n,team:1-my,tracked:false,platform:'Epic',goals:0,shots:0}));
       for(let g=0;g<them;g++)opp[g%2].goals++;
-      const miss=saves.length+pois(1.6);opp.forEach((o,i)=>o.shots=o.goals+(i?Math.floor(miss/2):Math.ceil(miss/2)));
+      const miss=lineup.reduce((a,p)=>a+p.saves,0)+pois(1.6);opp.forEach((o,i)=>o.shots=o.goals+(i?Math.floor(miss/2):Math.ceil(miss/2)));
       const players=[...lineup,...opp];
+      // Saves: a shot from their side and the touch that kept it out, in world units (they attack -f).
+      const saves=[];lineup.forEach(pl=>{for(let q=0;q<(pl.saves||0);q++){
+        const sh={x:clamp(norm(0,1700),-3600,3600),y:clamp(norm(2300,1100),200,4700),z:clamp(norm(150,150),93,900)},tg={x:clamp(norm(0,420),-800,800),z:clamp(norm(260,150),93,600)},u=.55+rnd()*.4;
+        const w=(x,y,z)=>({X:Math.round(-f*x),Y:Math.round(-f*y),Z:Math.round(z)});
+        saves.push({saver:pl.name,team:my,ours:true,kind:rnd()<.15?'EpicSave':'Save',shooter:pick(foes),shot_from:w(sh.x,sh.y,sh.z),shot_speed:Math.round(clamp(norm(2400,500),1200,4000)),
+          save_at:w(sh.x+(tg.x-sh.x)*u,sh.y+(5120-sh.y)*u,sh.z+(tg.z-sh.z)*u)});}});
       goals.forEach(g=>{if(g.ours&&rnd()<.14){const s=g.shot_from,ix=g.impact.X,f=Math.sign(g.impact.Y)||1;
         g.scorer_from=s;g.last_touch=pick(foes);g.shot_from={X:Math.round(s.X+(ix-s.X)*.6+norm(0,250)),Y:Math.round(s.Y+(f*5120-s.Y)*.6),Z:Math.round(clamp(norm(260,140),60,700))};}
         // Newer recorders save the last 3 touches; give the sample's assisted goals some.
@@ -207,17 +211,23 @@ function toMatch(r){
   });
   const myTeam=num(r.my_team);
   const opp=myTeam==null?[]:rows.filter(x=>x&&num(x.team)!=null&&num(x.team)!==myTeam);
-  // Only matches recorded since saves were tracked have a saves list.
-  const saves=Array.isArray(r.saves)?r.saves.filter(s=>s&&(s.ours!=null?s.ours:myTeam!=null&&num(s.team)===myTeam)).map(s=>{
-    const f=num(s.team)===1?-1:1,l=s.location;
-    return {who:PLAYERS.findIndex(p=>p.name===s.player),epic:!!s.epic,x:co(l,'X')!=null?f*co(l,'X'):null,y:co(l,'Y')!=null?f*co(l,'Y'):null};
+  // Our saves for the defense map, turned so our goal is at the bottom. Only matches recorded since
+  // saves were tracked have a saves list. Rocket League's X is left-handed, so X turns with Y.
+  const defSaves=Array.isArray(r.saves)?r.saves.filter(s=>s&&(s.ours!=null?s.ours:myTeam!=null&&num(s.team)===myTeam)).map(s=>{
+    const f=num(s.team)===1?-1:1,l=s.save_at||s.location,who=s.saver||s.player;
+    return {who:PLAYERS.findIndex(p=>p.name===who),epic:!!s.epic||/epic/i.test(s.kind||''),x:co(l,'X')!=null?-f*co(l,'X'):null,y:co(l,'Y')!=null?f*co(l,'Y'):null};
   }):null;
   // The game sends a second, empty GoalScored for most goals (no goal time, no scorer), so a match
   // stored twice as many goals as were scored. Real goals always have a goal time.
   const rawGoals=(r.goals||[]).filter(Boolean), timed=rawGoals.some(g=>+g.goal_time>0);
   const teamOf={};(r.players||[]).forEach(p=>{if(p&&p.name)teamOf[p.name]=num(p.team);});
   const goals=rawGoals.filter(g=>!timed||+g.goal_time>0).map(g=>{
+    // f turns every goal into one attacking +Y. Rocket League's axes are left-handed (+X is the
+    // shooter's left facing +Y), so X is negated too, or the maps come out mirrored.
     const team=num(g.team), f=team===1?-1:1, i=g.impact;
+    // The game reports about a third of impact points with Y on the wrong end (a team 0 goal at
+    // Y=-5300 shot from Y=+4800), so the impact is turned using its own Y sign, not the team's.
+    const fi=co(i,'Y')?Math.sign(co(i,'Y')):f;
     // Redirect: the game's last touch belongs to the other team from the scorer. Then shot_from is
     // where that player touched it, and scorer_from (newer recorders) is where the scorer hit it.
     const lt=g.last_touch, defl=lt&&g.scorer&&lt!==g.scorer&&teamOf[lt]!=null&&team!=null&&teamOf[lt]!==team?String(lt):null;
@@ -226,12 +236,22 @@ function toMatch(r){
     // Credit the goal to whoever the game credits; the last hit can be an opponent's deflection.
     const who=ours?PLAYERS.findIndex(p=>p.name===(PLAYERS.some(q=>q.name===g.scorer)?g.scorer:g.shot_from_player)):-1;
     return {ours,who,scorer:g.scorer||null,assister:g.assister||null,ko:isKickoffGoal(g),spd:num(g.speed)!=null?Math.round(+g.speed):null,
-      z:co(s,'Z'),x:co(s,'X')!=null?f*co(s,'X'):null,y:co(s,'Y')!=null?f*co(s,'Y'):null,
-      ix:co(i,'X')!=null?f*co(i,'X'):null,iz:co(i,'Z'),
-      ax:co(g.assist_from,'X')!=null?f*co(g.assist_from,'X'):null,ay:co(g.assist_from,'Y')!=null?f*co(g.assist_from,'Y'):null,az:co(g.assist_from,'Z'),
-      touches:Array.isArray(g.touches)?g.touches.filter(t=>t&&t.location).map(t=>({name:t.player?String(t.player):'',team:num(t.team),x:f*co(t.location,'X'),y:f*co(t.location,'Y'),z:co(t.location,'Z')})):null,scoreTeam:team,
-      defl,dx:co(dp,'X')!=null?f*co(dp,'X'):null,dy:co(dp,'Y')!=null?f*co(dp,'Y'):null,dz:co(dp,'Z'),deflOnly:!!defl&&!g.scorer_from};
+      z:co(s,'Z'),x:co(s,'X')!=null?-f*co(s,'X'):null,y:co(s,'Y')!=null?f*co(s,'Y'):null,
+      ix:co(i,'X')!=null?-fi*co(i,'X'):null,iz:co(i,'Z'),
+      ax:co(g.assist_from,'X')!=null?-f*co(g.assist_from,'X'):null,ay:co(g.assist_from,'Y')!=null?f*co(g.assist_from,'Y'):null,az:co(g.assist_from,'Z'),
+      touches:Array.isArray(g.touches)?g.touches.filter(t=>t&&t.location).map(t=>({name:t.player?String(t.player):'',team:num(t.team),x:-f*co(t.location,'X'),y:f*co(t.location,'Y'),z:co(t.location,'Z')})):null,scoreTeam:team,
+      defl,dx:co(dp,'X')!=null?-f*co(dp,'X'):null,dy:co(dp,'Y')!=null?f*co(dp,'Y'):null,dz:co(dp,'Z'),deflOnly:!!defl&&!g.scorer_from};
   });
+  // Saves (recorders from 2026-10-14): turned so the shot travels toward +Y, our goal at the top.
+  // Where it was heading is projected along the shot-to-save line; it's a straight-line estimate.
+  const saves=(r.saves||[]).filter(s=>s&&s.save_at).map(s=>{
+    const team=num(s.team), fs=team===0?-1:1, X=o=>co(o,'X')!=null?-fs*co(o,'X'):null, Y=o=>co(o,'Y')!=null?fs*co(o,'Y'):null;
+    const sv=s.save_at, sh=s.shot_from, o={save:true,ours:s.ours!=null?!!s.ours:(myTeam!=null&&team===myTeam),scorer:s.saver||null,shooter:s.shooter||null,epic:/epic/i.test(s.kind||''),
+      who:PLAYERS.findIndex(p=>p.name===s.saver),spd:toKmh(num(s.shot_speed)),x:X(sh),y:Y(sh),z:co(sh,'Z'),sx:X(sv),sy:Y(sv),sz:co(sv,'Z'),scoreTeam:team,touches:null};
+    if(o.sx==null||o.sy==null)return null;
+    let px=o.sx,pz=o.sz!=null?o.sz:93;
+    if(o.x!=null&&o.y!=null&&o.sy>o.y+50){const t=(5120-o.y)/(o.sy-o.y);px=o.x+t*(o.sx-o.x);pz=(o.z!=null?o.z:93)+t*(pz-(o.z!=null?o.z:93));}
+    o.ix=clamp(px,-800,800);o.iz=clamp(pz,93,600);return o;}).filter(Boolean);
   const dur=num(r.duration_seconds)||300;
   // Lowest and highest goal margin during the match, replayed from the goals in scoring order.
   // Skipped when the goals don't add up to the final score.
@@ -242,7 +262,7 @@ function toMatch(r){
   return {guid:r.match_guid,when:new Date(r.started_at),win:r.result==='Win',us:num(r.team_score)||0,them:num(r.opponent_score)||0,
     ot:!!r.overtime,dur,swing,arena:arenaName(r.arena),playlist:r.playlist||'Unknown playlist',lines,
     first:goals.length?(goals[0].ours?'us':'them'):null,goals,secs:matchSecs(r),deficit:maxDeficit(goals),lead:maxDeficit(goals,-1),
-    ourGoals:goals.filter(g=>g.ours),theirGoals:goals.filter(g=>!g.ours),saves,
+    ourGoals:goals.filter(g=>g.ours),theirGoals:goals.filter(g=>!g.ours),ourSaves:saves.filter(g=>g.ours),defSaves,
     oppShots:opp.length?opp.reduce((a,x)=>a+(num(x.shots)||0),0):null,oppGoals:opp.reduce((a,x)=>a+(num(x.goals)||0),0),
     replay:!!r.replay_created,left,opps,ff:!!r.ff,
     spectators:Array.isArray(r.spectators)?r.spectators.map(String):null,
@@ -504,14 +524,37 @@ function rlBall(x,y,r,ring,rw,id,tip,gid){
     `<circle r="1" fill="none" stroke="${ring}" stroke-width="${rw}" vector-effect="non-scaling-stroke"/></g>`;
 }
 function renderMaps(list){
-  let goals=list.flatMap(m=>(mapSide==='us'?m.ourGoals:m.theirGoals).map(g=>({...g,m})));
-  if(mapSide==='us'&&mapWho!=='all')goals=goals.filter(g=>g.who===+mapWho);
+  const SV=mapSide==='saves';
+  let goals=list.flatMap(m=>(SV?m.ourSaves:mapSide==='us'?m.ourGoals:m.theirGoals).map(g=>({...g,m})));
+  if(mapSide!=='them'&&mapWho!=='all')goals=goals.filter(g=>g.who===+mapWho);
   goals.forEach((g,k)=>g.k=k);
-  const shots=goals.filter(g=>g.x!=null&&g.y!=null), hits=goals.filter(g=>g.ix!=null&&g.iz!=null);
-  $('mapWho').style.visibility=mapSide==='us'&&PLAYERS.length>1?'visible':'hidden';
+  // The field shows where each shot came from; for saves, where we kept it out.
+  const fx=g=>SV?g.sx:g.x,fy=g=>SV?g.sy:g.y;
+  const shots=goals.filter(g=>fx(g)!=null&&fy(g)!=null), hits=goals.filter(g=>g.ix!=null&&g.iz!=null);
+  $('mapWho').style.visibility=mapSide!=='them'&&PLAYERS.length>1?'visible':'hidden';
   const col=g=>g.who>=0?PLAYERS[g.who].color:'var(--opp)';
-  const tip=g=>`${g.who>=0?PLAYERS[g.who].short:mapSide==='us'?'Us':'Opponent'}${g.assister?' (assist '+(PLAYERS.find(q=>q.name===g.assister)?.short||g.assister)+')':''}${g.defl?' · redirected by '+g.defl:''}${g.spd!=null?' · '+fSpd(g.spd):''} · ${g.m.us}–${g.m.them} ${g.m.win?'win':'loss'}, ${fmtDate(g.m.when)}`;
-  $('fieldMap').innerHTML=fieldMap(shots,'goal',tip,mapSide==='us'?'Their goal':'Our goal',mapSide==='us'?'Our goal':'Their goal');
+  const tip=g=>SV?`${g.who>=0?PLAYERS[g.who].short:'Us'} ${g.epic?'epic save':'save'}${g.shooter?' · shot by '+g.shooter:''}${g.spd!=null?' · '+fSpd(g.spd):''} · ${g.m.us}–${g.m.them} ${g.m.win?'win':'loss'}, ${fmtDate(g.m.when)}`:`${g.who>=0?PLAYERS[g.who].short:mapSide==='us'?'Us':'Opponent'}${g.assister?' (assist '+(PLAYERS.find(q=>q.name===g.assister)?.short||g.assister)+')':''}${g.defl?' · redirected by '+g.defl:''}${g.spd!=null?' · '+fSpd(g.spd):''} · ${g.m.us}–${g.m.them} ${g.m.win?'win':'loss'}, ${fmtDate(g.m.when)}`;
+  // Whole pitch, their goal at the top. Goal lines at Y=±5120, nets 880 deep, corners cut 1152.
+  const W=480,Y0=-6000,Y1=6000,H=Math.round(W*(Y1-Y0)/8192);
+  const sx=x=>(x+4096)/8192*W,sy=y=>(Y1-y)/(Y1-Y0)*H,su=u=>u/8192*W;
+  const cell=512,bins={};
+  shots.forEach(g=>{const c=Math.floor((clamp(fx(g),-4096,4095)+4096)/cell),r=Math.floor((clamp(fy(g),-5120,5119)+5120)/cell);const k=c+','+r;bins[k]=(bins[k]||0)+1;});
+  const bmax=Math.max(1,...Object.values(bins)),ch=1152;
+  const ends=s=>{const g=5120*s,c=(5120-ch)*s,n=6000*s;return `L${sx(-4096)},${sy(c)} L${sx(-4096+ch)},${sy(g)} L${sx(-893)},${sy(g)} L${sx(-893)},${sy(n)} L${sx(893)},${sy(n)} L${sx(893)},${sy(g)} L${sx(4096-ch)},${sy(g)} L${sx(4096)},${sy(c)}`;};
+  const outline=`M${sx(-4096)},${sy(0)} ${ends(1)} L${sx(4096)},${sy(-(5120-ch))} L${sx(4096-ch)},${sy(-5120)} L${sx(893)},${sy(-5120)} L${sx(893)},${sy(-6000)} L${sx(-893)},${sy(-6000)} L${sx(-893)},${sy(-5120)} L${sx(-4096+ch)},${sy(-5120)} L${sx(-4096)},${sy(-(5120-ch))} Z`;
+  let f=`<path d="${outline}" fill="var(--pitch)"/>`;
+  Object.entries(bins).forEach(([k,n])=>{const [c,r]=k.split(',').map(Number);
+    f+=`<rect x="${sx(c*cell-4096)+.5}" y="${sy(-5120+(r+1)*cell)+.5}" width="${su(cell)-1}" height="${su(cell)-1}" rx="2" fill="${heatColor(n/bmax)}" opacity=".85"><title>${n} ${SV?'save':'goal'}${n>1?'s':''} ${SV?'made':'from'} here</title></rect>`;});
+  const ln='stroke="var(--pitch-line)" stroke-width="1.5" fill="none"';
+  f+=`<path d="${outline}" ${ln}/>`;
+  f+=`<line x1="${sx(-4096)}" x2="${sx(4096)}" y1="${sy(0)}" y2="${sy(0)}" ${ln}/><circle cx="${sx(0)}" cy="${sy(0)}" r="${su(1000)}" ${ln}/>`;
+  f+=`<rect x="${sx(-1800)}" y="${sy(5120)}" width="${su(3600)}" height="${su(1100)}" ${ln}/><rect x="${sx(-1800)}" y="${sy(-4020)}" width="${su(3600)}" height="${su(1100)}" ${ln}/>`;
+  f+=`<text x="${W/2}" y="${sy(6000)-6}" text-anchor="middle">${mapSide==='us'?'Their goal':'Our goal'}</text><text x="${W/2}" y="${sy(-6000)+14}" text-anchor="middle">${mapSide==='us'?'Our goal':'Their goal'}</text>`;
+  // Saves: a faint line back to where the shot came from.
+  if(SV)shots.forEach(g=>{if(g.x!=null&&g.y!=null)f+=`<line x1="${sx(clamp(g.x,-4096,4096))}" y1="${sy(clamp(g.y,-5120,5120))}" x2="${sx(clamp(g.sx,-4096,4096))}" y2="${sy(clamp(g.sy,-5120,5120))}" stroke="var(--opp)" stroke-width="1" stroke-dasharray="3 3" opacity=".55"/><circle cx="${sx(clamp(g.x,-4096,4096))}" cy="${sy(clamp(g.y,-5120,5120))}" r="2" fill="var(--opp)" opacity=".7"/>`;});
+  // Dots stay neutral here so they don't fight the blue-to-red heat; the net view carries who scored.
+  shots.forEach(g=>{f+=rlBall(sx(clamp(fx(g),-4096,4096)),sy(clamp(fy(g),-5120,5120)),4.5,SV?col(g):'#0b1017',SV?1.6:1,'rlbF',tip(g),g.k);});
+  $('fieldMap').innerHTML=`<svg viewBox="0 -18 ${W} ${H+36}" role="img" aria-label="Top-down field with ${shots.length} ${SV?'save':'shot'} locations">${rlBallDefs('rlbF')}${f}</svg>`;
   // Front elevation of the goal, drawn like a technical drawing. Mouth 1786 x 642 uu, 880 deep (1 uu = 1 cm).
   const NW=460,ml=30,mr=58,mt=46,mb=66,iw=NW-ml-mr,ih=Math.round(iw*642/1786),NH=mt+ih+mb;
   const nx=x=>ml+(clamp(x,-893,893)+893)/1786*iw,nz=z=>mt+(642-clamp(z,0,642))/642*ih;
@@ -543,17 +586,19 @@ function renderMaps(list){
   hits.forEach(g=>{n+=rlBall(nx(g.ix),nz(g.iz),6,col(g),2.2,'rlbN',tip(g),g.k);});
   n+=labels.join('');
   $('netMap').innerHTML=`<svg viewBox="0 0 ${NW} ${NH}" role="img" aria-label="Goal mouth with ${hits.length} impact points">${rlBallDefs('rlbN')}${n}</svg>`;
-  $('fieldTitle').textContent=mapSide==='us'?'Where our goals were shot from':'Where their goals were shot from';
-  $('netTitle').textContent=mapSide==='us'?'Where our goals hit the net':'Where their goals beat us';
-  $('mapLegend').innerHTML=mapSide==='us'?PLAYERS.filter((p,j)=>mapWho==='all'||+mapWho===j).map(p=>`<span><i style="background:${p.color};height:8px;width:8px"></i>${esc(p.name)}</span>`).join(''):'<span><i style="background:var(--opp);height:8px;width:8px"></i>Opponents</span>';
+  $('fieldTitle').textContent=SV?'Where we made our saves':mapSide==='us'?'Where our goals were shot from':'Where their goals were shot from';
+  $('netTitle').textContent=SV?'Where the saved shots were heading':mapSide==='us'?'Where our goals hit the net':'Where their goals beat us';
+  $('mapLegend').innerHTML=mapSide!=='them'?PLAYERS.filter((p,j)=>mapWho==='all'||+mapWho===j).map(p=>`<span><i style="background:${p.color};height:8px;width:8px"></i>${esc(p.name)}</span>`).join(''):'<span><i style="background:var(--opp);height:8px;width:8px"></i>Opponents</span>';
   const top=Object.entries(zones).sort((a,b)=>b[1]-a[1])[0];
   const zname=k=>{const [c,r]=k.split(',').map(Number);return ['low','middle','high'][r]+' '+['left','centre','right'][c];};
   const sp=goals.filter(g=>g.spd!=null),avgSpd=sp.length?Math.round(sp.reduce((a,g)=>a+g.spd,0)/sp.length):null;
   const missing=goals.length-hits.length;
-  $('mapNote').textContent=!goals.length?'No goals in this period.':
+  $('mapNote').textContent=SV?(!goals.length?'No saves with positions yet. The widget records them from its next update on.':`${goals.length} saves${avgSpd!=null?', shots averaging '+fSpd(avgSpd):''}.`+(top?` Most were heading ${zname(top[0])} (${Math.round(100*top[1]/hits.length)}%).`:'')+' Dashed lines lead back to the shot. Where a shot was heading is estimated from the shot and the save in a straight line.'):
+    !goals.length?'No goals in this period.':
     `${goals.length} goals${avgSpd!=null?', average '+fSpd(avgSpd):''}.`+(top?` Most went in ${zname(top[0])} (${Math.round(100*top[1]/hits.length)}%).`:'')+
     (missing?` ${missing} goal${missing>1?'s were':' was'} recorded before positions were saved.`:'')+' The net is drawn as you would see it facing the goal.';
-  G3.goals=goals.filter(g=>g.x!=null&&g.y!=null&&g.ix!=null&&g.iz!=null);G3.side=mapSide;draw3D();
+  $('map3dTitle').textContent=SV?'In 3D: every save, from the shot to the save':'In 3D: every goal from shot to net';
+  G3.goals=goals.filter(g=>(SV?g.sx!=null:g.x!=null&&g.y!=null)&&g.ix!=null&&g.iz!=null);G3.side=mapSide;draw3D();
 }
 
 // ---------- 3D goal map ----------
@@ -568,6 +613,8 @@ function bez(a,b,n){const d=Math.hypot(b[0]-a[0],b[1]-a[1]),lift=Math.max(a[2],b
 // The ball's touches before a goal, oldest first: the last 3 touches when the recorder saved them,
 // otherwise assist, the scorer's shot and the redirect where those are known.
 function waypoints(g){
+  if(g.save){const w=[];if(g.x!=null&&g.y!=null)w.push({p:[g.x,g.y,g.z!=null?g.z:93],name:g.shooter,kind:'opp',other:false,label:'SHOT · '+String(g.shooter||'?').toUpperCase()});
+    w.push({p:[g.sx,g.sy,g.sz!=null?g.sz:93],name:g.scorer,kind:g.who>=0?'p'+g.who:'mate',other:false,save:true,label:(g.epic?'EPIC SAVE · ':'SAVE · ')+String(g.who>=0?PLAYERS[g.who].short:g.scorer||'?').toUpperCase()});return w;}
   const kind=(name,team)=>{const j=PLAYERS.findIndex(p=>p.name===name);return j>=0?'p'+j:team!=null&&team===g.scoreTeam?'mate':'opp';};
   if(g.touches&&g.touches.length)return g.touches.filter(t=>t.x!=null&&t.y!=null).map(t=>({p:[t.x,t.y,t.z!=null?t.z:93],name:t.name,kind:kind(t.name,t.team),other:t.team!=null&&g.scoreTeam!=null&&t.team!==g.scoreTeam}));
   const w=[];
@@ -579,7 +626,8 @@ function waypoints(g){
 // Points from the first touch to the net, 16 per leg. pts.marks: each touch's point index;
 // pts.kink: the redirect (a last touch by the other team), if any.
 function arcOf(g){
-  const w=waypoints(g),b=[g.ix,5120,g.iz];if(!w.length)w.push({p:[g.x,g.y,93],name:g.scorer,kind:'mate'});
+  // A save ends with the ball knocked back out the way it came.
+  const w=waypoints(g),b=g.save?(g.x!=null?[g.sx+(g.x-g.sx)*.35,g.sy+(g.y-g.sy)*.35,Math.max(93,(g.sz||93)+350)]:[g.sx*.85,g.sy-1400,Math.max(93,(g.sz||93)+300)]):[g.ix,5120,g.iz];if(!w.length)w.push({p:[g.x,g.y,93],name:g.scorer,kind:'mate'});
   let pts=[];const marks=[];
   w.forEach((t,i)=>{marks.push({i:pts.length?pts.length-1:0,...t});const nx=i+1<w.length?w[i+1].p:b,leg=bez(t.p,nx,16);pts=pts.concat(pts.length?leg.slice(1):leg);});
   pts.marks=marks;const last=w[w.length-1];if(last.other)pts.kink=marks[marks.length-1].i;
@@ -638,7 +686,10 @@ function render3D(cv,V){
     if(!inA){c.save();c.shadowColor='#5fe1ff';c.shadowBlur=18;ball(h[0],h[1],Math.max(4,F*92/h[2]*.75),col);c.restore();}
     // Each touch: a ring and the player's name once the ball has reached it.
     pts.marks.forEach((m,mi)=>{if(m.i===kk||p*Lx<m.i-0.01)return;const q=P(pts[m.i]),cc=kc(m.kind);c.strokeStyle=cc;c.lineWidth=1.3;c.beginPath();c.arc(q[0],q[1],5,0,7);c.stroke();
-      if(pts.marks.length>1||V.hud){c.font='bold 10px '+(tok('--mono')||'monospace');c.textAlign='left';c.fillStyle=cc;c.fillText(`${mi+1} · ${(PLAYERS.find(x=>x.name===m.name)?.short||m.name||'?').toUpperCase()}`,q[0]+8,q[1]-8);}});
+      if(pts.marks.length>1||V.hud){c.font='bold 10px '+(tok('--mono')||'monospace');c.textAlign='left';c.fillStyle=cc;c.fillText(m.label||`${mi+1} · ${(PLAYERS.find(x=>x.name===m.name)?.short||m.name||'?').toUpperCase()}`,q[0]+8,q[1]-8);}});
+    // Saves: a dashed line from the save to where the shot was heading, with a cross on the goal line.
+    if(g.save){const sm=pts.marks.find(m=>m.save);if(sm&&p*Lx>=sm.i){const a=P(pts[sm.i]),e=P([g.ix,5120,g.iz]);c.setLineDash([3,4]);c.strokeStyle=REDIR;c.globalAlpha=.8;c.lineWidth=1.2;c.beginPath();c.moveTo(a[0],a[1]);c.lineTo(e[0],e[1]);c.stroke();c.setLineDash([]);
+      c.beginPath();c.moveTo(e[0]-4,e[1]-4);c.lineTo(e[0]+4,e[1]+4);c.moveTo(e[0]+4,e[1]-4);c.lineTo(e[0]-4,e[1]+4);c.stroke();c.globalAlpha=1;if(V.hud){c.font='bold 10px '+(tok('--mono')||'monospace');c.textAlign='left';c.fillStyle=REDIR;c.textAlign='center';c.fillText('WAS HEADING HERE',e[0],e[1]+16);}}}
     if(kk!=null&&!inA&&p*Lx>=kk){
       // Redirect: a diamond and a pulse where the other team touched it, with their name.
       const q=P(pts[kk]),age=Math.min(1,(p*Lx-kk)/8),rr=6+age*14;c.strokeStyle=REDIR;c.lineWidth=1.6;
@@ -649,8 +700,8 @@ function render3D(cv,V){
     }
     if(!inA&&p>=1){const e=P(pts[Lx]),q=(el-dur)/900;c.strokeStyle=col;c.globalAlpha=1-q;c.lineWidth=2;c.beginPath();c.arc(e[0],e[1],6+q*28,0,7);c.stroke();c.globalAlpha=1;}
     if(V.hud){
-      const kmh=g.spd,d=Math.hypot(g.ix-g.x,5120-g.y)/100,lbl=g.who>=0?PLAYERS[g.who].short.toUpperCase():(V.side==='us'?'US':'OPPONENT');
-      const rows=[[`GOAL`,lbl],...(g.assister?[['ASSIST',(PLAYERS.find(q=>q.name===g.assister)?.short||g.assister).toUpperCase()]]:[]),...(g.defl?[['REDIRECT',g.defl.toUpperCase()]]:[]),['SPEED',kmh!=null?fSpd(kmh).toUpperCase():'—'],['RANGE',fLen(d).toUpperCase()],['IMPACT H',IMP()?(g.iz/100*3.28084).toFixed(1)+' FT':(g.iz/100).toFixed(2)+' M'],['T',(Math.min(el,dur)/1000).toFixed(2)+' S']];
+      const kmh=g.spd,d=g.save?0:Math.hypot(g.ix-g.x,5120-g.y)/100,lbl=g.who>=0?PLAYERS[g.who].short.toUpperCase():(V.side==='them'?'OPPONENT':'US');
+      const rows=g.save?[[g.epic?'EPIC SAVE':'SAVE',lbl],['SHOT BY',String(g.shooter||'—').toUpperCase()],['SHOT SPD',kmh!=null?fSpd(kmh).toUpperCase():'—'],['FROM LINE',fLen(Math.max(0,5120-g.sy)/100).toUpperCase()],['SAVE H',IMP()?((g.sz||93)/100*3.28084).toFixed(1)+' FT':((g.sz||93)/100).toFixed(2)+' M'],['T',(Math.min(el,dur)/1000).toFixed(2)+' S']]:[[`GOAL`,lbl],...(g.assister?[['ASSIST',(PLAYERS.find(q=>q.name===g.assister)?.short||g.assister).toUpperCase()]]:[]),...(g.defl?[['REDIRECT',g.defl.toUpperCase()]]:[]),['SPEED',kmh!=null?fSpd(kmh).toUpperCase():'—'],['RANGE',fLen(d).toUpperCase()],['IMPACT H',IMP()?(g.iz/100*3.28084).toFixed(1)+' FT':(g.iz/100).toFixed(2)+' M'],['T',(Math.min(el,dur)/1000).toFixed(2)+' S']];
       c.textAlign='left';c.font='10px '+(tok('--mono')||'monospace');
       rows.forEach(([k,v],i)=>{c.fillStyle='rgba(95,225,255,.6)';c.fillText(k,12,20+i*14);c.fillStyle='#d8f6ff';c.fillText(v,78,20+i*14);});
       c.strokeStyle='rgba(95,225,255,.7)';c.lineWidth=1.5;const br=(x,y,dx,dy)=>{c.beginPath();c.moveTo(x+dx*12,y);c.lineTo(x,y);c.lineTo(x,y+dy*12);c.stroke();};
@@ -662,7 +713,8 @@ function render3D(cv,V){
 }
 function draw3D(){const cv=$('map3d');if(!cv)return;
   render3D(cv,{goals:G3.goals,side:G3.side,T:G3.T,D:11500,F:Math.min(cv.clientWidth,cv.clientHeight*1.6)*1.45*G3.zoom,yaw:G3.yaw,pitch:G3.pitch,focus:G3.focus,ft:G3.ft});
-  $('map3dNote').textContent=G3.goals.length?`${G3.goals.length} goals with a shot and net position. Drag or use the knob to turn it, arrow keys to move, scroll to zoom. Hover a ball on the flat maps for a replay.`:'No goals with positions in this period.';
+  const nm=G3.side==='saves'?'saves with a position':'goals with a shot and net position';
+  $('map3dNote').textContent=G3.goals.length?`${G3.goals.length} ${nm}. Drag or use the knob to turn it, arrow keys to move, scroll to zoom. Hover a ball on the flat maps for a replay.`:`No ${G3.side==='saves'?'saves':'goals'} with positions in this period.`;
   syncKnob();
 }
 // The knob: its ring turns with the camera (N = looking at the attacked goal), the needle shows tilt.
@@ -672,8 +724,8 @@ function nudge3D(f){G3.auto=false;f();G3.pitch=Math.max(.05,Math.min(1.45,G3.pit
   G3.T[0]=Math.max(-4096,Math.min(4096,G3.T[0]));G3.T[1]=Math.max(-5120,Math.min(6000,G3.T[1]));draw3D();}
 function drawReplay(){
   const cv=$('replayCv'),g=G3.goals.find(x=>x.k===RP.k);if(!g)return;
-  const wp=waypoints(g),xs=[g.ix].concat(wp.map(t=>t.p[0])),ys=[5120].concat(wp.map(t=>t.p[1]));
-  const mid=[(Math.min(...xs)+Math.max(...xs))/2,(Math.min(...ys)+Math.max(...ys))/2,300],dx=g.ix-g.x,dy=5120-g.y,span=Math.hypot(Math.max(...xs)-Math.min(...xs),Math.max(...ys)-Math.min(...ys))+1800;
+  const wp=waypoints(g),xs=[g.ix].concat(wp.map(t=>t.p[0])),ys=[5120].concat(wp.map(t=>t.p[1])),ox=g.x!=null?g.x:wp[0].p[0],oy=g.y!=null?g.y:wp[0].p[1]-1500;
+  const mid=[(Math.min(...xs)+Math.max(...xs))/2,(Math.min(...ys)+Math.max(...ys))/2,300],dx=g.ix-ox,dy=5120-oy,span=Math.hypot(Math.max(...xs)-Math.min(...xs),Math.max(...ys)-Math.min(...ys))+1800;
   const yaw=Math.atan2(dx,dy)+0.75+Math.sin((performance.now()-RP.t)/2500)*.12;
   render3D(cv,{hud:true,goals:[g],side:G3.side,T:mid,D:span*1.25,F:cv.clientWidth*1.05,yaw,pitch:.38,focus:g.k,ft:RP.t});
 }
@@ -723,7 +775,7 @@ function loop3D(){if(looping)return;looping=true;const step=()=>{if(RP.k==null&&
 
 // ---------- defense ----------
 function renderDefense(list){
-  const sl=list.filter(m=>m.saves),saves=sl.flatMap(m=>m.saves.map(s=>({...s,m}))),pts=saves.filter(s=>s.x!=null&&s.y!=null);
+  const sl=list.filter(m=>m.defSaves),saves=sl.flatMap(m=>m.defSaves.map(s=>({...s,m}))),pts=saves.filter(s=>s.x!=null&&s.y!=null);
   const tip=s=>`${s.who>=0?PLAYERS[s.who].short:'Us'}${s.epic?' · epic save':''} · ${s.m.us}–${s.m.them} ${s.m.win?'win':'loss'}, ${fmtDate(s.m.when)}`;
   $('saveMap').innerHTML=fieldMap(pts,'save',tip,'Their goal','Our goal');
   const ol=list.filter(m=>m.oppShots!=null),shots=ol.reduce((a,m)=>a+m.oppShots,0),goals=ol.reduce((a,m)=>a+m.oppGoals,0);
@@ -1070,22 +1122,48 @@ $('matchClose').addEventListener('click',()=>$('matchDlg').close());
 $('matchDlg').addEventListener('click',e=>{if(e.target===$('matchDlg'))$('matchDlg').close();});
 $('matchDlg').addEventListener('close',()=>{if(location.hash.startsWith('#m-'))history.replaceState(null,'',location.pathname+location.search);});
 $('matchLog').addEventListener('click',e=>{const a=e.target.closest('a.mlink');if(!a)return;e.preventDefault();history.replaceState(null,'',a.getAttribute('href'));matchFromHash();});
-// Hovering a ball on one goal map lights up the same goal on the other.
-['fieldMap','netMap'].forEach(id=>{
-  $(id).addEventListener('mouseover',e=>{const d=e.target.closest('.dot');if(!d)return;const k=d.dataset.g;
-    document.querySelectorAll('#fieldMap,#netMap').forEach(el=>el.classList.add('linking'));
-    document.querySelectorAll(`#fieldMap .dot[data-g="${k}"],#netMap .dot[data-g="${k}"]`).forEach(el=>{el.classList.add('lit');if(el!==d)el.parentNode.appendChild(el);});
-    if(matchMedia('(hover: hover)').matches)showReplay(k,e);});
-  $(id).addEventListener('mousemove',e=>{if(RP.k!=null&&e.target.closest('.dot'))placeReplay(e);});
-  $(id).addEventListener('mouseout',e=>{const d=e.target.closest('.dot');if(!d)return;const to=e.relatedTarget&&e.relatedTarget.closest?e.relatedTarget.closest('.dot'):null;if(to===d)return;
-    document.querySelectorAll('#fieldMap,#netMap').forEach(el=>el.classList.remove('linking'));
-    document.querySelectorAll('.dot.lit').forEach(el=>el.classList.remove('lit'));hideReplay();});
-});
+// Hovering a ball on one goal map lights up the same goal on the other. The pointer is magnetic:
+// the nearest ball within reach snaps on and leans toward the cursor, so small balls are easy to catch.
+(function(){
+  const SNAP=26,LET_GO=38,PULL=.35,MAXPULL=7;let cur=null;
+  const centres=svg=>{if(svg._c)return svg._c;svg._c=[...svg.querySelectorAll('.dot')].map(d=>{const m=/translate\(([-\d.]+) ([-\d.]+)\)/.exec(d.getAttribute('transform')||'');return m?{d,x:+m[1],y:+m[2]}:null;}).filter(Boolean);return svg._c;};
+  const release=()=>{if(!cur)return;cur.d.style.translate='';cur=null;
+    document.querySelectorAll('#fieldMap,#netMap').forEach(el=>{el.classList.remove('linking');el.style.cursor='';});
+    document.querySelectorAll('.dot.lit').forEach(el=>el.classList.remove('lit'));hideReplay();};
+  const grab=(d,host,e)=>{const k=d.dataset.g;cur={d,k};
+    document.querySelectorAll('#fieldMap,#netMap').forEach(el=>el.classList.add('linking'));host.style.cursor='pointer';
+    document.querySelectorAll(`#fieldMap .dot[data-g="${k}"],#netMap .dot[data-g="${k}"]`).forEach(el=>{el.classList.add('lit');el.parentNode.appendChild(el);});
+    if(matchMedia('(hover: hover)').matches)showReplay(k,e);};
+  ['fieldMap','netMap'].forEach(id=>{const host=$(id);
+    host.addEventListener('pointermove',e=>{if(e.pointerType!=='mouse')return;const svg=host.querySelector('svg');if(!svg)return;
+      const M=svg.getScreenCTM();if(!M)return;const sc=Math.hypot(M.a,M.b)||1;
+      let best=null,bd=1e9;for(const c of centres(svg)){const dx=M.a*c.x+M.c*c.y+M.e-e.clientX,dy=M.b*c.x+M.d*c.y+M.f-e.clientY,dd=dx*dx+dy*dy;if(dd<bd){bd=dd;best=c;}}
+      bd=Math.sqrt(bd);
+      if(cur&&cur.d.ownerSVGElement===svg){const c=centres(svg).find(x=>x.d===cur.d);
+        // Stay on the current ball until the cursor leaves its reach or is clearly closer to another.
+        const cd=c?Math.hypot(M.a*c.x+M.c*c.y+M.e-e.clientX,M.b*c.x+M.d*c.y+M.f-e.clientY):1e9;
+        if(cd<=LET_GO&&!(best&&best.d!==cur.d&&bd<cd*.6)){best=c;bd=cd;}}
+      if(!best||bd>(cur?LET_GO:SNAP)){release();return;}
+      if(!cur||cur.d!==best.d){release();grab(best.d,host,e);}else if(RP.k!=null)placeReplay(e);
+      // Lean the ball toward the cursor, in the SVG's own units.
+      const px=(e.clientX-(M.a*best.x+M.c*best.y+M.e))*PULL,py=(e.clientY-(M.b*best.x+M.d*best.y+M.f))*PULL,l=Math.hypot(px,py),k=l>MAXPULL?MAXPULL/l:1;
+      best.d.style.translate=`${(px*k/sc).toFixed(2)}px ${(py*k/sc).toFixed(2)}px`;});
+    host.addEventListener('pointerleave',release);
+  });
+})();
 
 // ---------- version and update log ----------
 // Add a release at the top whenever something visible changes (dashboard or widget).
 const CHANGELOG=[
   {v:'1.6',date:'2026-10-14',items:[
+    'Up to four players: pick the names you track from the widget\'s Players... menu (it asks the first time)',
+    'Defense panel: where our saves happen, opponent shots per game and their shooting %',
+    'Counter goals in Playstyle, and win rate after going down or up by one to three goals',
+    'Match length now comes from the match clock, so time-based stats use the real length of each game',
+    'Run your own copy of the dashboard on a Windows PC with dashboard.bat',
+    'Goal map balls are magnetic: the nearest one snaps on as your mouse gets close',
+    'Our saves on the goal map: where we saved each shot, where it came from, where it was heading, with a 3D replay. Recorded from the next widget update on',
+    'Fixed the goal maps and 3D replays being mirrored left to right',
     'Arena background: a drawn pitch with boost pads over a random wallpaper on each visit',
     'Goal map pins are now little Rocket League balls',
     'Loading screen while your stats load, instead of briefly showing sample data',
