@@ -614,6 +614,7 @@ function render3D(cv,V){
   const ball=(x,y,r,col)=>{const gr=c.createRadialGradient(x-r*.35,y-r*.4,r*.1,x,y,r);gr.addColorStop(0,'#f4f6f8');gr.addColorStop(.6,'#c3cad2');gr.addColorStop(1,'#7d8692');
     c.fillStyle=gr;c.beginPath();c.arc(x,y,r,0,7);c.fill();c.strokeStyle=col;c.lineWidth=1.5;c.stroke();};
   const list=V.goals.map(g=>{const pts=arcOf(g);return {g,pts,depth:P(pts[pts.length>>1])[2]};}).sort((p,q)=>q.depth-p.depth);
+  if(!V.hud){cv._P=P;cv._list=list;}   // kept for hover hit-testing on the big view
   const fk=V.focus;
   list.forEach(({g,pts})=>{if(g.k===fk)return;const col=g.who>=0?pcol[g.who]:opp;
     c.globalAlpha=fk==null?.55:.1;c.strokeStyle=col;c.lineWidth=1.3;path(pts);c.stroke();
@@ -668,7 +669,7 @@ function render3D(cv,V){
 function draw3D(){const cv=$('map3d');if(!cv)return;
   render3D(cv,{goals:G3.goals,side:G3.side,T:G3.T,D:11500,F:Math.min(cv.clientWidth,cv.clientHeight*1.6)*1.45*G3.zoom,yaw:G3.yaw,pitch:G3.pitch,focus:G3.focus,ft:G3.ft});
   const nm=G3.side==='saves'?'saves with a position':'goals with a shot and net position';
-  $('map3dNote').textContent=G3.goals.length?`${G3.goals.length} ${nm}. Drag or use the knob to turn it, arrow keys to move, scroll to zoom. Hover a ball on the flat maps for a replay.`+(G3.pad&&G3.pad()?' Controller: left stick moves, right stick turns, triggers zoom, A or RB next goal, LB previous, B stops, Y resets.':''):`No ${G3.side==='saves'?'saves':'goals'} with positions in this period.`;
+  $('map3dNote').textContent=G3.goals.length?`${G3.goals.length} ${nm}. Drag or use the knob to turn it, arrow keys to move, scroll to zoom. Hover a goal here or a ball on the flat maps for a replay.`+(G3.pad&&G3.pad()?' Controller: left stick moves, right stick turns, triggers zoom, A or RB next goal, LB previous, B stops, Y resets.':''):`No ${G3.side==='saves'?'saves':'goals'} with positions in this period.`;
   syncKnob();
 }
 // The knob: its ring turns with the camera (N = looking at the attacked goal), the needle shows tilt.
@@ -701,6 +702,17 @@ function loop3D(){if(looping)return;looping=true;const step=()=>{if(RP.k==null&&
   cv.addEventListener('pointerdown',e=>{drag={x:e.clientX,y:e.clientY,yaw:G3.yaw,pitch:G3.pitch};G3.auto=false;cv.setPointerCapture(e.pointerId);});
   cv.addEventListener('pointermove',e=>{if(!drag)return;G3.yaw=drag.yaw-(e.clientX-drag.x)*.008;G3.pitch=Math.max(.05,Math.min(1.45,drag.pitch+(e.clientY-drag.y)*.006));draw3D();});
   ['pointerup','pointercancel'].forEach(t=>cv.addEventListener(t,()=>{drag=null;}));
+  // Hovering a goal's path or ball in the big view plays its replay, with the same magnetic catch.
+  let hov=null;
+  cv.addEventListener('pointermove',e=>{if(drag||e.pointerType!=='mouse'||!cv._P||!cv._list)return;
+    const rc=cv.getBoundingClientRect(),mx=e.clientX-rc.left,my=e.clientY-rc.top;let best=null,bd=1e9;
+    for(const {g,pts} of cv._list){for(let i=0;i<pts.length;i+=3){const q=cv._P(pts[i]),d=Math.hypot(q[0]-mx,q[1]-my);if(d<bd){bd=d;best=g;}}
+      const q=cv._P(pts[pts.length-1]),d=Math.hypot(q[0]-mx,q[1]-my)*.7;if(d<bd){bd=d;best=g;}}
+    if(hov!=null&&best&&best.k!==hov){const h=cv._list.find(x=>x.g.k===hov);if(h){let hd=1e9;h.pts.forEach(p=>{const q=cv._P(p);hd=Math.min(hd,Math.hypot(q[0]-mx,q[1]-my));});if(hd<=22&&bd>hd*.6){best=h.g;bd=hd;}}}
+    if(!best||bd>(hov!=null?22:14)){if(hov!=null){hov=null;cv.style.cursor='';hideReplay();}return;}
+    if(hov!==best.k){hov=best.k;cv.style.cursor='pointer';RP.k=null;}
+    showReplay(best.k,e);});
+  cv.addEventListener('pointerleave',()=>{if(hov!=null){hov=null;cv.style.cursor='';hideReplay();}});
   cv.addEventListener('wheel',e=>{e.preventDefault();G3.auto=false;G3.zoom=Math.max(.6,Math.min(3,G3.zoom*Math.exp(-e.deltaY*.0015)));draw3D();},{passive:false});
   $('map3dReset').addEventListener('click',()=>{G3.yaw=-.5;G3.pitch=.42;G3.zoom=1;G3.T=[0,3300,300];draw3D();});
   // Arrow keys move the point the camera looks at, relative to where it's facing (Shift: faster).
@@ -1102,6 +1114,7 @@ $('matchLog').addEventListener('click',e=>{const a=e.target.closest('a.mlink');i
 // Add a release at the top whenever something visible changes (dashboard or widget).
 const CHANGELOG=[
   {v:'1.6',date:'2026-10-14',items:[
+    'Hover a goal in the 3D view to play its replay',
     'Drive the 3D goal map with a game controller: sticks move and turn, triggers zoom, A plays the next goal',
     'Goal map balls are magnetic: the nearest one snaps on as your mouse gets close',
     'Our saves on the goal map: where we saved each shot, where it came from, where it was heading, with a 3D replay. Recorded from the next widget update on',
