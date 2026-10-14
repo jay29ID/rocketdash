@@ -195,7 +195,7 @@ function toMatch(r){
     // Credit the goal to whoever the game credits; the last hit can be an opponent's deflection.
     const who=ours?PLAYERS.findIndex(p=>p.name===(PLAYERS.some(q=>q.name===g.scorer)?g.scorer:g.shot_from_player)):-1;
     return {ours,who,scorer:g.scorer||null,assister:g.assister||null,ko:isKickoffGoal(g),spd:num(g.speed)!=null?Math.round(+g.speed):null,
-      x:co(s,'X')!=null?f*co(s,'X'):null,y:co(s,'Y')!=null?f*co(s,'Y'):null,
+      z:co(s,'Z'),x:co(s,'X')!=null?f*co(s,'X'):null,y:co(s,'Y')!=null?f*co(s,'Y'):null,
       ix:co(i,'X')!=null?f*co(i,'X'):null,iz:co(i,'Z')};
   });
   const dur=num(r.duration_seconds)||300;
@@ -507,7 +507,64 @@ function renderMaps(list){
   $('mapNote').textContent=!goals.length?'No goals in this period.':
     `${goals.length} goals${avgSpd!=null?', average '+fSpd(avgSpd):''}.`+(top?` Most went in ${zname(top[0])} (${Math.round(100*top[1]/hits.length)}%).`:'')+
     (missing?` ${missing} goal${missing>1?'s were':' was'} recorded before positions were saved.`:'')+' The net is drawn as you would see it facing the goal.';
+  G3.goals=goals.filter(g=>g.x!=null&&g.y!=null&&g.ix!=null&&g.iz!=null);G3.side=mapSide;draw3D();
 }
+
+// ---------- 3D goal map ----------
+// A hand-rolled perspective view of the pitch (uu, z up) that you drag to orbit. Each goal is an arc
+// from where it was shot to where it crossed the goal line. No library: a few hundred lines would be overkill.
+const G3={goals:[],side:'us',yaw:-0.5,pitch:0.42,zoom:1,auto:true,t0:performance.now()};
+function draw3D(){
+  const cv=$('map3d');if(!cv)return;
+  const W=cv.clientWidth,H=cv.clientHeight,dpr=window.devicePixelRatio||1;
+  if(cv.width!==Math.round(W*dpr)||cv.height!==Math.round(H*dpr)){cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);}
+  const c=cv.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,W,H);
+  const css=getComputedStyle(document.documentElement),tok=n=>css.getPropertyValue(n).trim();
+  const ink=tok('--ink-2'),muted=tok('--muted'),line=tok('--line'),pcol=[tok('--p1'),tok('--p2')],opp=tok('--opp')||muted;
+  const T=[0,3300,300],D=11500,F=Math.min(W,H*1.6)*1.45*G3.zoom,ca=Math.cos(G3.yaw),sa=Math.sin(G3.yaw),cb=Math.cos(G3.pitch),sb=Math.sin(G3.pitch);
+  const P=([x,y,z])=>{x-=T[0];y-=T[1];z-=T[2];const x1=x*ca-y*sa,y1=x*sa+y*ca;const up=z*cb+y1*sb,dp=y1*cb-z*sb+D;return [W/2+F*x1/dp,H*.55-F*up/dp,dp];};
+  const path=(pts,close)=>{c.beginPath();pts.forEach((p,i)=>{const q=P(p);i?c.lineTo(q[0],q[1]):c.moveTo(q[0],q[1]);});if(close)c.closePath();};
+  // Pitch floor and markings.
+  const ch=1152,floor=[[-4096,-5120+ch],[-4096+ch,-5120],[4096-ch,-5120],[4096,-5120+ch],[4096,5120-ch],[4096-ch,5120],[-4096+ch,5120],[-4096,5120-ch]].map(([x,y])=>[x,y,0]);
+  path(floor,true);c.fillStyle=tok('--pitch')||'rgba(40,80,50,.3)';c.globalAlpha=.55;c.fill();c.globalAlpha=1;c.strokeStyle=line;c.lineWidth=1.2;c.stroke();
+  path([[-4096,0,0],[4096,0,0]]);c.stroke();
+  path(Array.from({length:49},(_,i)=>{const a=i/48*Math.PI*2;return [1000*Math.cos(a),1000*Math.sin(a),0];}));c.stroke();
+  // Back wall behind the attacked goal, faint, for a sense of height (ceiling 2044 uu).
+  c.strokeStyle=line;c.globalAlpha=.5;path([[-4096+ch,5120,0],[-4096+ch,5120,2044],[4096-ch,5120,2044],[4096-ch,5120,0]]);c.stroke();c.globalAlpha=1;
+  // Both goals: posts, crossbar and the net box behind the goal line.
+  [1,-1].forEach(sd=>{const g=5120*sd,b=6000*sd;c.strokeStyle=sd>0?ink:muted;c.lineWidth=sd>0?2:1.2;
+    path([[-893,g,0],[-893,g,642],[893,g,642],[893,g,0]]);c.stroke();
+    c.lineWidth=.8;path([[-893,g,642],[-893,b,642],[893,b,642],[893,g,642]]);c.stroke();path([[-893,b,0],[-893,b,642]]);c.stroke();path([[893,b,0],[893,b,642]]);c.stroke();path([[-893,b,0],[893,b,0]]);c.stroke();});
+  c.fillStyle=muted;c.font='11px '+(tok('--body')||'sans-serif');c.textAlign='center';
+  const lab=(t,p)=>{const q=P(p);c.fillText(t,q[0],q[1]);};
+  lab(G3.side==='us'?'Their goal':'Our goal',[0,5120,800]);
+  // Goals, far ones first so near arcs sit on top.
+  const arcs=G3.goals.map(g=>{const a=[g.x,g.y,g.z!=null?g.z:93],b=[g.ix,5120,g.iz],d=Math.hypot(b[0]-a[0],b[1]-a[1]);
+    const lift=Math.max(a[2],b[2])+Math.min(900,d*.09);
+    const pts=Array.from({length:21},(_,i)=>{const t=i/20,u=1-t;return [u*a[0]+t*b[0],u*a[1]+t*b[1],u*u*a[2]+2*u*t*lift+t*t*b[2]];});
+    return {g,pts,depth:P(pts[10])[2]};}).sort((p,q)=>q.depth-p.depth);
+  arcs.forEach(({g,pts})=>{const col=g.who>=0?pcol[g.who]:opp;
+    c.strokeStyle=col;c.globalAlpha=.55;c.lineWidth=1.3;path(pts);c.stroke();c.globalAlpha=1;
+    const s=P(pts[0]);c.fillStyle=col;c.beginPath();c.arc(s[0],s[1],2,0,7);c.fill();
+    const e=P(pts[20]),r=Math.max(2.5,F*92/e[2]*.6);const gr=c.createRadialGradient(e[0]-r*.35,e[1]-r*.4,r*.1,e[0],e[1],r);
+    gr.addColorStop(0,'#f4f6f8');gr.addColorStop(.6,'#c3cad2');gr.addColorStop(1,'#7d8692');c.fillStyle=gr;c.beginPath();c.arc(e[0],e[1],r,0,7);c.fill();
+    c.strokeStyle=col;c.lineWidth=1.5;c.stroke();});
+  $('map3dNote').textContent=G3.goals.length?`${G3.goals.length} goals with a shot and net position. Drag to turn it, scroll to zoom.`:'No goals with positions in this period.';
+}
+(function(){
+  const cv=$('map3d');if(!cv)return;let drag=null;
+  const still=matchMedia('(prefers-reduced-motion: reduce)').matches;if(still)G3.auto=false;
+  cv.addEventListener('pointerdown',e=>{drag={x:e.clientX,y:e.clientY,yaw:G3.yaw,pitch:G3.pitch};G3.auto=false;cv.setPointerCapture(e.pointerId);});
+  cv.addEventListener('pointermove',e=>{if(!drag)return;G3.yaw=drag.yaw-(e.clientX-drag.x)*.008;G3.pitch=Math.max(.05,Math.min(1.45,drag.pitch+(e.clientY-drag.y)*.006));draw3D();});
+  ['pointerup','pointercancel'].forEach(t=>cv.addEventListener(t,()=>{drag=null;}));
+  cv.addEventListener('wheel',e=>{e.preventDefault();G3.auto=false;G3.zoom=Math.max(.6,Math.min(3,G3.zoom*Math.exp(-e.deltaY*.0015)));draw3D();},{passive:false});
+  $('map3dReset').addEventListener('click',()=>{G3.yaw=-.5;G3.pitch=.42;G3.zoom=1;draw3D();});
+  window.addEventListener('resize',()=>draw3D());
+  // Slow sway until someone grabs it.
+  let seen=false;new IntersectionObserver(es=>{seen=es[0].isIntersecting;}).observe(cv);
+  const tick=t=>{if(G3.auto&&seen&&document.visibilityState==='visible'){G3.yaw=-.5+Math.sin((t-G3.t0)/6000)*.6;draw3D();}if(G3.auto)requestAnimationFrame(tick);};
+  requestAnimationFrame(tick);
+})();
 
 // ---------- playstyle ----------
 function renderPlay(list){
@@ -844,6 +901,7 @@ const CHANGELOG=[
     'Goal map pins are now little Rocket League balls',
     'Loading screen while your stats load, instead of briefly showing sample data',
     'Goal mouth on the goal map drawn as a technical diagram with real dimensions',
+    '3D goal map you can drag to rotate, showing every goal from shot to net',
     'Click a match in the match log to see its full stats and goal-by-goal story',
     'Hover a ball on either goal map to light up the same goal on the other one',
     'Win % for each of you by goals scored in the game: 1, 2, 3, 4 and 5+',

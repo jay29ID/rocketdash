@@ -195,6 +195,13 @@ form.log button{background:var(--ink);color:var(--surface);border:0;border-radiu
 @media (max-width:760px){.maps{grid-template-columns:minmax(0,1fr)}}
 .map-col{display:flex;flex-direction:column;gap:8px;min-width:0}
 .map-col h3{font-size:13px;font-weight:600;color:var(--ink-2);letter-spacing:.04em}
+.map3d-wrap{margin-top:18px;border-top:1px solid var(--grid);padding-top:14px}
+.map3d-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.map3d-head h3{margin:0;font-size:13px;font-weight:600;color:var(--ink-2);letter-spacing:.04em}
+#map3d{display:block;width:100%;height:440px;cursor:grab;touch-action:none;border-radius:8px;background:var(--surface-2)}
+#map3d:active{cursor:grabbing}
+.chipbtn{border:1px solid var(--line);background:var(--surface);color:var(--ink-2);border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer}
+@media (max-width:600px){#map3d{height:320px}}
 .map-col svg{display:block;width:100%;height:auto}
 .map-col svg text{font-family:var(--body);font-size:11px;fill:var(--muted)}
 .map-col svg .dimt{font-family:var(--mono);font-size:9.5px;letter-spacing:.04em;fill:var(--muted)}
@@ -392,6 +399,11 @@ footer{font-size:12px;color:var(--muted);max-width:70ch}
         <div class="legend" id="mapLegend"></div>
         <div class="map-note" id="mapNote"></div>
       </div>
+    </div>
+    <div class="map3d-wrap">
+      <div class="map3d-head"><h3>In 3D: every goal from shot to net</h3><button type="button" class="chipbtn" id="map3dReset">Reset view</button></div>
+      <canvas id="map3d" role="img" aria-label="3D view of the pitch with each goal drawn from where it was shot to where it hit the net"></canvas>
+      <div class="map-note" id="map3dNote"></div>
     </div>
   </section>
 
