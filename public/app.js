@@ -134,7 +134,7 @@ const fLen=m=>m==null?'–':IMP()?(m*1.09361).toFixed(0)+' yd':m.toFixed(0)+' m'
 
 // ---------- wallpaper ----------
 // Wallpapers Jason picked, in public/bg/. One is chosen at random on each visit, behind the drawn pitch.
-const WALLPAPERS=['stadium.webp'];
+const WALLPAPERS=['stadium.webp','octane.jpg','fennec.webp'];
 document.documentElement.style.setProperty('--wall',`url(/bg/${WALLPAPERS[Math.floor(Math.random()*WALLPAPERS.length)]})`);
 
 // ---------- model ----------
