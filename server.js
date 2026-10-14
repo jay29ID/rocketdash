@@ -56,6 +56,7 @@ function mergeMatch(a, b) {
   out.players = (hi.players || []).map(p => fillNulls({ ...p }, byName.get(p && p.name)));
   for (const p of lo.players || []) if (p && !out.players.some(q => q.name === p.name)) out.players.push(p);
   if (!(hi.goals || []).length && (lo.goals || []).length) out.goals = lo.goals;
+  if (!(hi.saves || []).length && (lo.saves || []).length) out.saves = lo.saves;
   // Watchers and drinks are set on each widget separately, so keep what either copy says.
   const sp = [...new Set([...(a.spectators || []), ...(b.spectators || [])])];
   if (sp.length || a.spectators || b.spectators) out.spectators = sp;
