@@ -1178,6 +1178,17 @@ async function postAvatar(body){const r=await fetch('/api/avatar',{method:'POST'
     try{if(msg)msg.textContent='Uploading…';await postAvatar({player:who.name,image:await squareImage(f)});close();}catch(x){if(msg)msg.textContent=x.message;}});
 })();
 
+// ---------- time since each player's last goal ----------
+let LASTGOAL=[];
+function tickSince(){const now=Date.now();
+  document.querySelectorAll('#playerTags .since').forEach(el=>{const t=LASTGOAL[+el.dataset.j];
+    if(t==null){el.textContent='No goals yet';return;}
+    let s=Math.max(0,Math.floor((now-t)/1000));const d=Math.floor(s/86400);s%=86400;const h=Math.floor(s/3600);s%=3600;const m=Math.floor(s/60);s%=60;
+    const pad=n=>String(n).padStart(2,'0');
+    el.textContent=(d?d+'d ':'')+(d||h?pad(h)+'h ':'')+pad(m)+'m '+pad(s)+'s since last goal';
+    el.title='Last goal '+new Date(t).toLocaleString();});}
+setInterval(tickSince,1000);
+
 async function load(){
   let data=null;
   try{const r=await fetch('/api/data',{cache:'no-store'});if(r.ok)data=await r.json();}catch(e){}
@@ -1194,7 +1205,7 @@ async function load(){
   const shorts=PLAYERS.map(p=>p.short);
   $('title').textContent=shorts.length>1?shorts.slice(0,-1).join(', ')+' & '+shorts[shorts.length-1]:shorts[0];
   document.title=$('title').textContent+' Stats';
-  $('playerTags').innerHTML=PLAYERS.map((p,j)=>`<button type="button" class="tag ${p.tag} avbtn" data-j="${j}" title="Set ${esc(p.short)}'s picture"><i></i>${esc(p.name)}</button>`).join('');
+  $('playerTags').innerHTML=PLAYERS.map((p,j)=>`<span class="ptag"><button type="button" class="tag ${p.tag} avbtn" data-j="${j}" title="Set ${esc(p.short)}'s picture"><i></i>${esc(p.name)}</button><span class="since num" data-j="${j}"></span></span>`).join('');
   AV=data.avatars||{};applyAvatars();
   $('drinkWho').textContent=`How many drinks ${PLAYERS[0].short} had`;
   const who=$('mmrWho').value;
@@ -1207,6 +1218,10 @@ async function load(){
   SAMPLE=!real;
   RAW=real?{matches:data.matches,mmr:data.mmr||[]}:makeSample(names);
   if(real&&!RAW.mmr)RAW.mmr=[];
+  // When each player last scored: match start plus the goal's time in the match (every playlist).
+  LASTGOAL=PLAYERS.map(p=>{let t=null;(RAW.matches||[]).forEach(m=>{const st=Date.parse(m&&m.started_at);if(!st)return;
+    (m.goals||[]).forEach(g=>{if(g&&g.scorer===p.name&&+g.goal_time>0){const at=st+g.goal_time*1000;if(t==null||at>t)t=at;}});});return t;});
+  tickSince();
   $('dataBadge').hidden=!SAMPLE;
   $('banner').hidden=!SAMPLE;
   $('banner').textContent=SAMPLE?'No matches have been uploaded yet, so this shows sample data. It switches to your real stats as soon as the recorder sends the first finished match.':'';
@@ -1330,6 +1345,7 @@ $('matchLog').addEventListener('click',e=>{const a=e.target.closest('a.mlink');i
 // Add a release at the top whenever something visible changes (dashboard or widget).
 const CHANGELOG=[
   {v:'1.7',date:'2026-10-14',items:[
+    'A live timer under each name at the top: time since that player last scored',
     'Player pictures: click your name at the top to upload one, and it shows next to your name across the dashboard',
     'Neon or Classic look for the whole dashboard, switched at the top (each map can still have its own)',
     'Customize your dashboard: drag panels into any order, make them half or full width, or hide them (saved in your browser)',
