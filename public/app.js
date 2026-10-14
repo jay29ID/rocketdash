@@ -681,6 +681,43 @@ async function load(){
   $('banner').textContent=SAMPLE?'No matches have been uploaded yet, so this shows sample data. It switches to your real stats as soon as the recorder sends the first finished match.':'';
   renderAll();
 }
+// ---------- version and update log ----------
+// Add a release at the top whenever something visible changes (dashboard or widget).
+const CHANGELOG=[
+  {v:'1.6',date:'2026-10-14',items:[
+    'Version number and this update log',
+    'Kickoff goals fixed: they showed 0 because the game\'s goal timer includes the countdown. New games are timed from the kickoff exactly',
+    'Win % when we score first vs when they score first',
+    'Hat tricks and win % with a hat trick',
+    'Kickoff goals per player, and for and against as a team',
+    'All-time records: longest and hardest goal, hardest hit, top speed and single-game highs',
+    'Average speed and top speed in Playstyle',
+    'Forfeited games now count as wins and losses (tagged in the match log)']},
+  {v:'1.5',date:'2026-10-09',items:['Opponents column in the match log, each linking to their tracker.gg profile']},
+  {v:'1.4',date:'2026-10-03',items:['Goals against sometimes show the Mortal Kombat "oops" GIF']},
+  {v:'1.3',date:'2026-09-30',items:['Long team names fit inside the widget\'s match box']},
+  {v:'1.2',date:'2026-09-28',items:[
+    'Widget themes: Cyber, Rocket League and Classic',
+    'Watching and drinks are shared live between both widgets',
+    'Goal map fixes: no more doubled goals, and goals are credited to the scorer',
+    'Main car, I Got No Boost and Boost pads per game now work',
+    'Bumps column, live boost meters and speedometer on the widget']},
+  {v:'1.1',date:'2026-09-28',items:[
+    'Widget: session record, GIF on every goal, Check updates, tray icon, spectators and drinks',
+    'Type MMR pop-up, Last game period, Warm-Ups panel, rank badges',
+    'Whole-pitch goal map and I Got No Boost stat',
+    'Script-based setup replaces the exe']},
+  {v:'1.0',date:'2026-09-27',items:['Dashboard goes live: recorder uploads, player stats, trends, MMR, goal map and match log','Widget updates itself from the site']}];
+function renderChanges(){
+  $('verBtn').textContent='v'+CHANGELOG[0].v;
+  $('verBtn').title='What\'s new in v'+CHANGELOG[0].v;
+  $('changesBody').innerHTML=CHANGELOG.map(r=>`<section class="rel"><h3>v${esc(r.v)}<span>${fmtDate(new Date(r.date+'T12:00:00'))}</span></h3><ul>${r.items.map(i=>`<li>${esc(i)}</li>`).join('')}</ul></section>`).join('');
+}
+$('verBtn').addEventListener('click',()=>{const d=$('changes');if(d.showModal)d.showModal();else d.setAttribute('open','');});
+$('changesClose').addEventListener('click',()=>$('changes').close());
+$('changes').addEventListener('click',e=>{if(e.target===$('changes'))$('changes').close();});
+renderChanges();
+
 load();
 // New matches arrive from the recorder a few seconds after each game; pick them up without a reload.
 setInterval(()=>{if(document.visibilityState==='visible')load();},60000);

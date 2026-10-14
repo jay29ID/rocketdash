@@ -210,6 +210,15 @@ td.opps a:hover{color:var(--ink);text-decoration-color:currentColor}
 .log-table td.p1c{box-shadow:inset 3px 0 0 var(--p1-soft)}
 footer{font-size:12px;color:var(--muted);max-width:70ch}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+.ver{position:fixed;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));z-index:20;border:1px solid var(--line);background:var(--surface);color:var(--muted);font-family:var(--mono);font-size:11.5px;padding:4px 9px;border-radius:999px;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.ver:hover{color:var(--ink);border-color:var(--ink-2)}
+.changes{width:min(560px,calc(100vw - 32px));max-height:min(80vh,720px);border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink);padding:18px 20px}
+.changes::backdrop{background:rgba(8,12,18,.55)}
+.changes .x{border:0;background:none;color:var(--muted);font-size:22px;line-height:1;cursor:pointer;padding:0 4px}
+.changes .rel{padding:12px 0;border-top:1px solid var(--grid)}
+.changes .rel h3{margin:0 0 6px;font-size:14px;display:flex;gap:10px;align-items:baseline}
+.changes .rel h3 span{font-weight:400;font-size:12px;color:var(--muted)}
+.changes .rel ul{margin:0;padding-left:18px;color:var(--ink-2);font-size:13.5px;line-height:1.5}
 </style>
 </head>
 <body>
@@ -411,6 +420,11 @@ footer{font-size:12px;color:var(--muted);max-width:70ch}
     <div class="note" id="importNote"></div>
   </section>
 
+  <button type="button" class="ver" id="verBtn" aria-haspopup="dialog">v–</button>
+  <dialog class="changes" id="changes" aria-labelledby="changesTitle">
+    <div class="panel-head"><h2 id="changesTitle">Update log</h2><button type="button" class="x" id="changesClose" aria-label="Close">&times;</button></div>
+    <div id="changesBody"></div>
+  </dialog>
   <footer id="footer">Rank names use approximate MMR ranges for Ranked Doubles. Shot and net positions only exist for matches recorded with the latest recorder.</footer>
 </div>
 
