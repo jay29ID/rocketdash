@@ -332,22 +332,22 @@ body.editing .editbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;bac
 @media (max-width:520px){.wheel{right:auto;left:-70px}}
 /* Night: mellow greyscale with red accents. */
 :root.night{color-scheme:dark;
-  --bg:#09090a; --veil:rgba(8,8,9,.9); --glow-a:.05; --surface:#121214; --surface-2:#19191c;
-  --ink:#e4e4e6; --ink-2:#b0b0b4; --muted:#76767c; --line:#2a2a2e; --grid:#1d1d20;
-  --p1:#d4d4d8; --p2:#d8403a; --p3:#8e8e94; --p4:#a33a35;
-  --p1-soft:#d4d4d81c; --p2-soft:#d8403a24; --p3-soft:#8e8e9422; --p4-soft:#a33a3522;
-  --win:#cfcfd3; --loss:#d8403a; --win-soft:#cfcfd31a; --loss-soft:#d8403a22;
-  --focus:#d8403a; --heat:#d8403a; --opp:#6c6c72; --pitch:#0f0f11; --pitch-line:#2b2b30}
-:root.night body::before{filter:grayscale(1) brightness(.75)}
-:root.night h2{color:#d8d8dc;letter-spacing:.09em}
-:root.night .seg button[aria-pressed="true"]{background:#d8403a;color:#fff}
-:root.night .since .sp{background:#d4d4d8;color:#000}
-:root.night .since .sl{color:#e0443e;text-shadow:0 0 6px #e0443e55}
-:root.night .hcal i.on{background:#d8403a;box-shadow:0 0 5px #d8403a88}
-body.hm-night .maps .map-col{--pitch:#0b0b0d;--pitch-line:#2e2e33;--opp:#6c6c72;--p1:#e6e6e8;--p2:#e0443e;--p3:#9a9a9e;--p4:#a83a36}
-body.hm-night .heat-key .ramp{background:linear-gradient(90deg,rgb(38,38,42),rgb(120,120,126),rgb(214,52,48))}
-body.g3-night .mini3d{border-color:#3a3a40;background:#070708}
-body.g3-night .mini3d span{color:rgba(224,68,62,.75)}
+  --bg:#07080b; --veil:rgba(6,7,10,.9); --glow-a:.05; --surface:#0f1116; --surface-2:#161a21;
+  --ink:#e2e6ee; --ink-2:#a9b0bd; --muted:#717986; --line:#252a34; --grid:#1a1e26;
+  --p1:#d6dce6; --p2:#3d8bf0; --p3:#8a93a3; --p4:#2f62b8;
+  --p1-soft:#d6dce61c; --p2-soft:#3d8bf024; --p3-soft:#8a93a322; --p4-soft:#2f62b822;
+  --win:#5aa2f2; --loss:#5e6573; --win-soft:#5aa2f21f; --loss-soft:#5e657322;
+  --focus:#3d8bf0; --heat:#3d8bf0; --opp:#646c7a; --pitch:#0b0d12; --pitch-line:#262c38}
+:root.night body::before{filter:grayscale(1) brightness(.75) sepia(.25) hue-rotate(180deg)}
+:root.night h2{color:#d6dce6;letter-spacing:.09em}
+:root.night .seg button[aria-pressed="true"]{background:#3d8bf0;color:#fff}
+:root.night .since .sp{background:#d6dce6;color:#000}
+:root.night .since .sl{color:#4f9cf5;text-shadow:0 0 6px #4f9cf555}
+:root.night .hcal i.on{background:#3d8bf0;box-shadow:0 0 5px #3d8bf088}
+body.hm-night .maps .map-col{--pitch:#090b10;--pitch-line:#283040;--opp:#646c7a;--p1:#e2e8f0;--p2:#4f9cf5;--p3:#8a93a3;--p4:#2f62b8}
+body.hm-night .heat-key .ramp{background:linear-gradient(90deg,rgb(28,32,42),rgb(70,96,140),rgb(74,150,245))}
+body.g3-night .mini3d{border-color:#2c3444;background:#06070a}
+body.g3-night .mini3d span{color:rgba(79,156,245,.75)}
 /* Midnight (key "dark"): pure, very dark monotone. No colour at all; players differ by shade. */
 :root.dark{color-scheme:dark;
   --bg:#000000; --veil:rgba(0,0,0,.96); --glow-a:0; --surface:#080808; --surface-2:#0d0d0d;
@@ -467,7 +467,7 @@ body.g3-dark .mini3d span{color:#595959}
       <div class="wheel" id="themeWheel" hidden><div id="lookTheme" role="group" aria-label="Theme">
         <button type="button" class="q tl" data-t="classic" aria-pressed="true"><i style="background:linear-gradient(135deg,#3987e5,#d95926)"></i>Classic</button>
         <button type="button" class="q tr" data-t="neon"><i style="background:linear-gradient(135deg,#39ff14,#c04dff)"></i>Neon</button>
-        <button type="button" class="q bl" data-t="night"><i style="background:linear-gradient(135deg,#d4d4d6,#e0443e)"></i>Night</button>
+        <button type="button" class="q bl" data-t="night"><i style="background:linear-gradient(135deg,#d6dce6,#3d8bf0)"></i>Night</button>
         <button type="button" class="q br" data-t="dark"><i style="background:linear-gradient(135deg,#000,#5a5a5a);box-shadow:0 0 0 2px var(--surface),0 0 0 3px #666"></i>Midnight</button>
       </div><span class="hub" aria-hidden="true"></span></div></div>
     <button type="button" class="chipbtn" id="layoutBtn" aria-pressed="false">Customize</button>
