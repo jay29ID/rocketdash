@@ -753,6 +753,12 @@ let rt;window.addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(()=>
 async function load(){
   let data=null;
   try{const r=await fetch('/api/data',{cache:'no-store'});if(r.ok)data=await r.json();}catch(e){}
+  // Never swap real stats for sample data because a request failed: keep what's on screen,
+  // or on first load keep the loading screen up and retry.
+  if(!data){
+    if(document.body.classList.contains('is-loading')){$('loaderText').textContent='Can\'t reach the stats server yet. Retrying…';setTimeout(load,5000);}
+    return;
+  }
   const names=(data&&data.players&&data.players.length>=2?data.players:['jay29ID','Kobra Kelvin']).slice(0,2);
   PLAYERS=names.map((n,j)=>({name:n,short:(s=>s?s[0].toUpperCase()+s.slice(1):n)(n.split(/\s+/)[0].replace(/\d+.*$/,'')),color:j?'var(--p2)':'var(--p1)'}));
   document.querySelectorAll('.tag.p1').forEach(el=>{if(el.closest('header'))el.innerHTML='<i></i>'+esc(PLAYERS[0].name);});
@@ -769,6 +775,7 @@ async function load(){
   $('banner').hidden=!SAMPLE;
   $('banner').textContent=SAMPLE?'No matches have been uploaded yet, so this shows sample data. It switches to your real stats as soon as the recorder sends the first finished match.':'';
   renderAll();
+  document.body.classList.remove('is-loading');
 }
 // ---------- version and update log ----------
 // Add a release at the top whenever something visible changes (dashboard or widget).
@@ -776,6 +783,7 @@ const CHANGELOG=[
   {v:'1.6',date:'2026-10-14',items:[
     'Arena background: a drawn pitch with boost pads over a random wallpaper on each visit',
     'Goal map pins are now little Rocket League balls',
+    'Loading screen while your stats load, instead of briefly showing sample data',
     'Comebacks: wins after being 1, 2, 3 or 4+ goals down',
     'Blown leads: losses after being 1, 2, 3 or 4+ goals up',
     'km/h or mph toggle at the top switches every unit: speeds to mph, distances to miles, lengths to yards',
