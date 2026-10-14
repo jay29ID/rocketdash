@@ -421,6 +421,17 @@ function heatColor(t){
   const c=HEAT[i].map((v,k)=>Math.round(v+(HEAT[i+1][k]-v)*f));
   return `rgb(${c[0]},${c[1]},${c[2]})`;
 }
+// Goal-map markers drawn as little Rocket League balls: a grey sphere with the hex panel
+// seams, ringed in the scorer's colour (neutral on the field view, where the heat carries colour).
+function rlBallDefs(id){return `<defs><radialGradient id="${id}" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#f4f6f8"/><stop offset=".6" stop-color="#c3cad2"/><stop offset="1" stop-color="#7d8692"/></radialGradient></defs>`;}
+function rlBall(x,y,r,ring,rw,id,tip){
+  const hex=[0,1,2,3,4,5].map(k=>{const a=Math.PI/3*k-Math.PI/2;return [Math.cos(a),Math.sin(a)];});
+  const seam=hex.map(([c,s])=>`${(.38*c).toFixed(3)},${(.38*s).toFixed(3)}`).join(' ');
+  const spokes=hex.map(([c,s])=>`M${(.38*c).toFixed(3)} ${(.38*s).toFixed(3)}L${(.92*c).toFixed(3)} ${(.92*s).toFixed(3)}`).join('');
+  return `<g class="dot" transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(${r})"><title>${esc(tip)}</title>`+
+    `<circle r="1" fill="url(#${id})"/><g fill="none" stroke="#3a424c" stroke-opacity=".55" stroke-width=".5" vector-effect="non-scaling-stroke"><polygon points="${seam}"/><path d="${spokes}"/></g>`+
+    `<circle r="1" fill="none" stroke="${ring}" stroke-width="${rw}" vector-effect="non-scaling-stroke"/></g>`;
+}
 function renderMaps(list){
   let goals=list.flatMap(m=>(mapSide==='us'?m.ourGoals:m.theirGoals).map(g=>({...g,m})));
   if(mapSide==='us'&&mapWho!=='all')goals=goals.filter(g=>g.who===+mapWho);
@@ -445,8 +456,8 @@ function renderMaps(list){
   f+=`<rect x="${sx(-1800)}" y="${sy(5120)}" width="${su(3600)}" height="${su(1100)}" ${ln}/><rect x="${sx(-1800)}" y="${sy(-4020)}" width="${su(3600)}" height="${su(1100)}" ${ln}/>`;
   f+=`<text x="${W/2}" y="${sy(6000)-6}" text-anchor="middle">${mapSide==='us'?'Their goal':'Our goal'}</text><text x="${W/2}" y="${sy(-6000)+14}" text-anchor="middle">${mapSide==='us'?'Our goal':'Their goal'}</text>`;
   // Dots stay neutral here so they don't fight the blue-to-red heat; the net view carries who scored.
-  shots.forEach(g=>{f+=`<circle class="dot" cx="${sx(clamp(g.x,-4096,4096))}" cy="${sy(clamp(g.y,-5120,5120))}" r="2.5" fill="#fff" fill-opacity=".9" stroke="#0b1017" stroke-opacity=".6" stroke-width="1"><title>${esc(tip(g))}</title></circle>`;});
-  $('fieldMap').innerHTML=`<svg viewBox="0 -18 ${W} ${H+36}" role="img" aria-label="Top-down field with ${shots.length} shot locations">${f}</svg>`;
+  shots.forEach(g=>{f+=rlBall(sx(clamp(g.x,-4096,4096)),sy(clamp(g.y,-5120,5120)),4.5,'#0b1017',1,'rlbF',tip(g));});
+  $('fieldMap').innerHTML=`<svg viewBox="0 -18 ${W} ${H+36}" role="img" aria-label="Top-down field with ${shots.length} shot locations">${rlBallDefs('rlbF')}${f}</svg>`;
   const NW=440,m=24,NH=Math.round((NW-2*m)*642/1786)+m+22;
   const nx=x=>m+(clamp(x,-893,893)+893)/1786*(NW-2*m),nz=z=>m+(642-clamp(z,0,642))/642*(NH-m-22);
   let n=`<rect x="${nx(-893)}" y="${nz(642)}" width="${nx(893)-nx(-893)}" height="${nz(0)-nz(642)}" fill="var(--surface-2)"/>`;
@@ -460,9 +471,9 @@ function renderMaps(list){
   n+=`<path d="M${nx(-893)},${nz(0)} L${nx(-893)},${nz(642)} L${nx(893)},${nz(642)} L${nx(893)},${nz(0)}" stroke="var(--ink-2)" stroke-width="4" fill="none" stroke-linejoin="round"/>`;
   n+=`<line x1="4" x2="${NW-4}" y1="${nz(0)}" y2="${nz(0)}" stroke="var(--line)" stroke-width="2"/>`;
   n+=`<text x="${nx(-893)}" y="${NH-4}">Left post</text><text x="${nx(893)}" y="${NH-4}" text-anchor="end">Right post</text><text x="${NW/2}" y="${nz(642)-8}" text-anchor="middle">Crossbar</text>`;
-  hits.forEach(g=>{n+=`<circle class="dot" cx="${nx(g.ix)}" cy="${nz(g.iz)}" r="3.5" fill="${col(g)}" stroke="#fff" stroke-width="1.5"><title>${esc(tip(g))}</title></circle>`;});
+  hits.forEach(g=>{n+=rlBall(nx(g.ix),nz(g.iz),6,col(g),2.2,'rlbN',tip(g));});
   n+=labels.join('');
-  $('netMap').innerHTML=`<svg viewBox="0 0 ${NW} ${NH}" role="img" aria-label="Goal mouth with ${hits.length} impact points">${n}</svg>`;
+  $('netMap').innerHTML=`<svg viewBox="0 0 ${NW} ${NH}" role="img" aria-label="Goal mouth with ${hits.length} impact points">${rlBallDefs('rlbN')}${n}</svg>`;
   $('fieldTitle').textContent=mapSide==='us'?'Where our goals were shot from':'Where their goals were shot from';
   $('netTitle').textContent=mapSide==='us'?'Where our goals hit the net':'Where their goals beat us';
   $('mapLegend').innerHTML=mapSide==='us'?PLAYERS.filter((p,j)=>mapWho==='all'||+mapWho===j).map(p=>`<span><i style="background:${p.color};height:8px;width:8px"></i>${esc(p.name)}</span>`).join(''):'<span><i style="background:var(--opp);height:8px;width:8px"></i>Opponents</span>';
@@ -758,6 +769,7 @@ async function load(){
 // Add a release at the top whenever something visible changes (dashboard or widget).
 const CHANGELOG=[
   {v:'1.6',date:'2026-10-14',items:[
+    'Goal map pins are now little Rocket League balls',
     'Comebacks: wins after being 1, 2, 3 or 4+ goals down',
     'Blown leads: losses after being 1, 2, 3 or 4+ goals up',
     'km/h or mph toggle at the top switches every unit: speeds to mph, distances to miles, lengths to yards',
