@@ -275,6 +275,10 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
+  try { // TEMP car check
+    const c = {}; for (const m of Object.values(store.matches)) for (const p of m.players || []) if (p && p.tracked && Array.isArray(p.loadout)) { const k = p.name + ':' + (p.loadout.find(x => /^body_/i.test(x)) || p.loadout[0]); c[k] = (c[k] || 0) + 1; }
+    console.log('car check: ' + JSON.stringify(c));
+  } catch (e) { console.log('car check failed ' + e.message); }
   console.log(`rocketdash listening on ${PORT}, data in ${DATA_DIR}`);
   if (process.env.GIPHY_KEY) {
     gifList(GIF_QUERY, 3, 0).then(l => console.log(l.length ? `goal GIFs ready: ${l.length} for "${GIF_QUERY}"` : 'goal GIFs: GIPHY returned nothing (check GIPHY_KEY)'));
