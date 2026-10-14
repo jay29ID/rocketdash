@@ -407,6 +407,8 @@ function Invoke-Message($Msg) {
       if (-not $shot) { $shot = @{ location = $null; player = $null; speed = $null } }
       # The scorer's own last hit, so a goal an opponent redirected keeps both points.
       $scorerHit = $m.LastHitBy[[string](Get-Prop (Get-Prop $data 'Scorer') 'Name')]
+      $assistHit = $null; $an = [string](Get-Prop (Get-Prop $data 'Assister') 'Name')
+      if ($an) { $assistHit = $m.LastHitBy[$an] }
       [void]$m.Goals.Add([ordered]@{
         scorer = Get-Prop (Get-Prop $data 'Scorer') 'Name'
         assister = Get-Prop (Get-Prop $data 'Assister') 'Name'
@@ -416,6 +418,7 @@ function Invoke-Message($Msg) {
         impact = Get-Prop $data 'ImpactLocation'
         shot_from = $shot.location; shot_from_player = $shot.player; shot_speed = $shot.speed
         scorer_from = $(if ($scorerHit) { $scorerHit.location } else { $null })
+        assist_from = $(if ($assistHit) { $assistHit.location } else { $null })
         since_kickoff = $since
         ours = $null
       })
