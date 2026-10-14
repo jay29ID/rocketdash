@@ -714,7 +714,7 @@ function render3D(cv,V){
 function draw3D(){const cv=$('map3d');if(!cv)return;
   render3D(cv,{goals:G3.goals,side:G3.side,T:G3.T,D:11500,F:Math.min(cv.clientWidth,cv.clientHeight*1.6)*1.45*G3.zoom,yaw:G3.yaw,pitch:G3.pitch,focus:G3.focus,ft:G3.ft});
   const nm=G3.side==='saves'?'saves with a position':'goals with a shot and net position';
-  $('map3dNote').textContent=G3.goals.length?`${G3.goals.length} ${nm}. Drag or use the knob to turn it, arrow keys to move, scroll to zoom. Hover a ball on the flat maps for a replay.`:`No ${G3.side==='saves'?'saves':'goals'} with positions in this period.`;
+  $('map3dNote').textContent=G3.goals.length?`${G3.goals.length} ${nm}. Drag or use the knob to turn it, arrow keys to move, scroll to zoom. Hover a ball on the flat maps for a replay.`+(G3.pad&&G3.pad()?' Controller: left stick moves, right stick turns, triggers zoom, A or RB next goal, LB previous, B stops, Y resets.':''):`No ${G3.side==='saves'?'saves':'goals'} with positions in this period.`;
   syncKnob();
 }
 // The knob: its ring turns with the camera (N = looking at the attacked goal), the needle shows tilt.
@@ -768,6 +768,30 @@ function loop3D(){if(looping)return;looping=true;const step=()=>{if(RP.k==null&&
   hold('kZoomIn',()=>G3.zoom*=1.06);hold('kZoomOut',()=>G3.zoom/=1.06);
   window.addEventListener('resize',()=>draw3D());
   G3.seen=false;new IntersectionObserver(es=>{G3.seen=es[0].isIntersecting;if(G3.seen&&G3.auto)loop3D();}).observe(cv);
+  // Game controller (any pad the browser maps to the standard layout): left stick moves the camera,
+  // right stick turns and tilts, triggers zoom, A / RB next goal, LB previous, B stops, Y resets.
+  // Browsers only reveal a pad after a button is pressed while the page is open.
+  const PAD={on:false,prev:[],k:-1};
+  const dz=v=>Math.abs(v)<.15?0:(v-Math.sign(v)*.15)/.85;
+  const focusGoal=step=>{const n=G3.goals.length;if(!n)return;PAD.k=((PAD.k+step)%n+n)%n;const g=G3.goals[PAD.k];
+    G3.auto=false;G3.focus=g.k;G3.ft=performance.now();
+    const w=waypoints(g),p0=w.length?w[0].p:[g.x,g.y,93];G3.T=[(p0[0]+g.ix)/2,(p0[1]+5120)/2,300];};
+  const padLoop=()=>{const gp=[...(navigator.getGamepads?navigator.getGamepads():[])].find(x=>x&&x.connected);
+    if(!gp){PAD.on=false;draw3D();return;}
+    const ax=gp.axes,bt=gp.buttons.map(b=>b&&(b.pressed||b.value>.5)),val=i=>gp.buttons[i]?gp.buttons[i].value:0,hit=i=>bt[i]&&!PAD.prev[i];
+    if(G3.seen&&document.visibilityState==='visible'){
+      const lx=dz(ax[0]||0)+(bt[15]?1:0)-(bt[14]?1:0),ly=dz(ax[1]||0)+(bt[13]?1:0)-(bt[12]?1:0),rx=dz(ax[2]||0),ry=dz(ax[3]||0),zm=val(7)-val(6);
+      const moved=lx||ly||rx||ry||Math.abs(zm)>.05;
+      if(moved){G3.auto=false;const fw=[Math.sin(G3.yaw),Math.cos(G3.yaw)],rt=[fw[1],-fw[0]],st=bt[10]?110:45;
+        G3.T[0]+=(rt[0]*lx-fw[0]*ly)*st;G3.T[1]+=(rt[1]*lx-fw[1]*ly)*st;G3.yaw-=rx*.04;G3.pitch+=ry*.025;G3.zoom*=Math.exp(zm*.03);}
+      if(hit(0)||hit(5))focusGoal(1);if(hit(4))focusGoal(-1);
+      if(hit(1)){G3.focus=null;PAD.k=-1;}
+      if(hit(3)){G3.yaw=-.5;G3.pitch=.42;G3.zoom=1;G3.T=[0,3300,300];G3.focus=null;PAD.k=-1;}
+      if(moved||G3.focus!=null||bt.some(Boolean))nudge3D(()=>{});
+    }
+    PAD.prev=bt;requestAnimationFrame(padLoop);};
+  window.addEventListener('gamepadconnected',()=>{if(PAD.on)return;PAD.on=true;draw3D();requestAnimationFrame(padLoop);});
+  G3.pad=()=>PAD.on;
   // Slow sway until someone grabs it.
   const sway=t=>{if(!G3.auto)return;G3.yaw=-.5+Math.sin((t-G3.t0)/6000)*.6;requestAnimationFrame(sway);};
   requestAnimationFrame(sway);
@@ -1161,6 +1185,7 @@ const CHANGELOG=[
     'Counter goals in Playstyle, and win rate after going down or up by one to three goals',
     'Match length now comes from the match clock, so time-based stats use the real length of each game',
     'Run your own copy of the dashboard on a Windows PC with dashboard.bat',
+    'Drive the 3D goal map with a game controller: sticks move and turn, triggers zoom, A plays the next goal',
     'Goal map balls are magnetic: the nearest one snaps on as your mouse gets close',
     'Our saves on the goal map: where we saved each shot, where it came from, where it was heading, with a 3D replay. Recorded from the next widget update on',
     'Fixed the goal maps and 3D replays being mirrored left to right',
