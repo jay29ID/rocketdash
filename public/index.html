@@ -151,6 +151,14 @@ header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:spac
 .stack{display:flex;height:22px;gap:2px}
 .stack div{height:100%;display:flex;align-items:center;justify-content:center;font-size:11px;font-family:var(--mono);color:#fff;min-width:0;overflow:hidden}
 .stack div:first-child{border-radius:3px 0 0 3px}.stack div:last-child{border-radius:0 3px 3px 0}
+.garage{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin:14px 0 4px}
+.garage:empty{display:none}
+.car-card{margin:0;border:1px solid var(--line);border-radius:8px;padding:10px 12px 8px;
+  background-color:var(--surface);background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:12px 12px}
+.car-card figcaption{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px}
+.car-card figcaption .muted{margin-left:auto;font-size:11px;text-transform:uppercase;letter-spacing:.07em}
+.car-card .bp{display:block;width:100%;height:auto;margin-top:4px}
+.car-dims{font-family:var(--mono);font-size:11px;color:var(--muted);text-align:right}
 .play-kv{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:0 16px}
 .play-kv > div{padding:7px 0;border-bottom:1px solid var(--grid)}
 .play-kv .h{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
@@ -379,6 +387,7 @@ footer{font-size:12px;color:var(--muted);max-width:70ch}
       <div class="panel-head"><h2 id="playTitle">Playstyle</h2><span class="new">From the expanded recorder</span></div>
       <div class="split" id="split"></div>
       <div class="play-kv num" id="playKv"></div>
+      <div class="garage" id="garage"></div>
       <div class="play-kv team-kv num" id="teamKv"></div>
       <div class="note" id="koNote"></div>
     </div>

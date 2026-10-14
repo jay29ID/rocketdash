@@ -470,6 +470,52 @@ function renderPlay(list){
   $('teamKv').innerHTML=list.length?'<div class="h">Team</div><div class="h v"></div>'+teamRows.map(r=>`<div>${r[0]}</div><div class="v">${r[1]}</div>`).join(''):'';
   $('koNote').textContent=list.length?`A kickoff goal is scored within about ${KICKOFF_SECS}s of play after the kickoff.`:'';
   $('playKv').innerHTML=`<div class="h">Stat</div><div class="h v">${esc(PLAYERS[0].short)}</div><div class="h v">${esc(PLAYERS[1].short)}</div>`+rows.map(r=>`<div>${r[0]}</div><div class="v">${r[1](A[0])}</div><div class="v">${r[1](A[1])}</div>`).join('');
+  renderGarage(A);
+}
+
+// ---------- car blueprints ----------
+// Hand-drawn side profiles (not game art), facing right, ground at y=96. x0/x1/top are the body's
+// extent for the dimension lines; hb is the in-game hitbox the body uses (length, width, height in uu).
+const HITBOX={Octane:[118.0,84.2,36.2],Dominus:[127.9,83.3,31.3]};
+const CAR_ART={
+  Fennec:{hb:'Octane',x0:34,x1:226,top:33,wheels:[[66,80,16],[186,80,16]],
+    body:'M36 80 L34 60 L40 44 L58 34 L150 33 L172 50 L218 55 Q226 57 226 66 L224 80 L206 80 A20 20 0 0 0 166 80 L86 80 A20 20 0 0 0 46 80 Z',
+    lines:'M50 52 L60 39 L146 38 L164 52 Z M104 38 L104 52 L102 76 M164 52 L164 76 M58 34 L32 32 L34 38 L42 42 M86 77 L166 77 M178 53 L198 55 M214 60 L225 62 M34 50 L40 50 L40 56'},
+  Octane:{hb:'Octane',x0:30,x1:228,top:23,wheels:[[70,78,18],[184,81,15]],
+    body:'M36 80 C30 66 34 52 48 46 C64 38 76 26 104 24 C132 22 146 34 158 46 L206 52 C222 54 228 62 226 74 L222 80 L203 80 A19 19 0 0 0 165 80 L92 80 A22 22 0 0 0 48 80 Z',
+    lines:'M66 46 C76 34 90 30 106 30 C126 30 138 38 148 47 Z M114 30 L114 47 L112 76 M92 77 L165 77 M214 58 L225 62 M34 60 L42 58 M30 76 L38 76'},
+  Dominus:{hb:'Dominus',x0:26,x1:236,top:36,wheels:[[68,80,16],[196,80,16]],
+    body:'M30 80 L28 62 L34 56 L80 52 C96 40 104 36 124 36 L146 36 C158 38 168 46 176 52 L230 58 Q236 60 236 70 L234 80 L216 80 A20 20 0 0 0 176 80 L88 80 A20 20 0 0 0 48 80 Z',
+    lines:'M92 52 C102 42 110 40 124 40 L144 40 C154 42 160 47 166 52 Z M132 40 L132 52 L130 76 M88 77 L176 77 M28 56 L26 49 L46 49 L42 55 M226 62 L236 64 M186 56 L214 58'}
+};
+function carBlueprint(car,color){
+  const c=CAR_ART[car];if(!c)return '';
+  const [L,,H]=HITBOX[c.hb],R=c.x1+12,dim='stroke="var(--muted)" stroke-width=".8"';
+  const wheels=c.wheels.map(([x,y,r])=>`<circle cx="${x}" cy="${y}" r="${r}"/><circle cx="${x}" cy="${y}" r="${r*.6}"/><circle cx="${x}" cy="${y}" r="2.5"/>`+
+    `<path d="M${x} ${y-r-4}V${y+r+4}M${x-r-4} ${y}H${x+r+4}" ${dim} stroke-dasharray="4 2 1 2"/>`).join('');
+  return `<svg class="bp" viewBox="0 0 270 124" role="img" aria-label="Side view line drawing of the ${esc(car)}">
+  <path d="M8 96H262" ${dim} stroke-dasharray="6 3"/>
+  <g fill="none" stroke="var(--ink-2)" stroke-width="1" stroke-linejoin="round" stroke-linecap="round">
+    <path d="${c.lines}"/>${wheels}
+  </g>
+  <path d="${c.body}" fill="${color}" fill-opacity=".08" stroke="${color}" stroke-width="1.6" stroke-linejoin="round"/>
+  <g ${dim} fill="none">
+    <path d="M${c.x0} 100V114M${c.x1} 100V114M${c.x0} 110H${c.x1}M${c.x0-3} 113l6-6M${c.x1-3} 113l6-6"/>
+    <path d="M${c.x1+4} 96H${R+4}M${c.x1+4-30} ${c.top}H${R+4}M${R} 96V${c.top}M${R-3} ${c.top+3}l6-6M${R-3} 99l6-6"/>
+  </g>
+  <g fill="var(--muted)" font-family="var(--mono)" font-size="8">
+    <text x="${(c.x0+c.x1)/2}" y="107" text-anchor="middle">L ${L.toFixed(1)}</text>
+    <text transform="translate(${R+9} ${(96+c.top)/2}) rotate(-90)" text-anchor="middle">H ${H.toFixed(1)}</text>
+  </g>
+</svg>`;
+}
+function renderGarage(A){
+  $('garage').innerHTML=PLAYERS.map((p,j)=>{const car=A[j].car;if(!car)return '';
+    const art=CAR_ART[car],hb=art&&HITBOX[art.hb];
+    return `<figure class="car-card"><figcaption><span class="tag p${j+1}" style="padding:1px 8px"><i></i>${esc(p.short)}</span><b>${esc(car)}</b>`+
+      (art?`<span class="muted">${art.hb} hitbox</span>`:'')+`</figcaption>`+
+      (art?carBlueprint(car,p.color)+`<div class="car-dims num">L ${hb[0].toFixed(1)} · W ${hb[1].toFixed(1)} · H ${hb[2].toFixed(1)} uu</div>`
+          :`<div class="note">No drawing for the ${esc(car)} yet.</div>`)+`</figure>`;}).join('');
 }
 
 // ---------- all-time records ----------
@@ -685,6 +731,7 @@ async function load(){
 // Add a release at the top whenever something visible changes (dashboard or widget).
 const CHANGELOG=[
   {v:'1.6',date:'2026-10-14',items:[
+    'Technical drawing of each of your main cars under Playstyle, with its hitbox size',
     'Version number and this update log',
     'Main car shows Fennec instead of the game\'s internal name "Grain"',
     'Kickoff goals fixed: they showed 0 because the game\'s goal timer includes the countdown. New games are timed from the kickoff exactly',
