@@ -124,13 +124,20 @@ function makeSample(names){
   return {matches,mmr};
 }
 
+// ---------- units ----------
+// Everything is stored metric; the Units toggle converts only when it's shown.
+const IMP=()=>units==='imperial';
+const fSpd=(kmh,d=0)=>kmh==null?'–':IMP()?(kmh*0.621371).toFixed(d)+' mph':kmh.toFixed(d)+' km/h';
+const fDist=(km,d=1)=>km==null?'–':IMP()?(km*0.621371).toFixed(d)+' mi':km.toFixed(d)+' km';
+const fLen=m=>m==null?'–':IMP()?(m*1.09361).toFixed(0)+' yd':m.toFixed(0)+' m';
+
 // ---------- model ----------
 let PLAYERS=[], RAW={matches:[],mmr:[]}, SAMPLE=false;
 let ALL=[], DONE=[], sessions=[], NOW=Date.now();
 const SPECTATORS=['Morgan','Chance','Nick'];
-let period='30', mode='avg', metric='winpct', playlist=null, mapSide='us', mapWho='all';
-try{const s=JSON.parse(localStorage.getItem('rl-duo-ui')||'{}');if(s.period)period=s.period;if(s.mode)mode=s.mode;if(s.metric)metric=s.metric;if(s.playlist)playlist=s.playlist;}catch(e){}
-const saveUi=()=>{try{localStorage.setItem('rl-duo-ui',JSON.stringify({period,mode,metric,playlist}))}catch(e){}};
+let period='30', mode='avg', metric='winpct', playlist=null, units='metric', mapSide='us', mapWho='all';
+try{const s=JSON.parse(localStorage.getItem('rl-duo-ui')||'{}');if(s.period)period=s.period;if(s.mode)mode=s.mode;if(s.metric)metric=s.metric;if(s.playlist)playlist=s.playlist;if(s.units)units=s.units;}catch(e){}
+const saveUi=()=>{try{localStorage.setItem('rl-duo-ui',JSON.stringify({period,mode,metric,playlist,units}))}catch(e){}};
 
 // A forfeit never sends the game's "match ended" event, so the recorder saves it as Incomplete.
 // When one side was ahead, that side won (the team behind forfeited, or quit, which is a loss too).
@@ -410,7 +417,7 @@ function renderMaps(list){
   const shots=goals.filter(g=>g.x!=null&&g.y!=null), hits=goals.filter(g=>g.ix!=null&&g.iz!=null);
   $('mapWho').style.visibility=mapSide==='us'?'visible':'hidden';
   const col=g=>g.who>=0?PLAYERS[g.who].color:'var(--opp)';
-  const tip=g=>`${g.who>=0?PLAYERS[g.who].short:mapSide==='us'?'Us':'Opponent'}${g.spd!=null?' · '+g.spd+' km/h':''} · ${g.m.us}–${g.m.them} ${g.m.win?'win':'loss'}, ${fmtDate(g.m.when)}`;
+  const tip=g=>`${g.who>=0?PLAYERS[g.who].short:mapSide==='us'?'Us':'Opponent'}${g.spd!=null?' · '+fSpd(g.spd):''} · ${g.m.us}–${g.m.them} ${g.m.win?'win':'loss'}, ${fmtDate(g.m.when)}`;
   // Whole pitch, their goal at the top. Goal lines at Y=±5120, nets 880 deep, corners cut 1152.
   const W=480,Y0=-6000,Y1=6000,H=Math.round(W*(Y1-Y0)/8192);
   const sx=x=>(x+4096)/8192*W,sy=y=>(Y1-y)/(Y1-Y0)*H,su=u=>u/8192*W;
@@ -454,7 +461,7 @@ function renderMaps(list){
   const sp=goals.filter(g=>g.spd!=null),avgSpd=sp.length?Math.round(sp.reduce((a,g)=>a+g.spd,0)/sp.length):null;
   const missing=goals.length-hits.length;
   $('mapNote').textContent=!goals.length?'No goals in this period.':
-    `${goals.length} goals${avgSpd!=null?', average '+avgSpd+' km/h':''}.`+(top?` Most went in ${zname(top[0])} (${Math.round(100*top[1]/hits.length)}%).`:'')+
+    `${goals.length} goals${avgSpd!=null?', average '+fSpd(avgSpd):''}.`+(top?` Most went in ${zname(top[0])} (${Math.round(100*top[1]/hits.length)}%).`:'')+
     (missing?` ${missing} goal${missing>1?'s were':' was'} recorded before positions were saved.`:'')+' The net is drawn as you would see it facing the goal.';
 }
 
@@ -465,7 +472,7 @@ function renderPlay(list){
     PLAYERS.map((p,j)=>{const a=A[j];if(a.ground==null)return `<div class="split-row"><span class="tag p${j+1}" style="padding:1px 8px"><i></i>${esc(p.short)}</span><span class="note">No movement data yet</span></div>`;
       return `<div class="split-row"><span class="tag p${j+1}" style="padding:1px 8px"><i></i>${esc(p.short)}</span><div class="stack" title="Ground ${f(a.ground)}%, wall ${f(a.wall)}%, air ${f(a.air)}%">
       <div style="width:${a.ground}%;background:var(--ink-2)">${f(a.ground)}%</div><div style="width:${a.wall}%;background:var(--muted)">${f(a.wall)}%</div><div style="width:${a.air}%;background:${p.color}">${f(a.air)}%</div></div></div>`;}).join('');
-  const rows=[['Hat tricks',a=>a.games?String(a.hat):'–'],['Win % with a hat trick',a=>a.hat?`<span title="${a.hatWins} won of ${a.hat}">${Math.round(100*a.hatWins/a.hat)}%</span>`:'–'],['Kickoff goals',a=>a.games?String(a.kickoff):'–'],['Avg speed',a=>f(a.speed,0,' km/h')],['Top speed',a=>f(a.topSpeed,0,' km/h')],['Distance driven',a=>f(a.dist,a.dist>=100?0:1,' km')],['Distance / game',a=>a.dist==null?'–':(a.dist/a.distGames).toFixed(2)+' km'],['Avg boost held',a=>f(a.boost)],['Time supersonic',a=>f(a.ss,1,'%')],['Avg goal speed',a=>f(a.gsAvg,0,' km/h')],['Hardest goal',a=>f(a.gsMax,0,' km/h')],['Hardest hit',a=>f(a.hardest,0,' km/h')],['Bumps / game',a=>f(a.bumps,1)],['Boost pads / game',a=>f(a.pickups,1)],['Main car',a=>a.car?esc(a.car):'–'],['I Got No Boost',a=>a.noBoost==null?'–':`<span title="${fmtDur(a.noBoost/a.noBoostGames)} a game">${fmtDur(a.noBoost)}</span>`]];
+  const rows=[['Hat tricks',a=>a.games?String(a.hat):'–'],['Win % with a hat trick',a=>a.hat?`<span title="${a.hatWins} won of ${a.hat}">${Math.round(100*a.hatWins/a.hat)}%</span>`:'–'],['Kickoff goals',a=>a.games?String(a.kickoff):'–'],['Avg speed',a=>fSpd(a.speed)],['Top speed',a=>fSpd(a.topSpeed)],['Distance driven',a=>fDist(a.dist,a.dist>=100?0:1)],['Distance / game',a=>a.dist==null?'–':fDist(a.dist/a.distGames,2)],['Avg boost held',a=>f(a.boost)],['Time supersonic',a=>f(a.ss,1,'%')],['Avg goal speed',a=>fSpd(a.gsAvg)],['Hardest goal',a=>fSpd(a.gsMax)],['Hardest hit',a=>fSpd(a.hardest)],['Bumps / game',a=>f(a.bumps,1)],['Boost pads / game',a=>f(a.pickups,1)],['Main car',a=>a.car?esc(a.car):'–'],['I Got No Boost',a=>a.noBoost==null?'–':`<span title="${fmtDur(a.noBoost/a.noBoostGames)} a game">${fmtDur(a.noBoost)}</span>`]];
   const koFor=list.reduce((s,m)=>s+m.ourGoals.filter(g=>g.ko).length,0),koAgainst=list.reduce((s,m)=>s+m.theirGoals.filter(g=>g.ko).length,0);
   const pct=ms=>ms.length?`<span title="${ms.filter(m=>m.win).length} won of ${ms.length}">${Math.round(100*ms.filter(m=>m.win).length/ms.length)}%</span> <small class="muted">${ms.length} games</small>`:'–';
   const teamRows=[['Win % when we score first',pct(list.filter(m=>m.first==='us'))],['Win % when they score first',pct(list.filter(m=>m.first==='them'))],
@@ -529,10 +536,10 @@ function renderRecords(){
   const goalBest=(j,val)=>{let b=null;ms.forEach(m=>m.ourGoals.filter(g=>g.who===j).forEach(g=>{const v=val(g);if(v!=null&&(!b||v>b.v))b={v,m};}));return b;};
   const line=k=>(m,j)=>m.lines[j]?m.lines[j][k]:null;
   const recs=[
-    ['Longest goal',j=>goalBest(j,g=>g.x!=null&&g.y!=null?Math.hypot(g.x,5120-g.y)/100:null),v=>v.toFixed(0)+' m'],
-    ['Hardest goal',j=>goalBest(j,g=>g.spd),v=>v.toFixed(0)+' km/h'],
-    ['Hardest hit',j=>best(j,line('hardest')),v=>v.toFixed(0)+' km/h'],
-    ['Top speed',j=>best(j,line('topSpeed')),v=>v.toFixed(0)+' km/h'],
+    ['Longest goal',j=>goalBest(j,g=>g.x!=null&&g.y!=null?Math.hypot(g.x,5120-g.y)/100:null),v=>fLen(v)],
+    ['Hardest goal',j=>goalBest(j,g=>g.spd),v=>fSpd(v)],
+    ['Hardest hit',j=>best(j,line('hardest')),v=>fSpd(v)],
+    ['Top speed',j=>best(j,line('topSpeed')),v=>fSpd(v)],
     ['Most goals',j=>best(j,line('goals')),v=>v],
     ['Most assists',j=>best(j,line('assists')),v=>v],
     ['Most saves',j=>best(j,line('saves')),v=>v],
@@ -656,6 +663,9 @@ function renderAll(){
   if(!ALL.length){$('banner').hidden=false;$('banner').textContent='No finished matches for this playlist yet.';return;}
   renderPeriod();renderLastSession();renderStrip();renderTrend();renderMMR();renderWarmups();
 }
+$('units').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;units=b.dataset.u;saveUi();syncUnits();renderAll();});
+function syncUnits(){$('units').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.u===units)));}
+syncUnits();
 $('period').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;period=b.dataset.p;saveUi();renderPeriod();});
 $('mode').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;mode=b.dataset.m;saveUi();renderCmp(inPeriod());syncButtons();});
 $('metric').innerHTML=METRICS.map(m=>`<button type="button" data-k="${m.k}">${m.label}</button>`).join('');
@@ -734,6 +744,7 @@ async function load(){
 // Add a release at the top whenever something visible changes (dashboard or widget).
 const CHANGELOG=[
   {v:'1.6',date:'2026-10-14',items:[
+    'km/h or mph toggle at the top switches every unit: speeds to mph, distances to miles, lengths to yards',
     'Distance driven, in total and per game',
     'Technical drawing of each of your main cars under Playstyle, with its hitbox size',
     'Version number and this update log',
