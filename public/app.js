@@ -200,7 +200,12 @@ function toMatch(r){
   const rawGoals=(r.goals||[]).filter(Boolean), timed=rawGoals.some(g=>+g.goal_time>0);
   const teamOf={};(r.players||[]).forEach(p=>{if(p&&p.name)teamOf[p.name]=num(p.team);});
   const goals=rawGoals.filter(g=>!timed||+g.goal_time>0).map(g=>{
+    // f turns every goal into one attacking +Y. Rocket League's axes are left-handed (+X is the
+    // shooter's left facing +Y), so X is negated too, or the maps come out mirrored.
     const team=num(g.team), f=team===1?-1:1, i=g.impact;
+    // The game reports about a third of impact points with Y on the wrong end (a team 0 goal at
+    // Y=-5300 shot from Y=+4800), so the impact is turned using its own Y sign, not the team's.
+    const fi=co(i,'Y')?Math.sign(co(i,'Y')):f;
     // Redirect: the game's last touch belongs to the other team from the scorer. Then shot_from is
     // where that player touched it, and scorer_from (newer recorders) is where the scorer hit it.
     const lt=g.last_touch, defl=lt&&g.scorer&&lt!==g.scorer&&teamOf[lt]!=null&&team!=null&&teamOf[lt]!==team?String(lt):null;
@@ -209,11 +214,11 @@ function toMatch(r){
     // Credit the goal to whoever the game credits; the last hit can be an opponent's deflection.
     const who=ours?PLAYERS.findIndex(p=>p.name===(PLAYERS.some(q=>q.name===g.scorer)?g.scorer:g.shot_from_player)):-1;
     return {ours,who,scorer:g.scorer||null,assister:g.assister||null,ko:isKickoffGoal(g),spd:num(g.speed)!=null?Math.round(+g.speed):null,
-      z:co(s,'Z'),x:co(s,'X')!=null?f*co(s,'X'):null,y:co(s,'Y')!=null?f*co(s,'Y'):null,
-      ix:co(i,'X')!=null?f*co(i,'X'):null,iz:co(i,'Z'),
-      ax:co(g.assist_from,'X')!=null?f*co(g.assist_from,'X'):null,ay:co(g.assist_from,'Y')!=null?f*co(g.assist_from,'Y'):null,az:co(g.assist_from,'Z'),
-      touches:Array.isArray(g.touches)?g.touches.filter(t=>t&&t.location).map(t=>({name:t.player?String(t.player):'',team:num(t.team),x:f*co(t.location,'X'),y:f*co(t.location,'Y'),z:co(t.location,'Z')})):null,scoreTeam:team,
-      defl,dx:co(dp,'X')!=null?f*co(dp,'X'):null,dy:co(dp,'Y')!=null?f*co(dp,'Y'):null,dz:co(dp,'Z'),deflOnly:!!defl&&!g.scorer_from};
+      z:co(s,'Z'),x:co(s,'X')!=null?-f*co(s,'X'):null,y:co(s,'Y')!=null?f*co(s,'Y'):null,
+      ix:co(i,'X')!=null?-fi*co(i,'X'):null,iz:co(i,'Z'),
+      ax:co(g.assist_from,'X')!=null?-f*co(g.assist_from,'X'):null,ay:co(g.assist_from,'Y')!=null?f*co(g.assist_from,'Y'):null,az:co(g.assist_from,'Z'),
+      touches:Array.isArray(g.touches)?g.touches.filter(t=>t&&t.location).map(t=>({name:t.player?String(t.player):'',team:num(t.team),x:-f*co(t.location,'X'),y:f*co(t.location,'Y'),z:co(t.location,'Z')})):null,scoreTeam:team,
+      defl,dx:co(dp,'X')!=null?-f*co(dp,'X'):null,dy:co(dp,'Y')!=null?f*co(dp,'Y'):null,dz:co(dp,'Z'),deflOnly:!!defl&&!g.scorer_from};
   });
   const dur=num(r.duration_seconds)||300;
   const opps=(r.players||[]).filter(p=>p&&p.name&&!p.tracked&&myTeam!=null&&num(p.team)!==myTeam).map(p=>({name:String(p.name),url:trackerUrl(p)}));
@@ -1025,6 +1030,7 @@ $('matchLog').addEventListener('click',e=>{const a=e.target.closest('a.mlink');i
 // Add a release at the top whenever something visible changes (dashboard or widget).
 const CHANGELOG=[
   {v:'1.6',date:'2026-10-14',items:[
+    'Fixed the goal maps and 3D replays being mirrored left to right',
     'Arena background: a drawn pitch with boost pads over a random wallpaper on each visit',
     'Goal map pins are now little Rocket League balls',
     'Loading screen while your stats load, instead of briefly showing sample data',
