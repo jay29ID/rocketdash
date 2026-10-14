@@ -344,6 +344,13 @@ body.editing .editbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;bac
 .tlapse canvas{display:block;width:100%;aspect-ratio:12000/8400;max-height:60vh;border-radius:8px;background:var(--surface-2)}
 .tlbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:8px}
 .tlbar input[type=range]{flex:1 1 160px;min-width:0}
+.small{font-size:12px}
+.mpick{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:5px 8px;color:var(--ink);font-size:13px;max-width:100%;min-width:0}
+.artwrap{position:relative;margin-top:8px;display:grid;place-items:center;background:#05030a;border-radius:10px;overflow:hidden}
+.artwrap canvas{display:block;width:min(100%,520px);aspect-ratio:1;max-width:100%;animation:artspin 240s linear infinite}
+@keyframes artspin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.artwrap canvas{animation:none}}
+.akey{display:inline-flex;align-items:center;gap:4px;margin-right:8px}.akey i{width:8px;height:8px;border-radius:50%;display:inline-block}
 </style>
 </head>
 <body class="is-loading">
@@ -523,6 +530,19 @@ body.editing .editbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;bac
       <canvas id="map3d" role="img" aria-label="3D view of the pitch with each goal drawn from where it was shot to where it hit the net"></canvas>
       </div>
       <div class="map-note" id="map3dNote"></div>
+    </div>
+  </section>
+
+  <section class="grid g-2">
+    <div class="panel" aria-labelledby="tlpTitle">
+      <div class="panel-head"><h2 id="tlpTitle">Timelapse</h2><select class="mpick" id="tlpMatch" aria-label="Match to play"></select></div>
+      <div id="tlpBody"></div>
+      <p class="muted small" style="margin:6px 0 0">Cars glide between the spots where they touched the ball. We attack to the right.</p>
+    </div>
+    <div class="panel" aria-labelledby="artTitle">
+      <div class="panel-head"><h2 id="artTitle">Spirograph</h2><select class="mpick" id="artMatch" aria-label="Match to draw"></select></div>
+      <div class="artwrap"><canvas id="artCv" role="img" aria-label="Spirograph drawn from every ball touch in the match"></canvas></div>
+      <div class="tlbar"><span class="muted small">Petals</span><div class="seg" id="artSym" role="group" aria-label="Petals"><button type="button" data-n="3">3</button><button type="button" data-n="6" aria-pressed="true">6</button><button type="button" data-n="9">9</button></div><button type="button" class="chipbtn" id="artRedraw">Redraw</button><span class="muted small" id="artKey"></span></div>
     </div>
   </section>
 

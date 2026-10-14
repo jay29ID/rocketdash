@@ -1090,7 +1090,7 @@ function renderWarmups(){
 function renderAll(){
   build();
   if(!ALL.length){$('banner').hidden=false;$('banner').textContent='No finished matches for this playlist yet.';return;}
-  renderPeriod();renderLastSession();renderStrip();renderTrend();renderMMR();renderWarmups();
+  renderPeriod();renderLastSession();renderStrip();renderTrend();renderMMR();renderWarmups();renderMotion();
 }
 $('units').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;units=b.dataset.u;saveUi();syncUnits();renderAll();});
 function syncUnits(){$('units').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.u===units)));}
@@ -1108,7 +1108,7 @@ function applyThemes(){document.documentElement.classList.toggle('neon',look==='
   document.querySelectorAll('#g3Theme button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.t===g3Theme));}
 applyThemes();
 // The global Look switch themes the whole page and sets both map looks to match; each map can still be changed after.
-$('lookTheme').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;look=hmTheme=g3Theme=b.dataset.t;saveUi();applyThemes();renderAll();draw3D();drawMini();});
+$('lookTheme').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;look=hmTheme=g3Theme=b.dataset.t;saveUi();applyThemes();renderAll();draw3D();drawMini();if(ART.m)artStart(ART.m);});
 $('hmTheme').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;hmTheme=b.dataset.t;saveUi();applyThemes();renderAll();});
 $('g3Theme').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;g3Theme=b.dataset.t;saveUi();applyThemes();draw3D();drawMini();});
 $('mapSide').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;mapSide=b.dataset.s;document.querySelectorAll('#mapSide button').forEach(x=>x.setAttribute('aria-pressed',x===b));renderMaps(inPeriod());});
@@ -1259,24 +1259,30 @@ function openMatch(guid){
     (m.ff||m.replay||m.left.length?`<div class="mnotes">${notes(m)}</div>`:'')+
     `<table class="lines mtable num"><thead>${head}</thead><tbody>${body}</tbody></table>`+
     `<h3>Goals</h3>${story?`<ol class="story">${story}</ol>`:'<p class="muted">No goal details for this match.</p>'}`+
-    (m.tl?`<h3>Timelapse</h3><div class="tlapse"><canvas id="tlCv"></canvas><div class="tlbar"><button type="button" id="tlPlay" class="chipbtn">Pause</button><input type="range" id="tlPos" min="0" max="1000" value="0" aria-label="Match time"><span id="tlTime" class="num muted"></span><div class="seg" id="tlSpeed"><button type="button" data-x="10">10×</button><button type="button" data-x="30" aria-pressed="true">30×</button><button type="button" data-x="60">60×</button></div></div><p class="muted" style="margin:4px 0 0">Each car is drawn where it touched the ball, gliding between its touches, since the game doesn't send positions in between. We attack to the right.</p></div>`:'')+
+    (m.tl?`<h3>Timelapse</h3>${tlMarkup('tl')}<p class="muted" style="margin:4px 0 0">Each car is drawn where it touched the ball, gliding between its touches, since the game doesn't send positions in between. We attack to the right.</p>`:'')+
     `<h3>Opponents</h3><p>${m.opps.length?m.opps.map(o=>`<a href="${esc(o.url)}" target="_blank" rel="noopener">${esc(o.name)}</a>`).join(' · '):'<span class="muted">Not recorded</span>'}</p>`;
   const d=$('matchDlg');if(!d.open){if(d.showModal)d.showModal();else d.setAttribute('open','');}
-  if(m.tl)startTimelapse(m);
+  if(m.tl)startTimelapse(m,'tl',()=>$('matchDlg').open);
   return true;
 }
 // ---------- touch timelapse ----------
 // The Stats API has no car positions, only where each touch happened. Each car glides from one of
 // its touches to the next; if it went a long time without touching the ball it fades until the next one.
-const TL={m:null,t:0,x:30,play:true,last:0,raf:0};
-function startTimelapse(m){TL.m=m;TL.t=m.tl[0].t;TL.play=true;TL.last=performance.now();
-  $('tlPlay').onclick=()=>{TL.play=!TL.play;$('tlPlay').textContent=TL.play?'Pause':'Play';TL.last=performance.now();};
-  $('tlPos').oninput=e=>{const a=m.tl[0].t,b=m.tl[m.tl.length-1].t;TL.t=a+(b-a)*e.target.value/1000;drawTimelapse();};
-  $('tlSpeed').onclick=e=>{const b=e.target.closest('button');if(!b)return;TL.x=+b.dataset.x;$('tlSpeed').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));};
-  cancelAnimationFrame(TL.raf);const step=now=>{if(!$('matchDlg').open||TL.m!==m||!$('tlCv'))return;
+const tlMarkup=pre=>`<div class="tlapse"><canvas id="${pre}Cv"></canvas><div class="tlbar"><button type="button" id="${pre}Play" class="chipbtn">Pause</button><input type="range" id="${pre}Pos" min="0" max="1000" value="0" aria-label="Match time"><span id="${pre}Time" class="num muted"></span><div class="seg" id="${pre}Speed"><button type="button" data-x="10">10×</button><button type="button" data-x="30" aria-pressed="true">30×</button><button type="button" data-x="60">60×</button></div></div></div>`;
+// One player per canvas: the match dialog ('tl') and the dashboard panel ('tlp') each run their own.
+const TLS={};
+function startTimelapse(m,pre,alive){const TL=TLS[pre]||(TLS[pre]={x:30,raf:0});TL.m=m;TL.t=m.tl[0].t;TL.play=true;TL.alive=alive;
+  $(pre+'Play').textContent='Pause';
+  $(pre+'Play').onclick=()=>{TL.play=!TL.play;$(pre+'Play').textContent=TL.play?'Pause':'Play';runTimelapse(pre);};
+  $(pre+'Pos').oninput=e=>{const a=TL.m.tl[0].t,b=TL.m.tl[TL.m.tl.length-1].t;TL.t=a+(b-a)*e.target.value/1000;drawTimelapse(pre);};
+  $(pre+'Speed').onclick=e=>{const b=e.target.closest('button');if(!b)return;TL.x=+b.dataset.x;$(pre+'Speed').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));};
+  $(pre+'Speed').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',+x.dataset.x===TL.x));
+  runTimelapse(pre);}
+function runTimelapse(pre){const TL=TLS[pre];if(!TL||!TL.m)return;cancelAnimationFrame(TL.raf);TL.last=performance.now();
+  const m=TL.m,step=now=>{if(!TL.alive()||TL.m!==m||!$(pre+'Cv')){TL.raf=0;return;}
     if(TL.play){TL.t+=(now-TL.last)/1000*TL.x;const end=m.tl[m.tl.length-1].t+2;if(TL.t>end)TL.t=m.tl[0].t;}
-    TL.last=now;drawTimelapse();TL.raf=requestAnimationFrame(step);};TL.raf=requestAnimationFrame(step);}
-function drawTimelapse(){const m=TL.m,cv=$('tlCv');if(!m||!cv)return;
+    TL.last=now;drawTimelapse(pre);TL.raf=requestAnimationFrame(step);};TL.raf=requestAnimationFrame(step);}
+function drawTimelapse(pre){const TL=TLS[pre],m=TL&&TL.m,cv=$(pre+'Cv');if(!m||!cv)return;
   const W=cv.clientWidth,H=cv.clientHeight,dpr=window.devicePixelRatio||1;if(!W||!H)return;
   if(cv.width!==Math.round(W*dpr)){cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);}
   const c=cv.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,W,H);
@@ -1304,8 +1310,72 @@ function drawTimelapse(){const m=TL.m,cv=$('tlCv');if(!m||!cv)return;
   c.textAlign='left';c.font='600 13px '+(tok('--mono')||'monospace');c.fillStyle=tok('--ink');c.fillText(`${us}–${them}`,10,18);
   if(last&&t-last.t<6){c.globalAlpha=1-(t-last.t)/6;c.textAlign='center';c.font='700 22px '+(tok('--display')||'sans-serif');c.fillStyle=last.ours?tok('--win'):tok('--loss');
     const j=PLAYERS.findIndex(q=>q.name===last.who);c.fillText('GOAL'+(j>=0?' · '+PLAYERS[j].short.toUpperCase():''),W/2,H/2-30);c.globalAlpha=1;}
-  const a0=tl[0].t,b0=tl[tl.length-1].t;$('tlPos').value=Math.round(1000*Math.min(1,(t-a0)/((b0-a0)||1)));
-  $('tlTime').textContent=fmtDur(Math.max(0,Math.round(t-a0)))+' / '+fmtDur(Math.round(b0-a0));}
+  const a0=tl[0].t,b0=tl[tl.length-1].t;$(pre+'Pos').value=Math.round(1000*Math.min(1,(t-a0)/((b0-a0)||1)));
+  $(pre+'Time').textContent=fmtDur(Math.max(0,Math.round(t-a0)))+' / '+fmtDur(Math.round(b0-a0));}
+// ---------- dashboard panels: timelapse and spirograph ----------
+const MOT={tlg:null,seen:false,obs:false};
+const ART={m:null,i:0,n:6,raf:0,seen:false,segs:[],W:0};
+const motionMatches=()=>ALL.filter(m=>m.tl&&m.tl.length>1).slice().sort((a,b)=>b.when-a.when);
+const mLabel=m=>`${m.win?'W':'L'} ${m.us}–${m.them} · ${fmtDate(m.when)} ${fmtTime(m.when)} · ${m.arena}`;
+function fillPick(sel,list){const keep=sel.value;sel.innerHTML=list.map(m=>`<option value="${esc(m.guid)}">${esc(mLabel(m))}</option>`).join('');
+  if(list.some(m=>String(m.guid)===keep))sel.value=keep;sel.disabled=!list.length;}
+function renderMotion(){
+  const list=motionMatches(),pick=sel=>list.find(m=>String(m.guid)===sel.value)||list[0];
+  fillPick($('tlpMatch'),list);fillPick($('artMatch'),list);
+  if(!MOT.obs){MOT.obs=true;
+    new IntersectionObserver(es=>{MOT.seen=es[0].isIntersecting;if(MOT.seen&&TLS.tlp&&!TLS.tlp.raf)runTimelapse('tlp');}).observe($('tlpBody'));
+    new IntersectionObserver(es=>{ART.seen=es[0].isIntersecting;if(ART.seen)artRun();}).observe($('artCv'));
+    $('tlpMatch').onchange=()=>{MOT.tlg=null;renderMotion();};
+    $('artMatch').onchange=()=>{ART.m=null;renderMotion();};
+    $('artRedraw').onclick=()=>{if(ART.m)artStart(ART.m);};
+    $('artSym').onclick=e=>{const b=e.target.closest('button');if(!b)return;ART.n=+b.dataset.n;$('artSym').querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',x===b));if(ART.m)artStart(ART.m);};
+    let rz;window.addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(()=>{if(ART.m&&$('artCv').clientWidth!==ART.W)artPaint(true);},200);});}
+  if(!list.length){MOT.tlg=null;ART.m=null;
+    $('tlpBody').innerHTML='<p class="muted">No games with touch data yet. Click Check updates on the widget, then play a game.</p>';
+    const cv=$('artCv');cv.getContext('2d').clearRect(0,0,cv.width,cv.height);$('artKey').textContent='Needs a game with touch data.';return;}
+  const tm=pick($('tlpMatch'));
+  if(MOT.tlg!==tm.guid){MOT.tlg=tm.guid;$('tlpBody').innerHTML=tlMarkup('tlp');startTimelapse(tm,'tlp',()=>MOT.seen);}
+  const am=pick($("artMatch"));if(!ART.m||ART.m.guid!==am.guid)artStart(am);
+}
+// A spirograph per thing on the pitch: the ball and every car each trace one continuous hypotrochoid
+// through the match. The pen goes round once every few seconds of game time; how far up the pitch
+// it was (towards their goal = wider) sets the big circle, how high off the ground sets the little
+// rolling circle, and side to side nudges the angle. Goals leave a ring. Petals sets how fast the little circle spins.
+function artSegments(m){
+  const tl=m.tl,t0=tl[0].t,t1=tl[tl.length-1].t,col=p=>{const j=PLAYERS.findIndex(q=>q.name===p);return j>=0?'--p'+(j+1):'--opp';};
+  const track=pts=>t=>{let i=0;while(i<pts.length-1&&pts[i+1].t<=t)i++;const A=pts[i],B=pts[Math.min(i+1,pts.length-1)];
+    let u=B.t>A.t?clamp((t-A.t)/(B.t-A.t),0,1):0;u=u*u*(3-2*u);return {x:A.x+(B.x-A.x)*u,y:A.y+(B.y-A.y)*u,z:(A.z||0)+((B.z||0)-(A.z||0))*u};};
+  const ents=[{at:track(tl),c:'--ball',R:.5,Ry:.16,r:.14,rz:.22,k:ART.n+.3,a:.4,w:.9}];
+  [...new Set(tl.map(x=>x.p))].forEach((p,n)=>{const mine=tl.filter(x=>x.p===p);if(mine.length<2)return;
+    ents.push({at:track(mine),c:col(p),R:.28+.06*(n%3),Ry:.14,r:.2,rz:.1,k:(n%2?-1:1)*(ART.n*.7+.17*n+.12),a:.3,w:.8});});
+  const P=14,dt=1/24,out=[];
+  for(let a=t0;a<t1;a+=1){const b=Math.min(t1,a+1);
+    ents.forEach(e=>{const pts=[];for(let t=a;t<=b+1e-6;t+=dt){const s=e.at(t),th=2*Math.PI*(t-t0)/P+.5*s.x/4096,
+        R=e.R+e.Ry*s.y/5120,r=e.r+e.rz*Math.min(1,s.z/1800);
+        pts.push([R*Math.cos(th)+r*Math.cos(e.k*th),R*Math.sin(th)+r*Math.sin(e.k*th)]);}
+      out.push({t:a,c:e.c,a:e.a,w:e.w,pts});});}
+  (m.goalAt||[]).forEach((g,n)=>out.push({t:g.t,ring:.97-n*.018,c:g.ours?'--win':'--loss',a:.8,w:1.6}));
+  return out.sort((a,b)=>a.t-b.t);}
+function artStart(m){ART.m=m;ART.segs=artSegments(m);ART.i=0;artPaint(true);
+  const names=[...new Set(m.tl.map(x=>x.p))],ours=PLAYERS.filter(p=>names.includes(p.name));
+  $('artKey').innerHTML=ours.map(p=>`<span class="akey"><i style="background:var(--p${PLAYERS.indexOf(p)+1})"></i>${esc(p.short)}</span>`).join('')+
+    (names.some(n=>!PLAYERS.some(p=>p.name===n))?'<span class="akey"><i style="background:var(--opp)"></i>Opponents</span>':'')+
+    `<span class="num">${m.tl.length} touches</span>`;
+  artRun();}
+function artPaint(clear){const cv=$('artCv'),W=cv.clientWidth,dpr=window.devicePixelRatio||1;if(!W)return;
+  if(clear||ART.W!==W){ART.W=W;cv.width=cv.height=Math.round(W*dpr);const c=cv.getContext('2d');c.setTransform(1,0,0,1,0,0);c.clearRect(0,0,cv.width,cv.height);
+    const n=ART.i;ART.i=0;artDraw(n);}}
+function artDraw(upto){const cv=$('artCv'),c=cv.getContext('2d'),S=cv.width/2,R=S*.9;if(!S)return;
+  const css=getComputedStyle(document.documentElement),cache={},tok=n=>cache[n]||(cache[n]=css.getPropertyValue(n).trim()||'#fff');
+  c.save();c.globalCompositeOperation='lighter';c.lineJoin='round';const dpr=cv.width/(ART.W||1);
+  for(;ART.i<Math.min(upto,ART.segs.length);ART.i++){const g=ART.segs[ART.i];c.strokeStyle=tok(g.c);c.globalAlpha=g.a;c.lineWidth=g.w*dpr;
+    if(g.ring){c.beginPath();c.arc(S,S,g.ring*R,0,2*Math.PI);c.stroke();continue;}
+    c.beginPath();g.pts.forEach(([x,y],q)=>q?c.lineTo(S+R*x,S+R*y):c.moveTo(S+R*x,S+R*y));c.stroke();}
+  c.restore();}
+function artRun(){cancelAnimationFrame(ART.raf);ART.raf=0;if(!ART.m||!ART.seen)return;
+  const per=Math.max(1,ART.segs.length/(12*60)),step=()=>{if(!ART.seen||ART.i>=ART.segs.length){ART.raf=0;return;}
+    if(ART.W!==$('artCv').clientWidth)artPaint(false);artDraw(ART.i+per);ART.raf=requestAnimationFrame(step);};
+  ART.raf=requestAnimationFrame(step);}
 function matchFromHash(){const h=location.hash;if(h.startsWith('#m-'))openMatch(decodeURIComponent(h.slice(3)));}
 window.addEventListener('hashchange',matchFromHash);
 $('matchClose').addEventListener('click',()=>$('matchDlg').close());
@@ -1364,7 +1434,8 @@ $('matchLog').addEventListener('click',e=>{const a=e.target.closest('a.mlink');i
   try{const x=JSON.parse(localStorage.getItem(KEY)||'null');if(x&&Array.isArray(x.order))L={order:x.order,w:x.w||{},hidden:x.hidden||[]};}catch(e){}
   const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(L));}catch(e){}};
   const byId=id=>mods.find(m=>m.dataset.mod===id);
-  const apply=()=>{const ord=L.order.filter(byId).concat(defOrder.filter(id=>!L.order.includes(id)));
+  const apply=()=>{const ord=L.order.filter(byId);
+    defOrder.forEach((id,k)=>{if(ord.includes(id))return;const prev=defOrder.slice(0,k).reverse().find(x=>ord.includes(x));ord.splice(prev?ord.indexOf(prev)+1:0,0,id);});
     ord.forEach(id=>{const m=byId(id),half=L.w[id]?L.w[id]==='half':!!m.dataset.half;m.classList.toggle('half',half);m.classList.toggle('gone',L.hidden.includes(id));
       const mb=m.querySelector('.modbar');mb.querySelector('[data-a="w"]').textContent=half?'▭':'½';mb.querySelector('[data-a="hide"]').textContent=L.hidden.includes(id)?'👁':'✕';board.appendChild(m);});
     L.order=ord;};
@@ -1399,6 +1470,7 @@ $('matchLog').addEventListener('click',e=>{const a=e.target.closest('a.mlink');i
 // Add a release at the top whenever something visible changes (dashboard or widget).
 const CHANGELOG=[
   {v:'1.7',date:'2026-10-14',items:[
+    'Timelapse and Spirograph panels on the dashboard: pick a game to replay its touches, or watch it drawn as trippy spirograph loops from the ball and every car',
     'Match timelapse: open a match to watch the cars move between their ball touches on the overhead field (new games)',
     'A live timer under each name at the top: time since that player last scored',
     'Player pictures: click your name at the top to upload one, and it shows next to your name across the dashboard',
