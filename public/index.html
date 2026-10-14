@@ -456,6 +456,21 @@ footer{font-size:12px;color:var(--muted);max-width:70ch}
     </div>
   </section>
 
+  <section class="panel" aria-labelledby="defTitle">
+    <div class="panel-head"><h2 id="defTitle">Defense</h2><span class="muted">Saves and shots against for the period above</span></div>
+    <div class="maps">
+      <div class="map-col">
+        <h3>Where our saves happened</h3>
+        <div id="saveMap"></div>
+        <div class="heat-key"><span>Cold</span><span class="ramp"></span><span>Hot</span></div>
+      </div>
+      <div class="map-col">
+        <div class="callouts" id="defCallouts" style="grid-template-columns:repeat(2,minmax(0,1fr))"></div>
+        <div class="map-note" id="saveNote"></div>
+      </div>
+    </div>
+  </section>
+
   <section class="grid g-2b">
     <div class="panel" aria-labelledby="mmrTitle">
       <div class="panel-head"><h2 id="mmrTitle">MMR history</h2><span class="muted" id="mmrSub"></span></div>
@@ -528,7 +543,7 @@ footer{font-size:12px;color:var(--muted);max-width:70ch}
     <div class="panel-head"><h2 id="matchTitle">Match</h2><button type="button" class="x" id="matchClose" aria-label="Close">&times;</button></div>
     <div id="matchBody"></div>
   </dialog>
-  <footer id="footer">Rank names use approximate MMR ranges for Ranked Doubles. Shot and net positions only exist for matches recorded with the latest recorder.</footer>
+  <footer id="footer">Rank names use approximate MMR ranges for Ranked Doubles. Shot and net positions only exist for matches recorded with the latest recorder. Save positions exist for matches recorded since saves were tracked.</footer>
 </div>
 
 <script src="/app.js"></script>

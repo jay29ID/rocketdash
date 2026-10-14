@@ -133,6 +133,7 @@ function Get-Match([string]$Guid) {
     $script:OpenMatches[$Guid] = @{
       Guid = $Guid; StartedAt = (Get-Date).ToUniversalTime(); State = $null; Saved = $false
       Goals = New-Object System.Collections.ArrayList
+      Saves = New-Object System.Collections.ArrayList   # each save, with where the saver touched the ball
       Events = New-Object System.Collections.ArrayList   # raw event log, written to events\<guid>.jsonl
       Agg = @{}          # per-player movement/boost samples from UpdateState
       Feed = @{}         # per-player counts of statfeed events (EpicSave, AerialGoal, ...)
@@ -310,13 +311,14 @@ function Save-Match($M, [string]$Result, $WinnerTeamNum) {
     possession_pct = $possession
     mmr_at_queue = $null; mmr_party_size = $null
     goals = @($M.Goals)
+    saves = @($M.Saves)
     players = @($rows)
     players_left = @($M.Left)
     replay_created = $M.Replay
     kickoffs = $M.Kickoffs
   }
 
-  if ($null -ne $myTeam) { foreach ($g in $M.Goals) { if ($null -ne $g.team) { $g.ours = ([int]$g.team -eq [int]$myTeam) } } }
+  if ($null -ne $myTeam) { foreach ($g in @($M.Goals) + @($M.Saves)) { if ($null -ne $g.team) { $g.ours = ([int]$g.team -eq [int]$myTeam) } } }
 
   $q = $null; if ($playlist) { $q = Get-QueueMmr $playlist $M.StartedAt }
   if ($q) { $record.mmr_at_queue = $q.mmr; $record.mmr_party_size = $q.party_size }
@@ -469,8 +471,14 @@ function Invoke-Message($Msg) {
       if (-not $kind) { $kind = [string](Get-Prop $data 'Type') }
       Add-Count $m.Feed ([string](Get-Prop (Get-Prop $data 'MainTarget') 'Name')) $kind
       Add-Count $m.FeedAgainst ([string](Get-Prop (Get-Prop $data 'SecondaryTarget') 'Name')) $kind
-      $saveTeam = Get-Prop (Get-Prop $data 'MainTarget') 'TeamNum'
-      if ($kind -in 'Save', 'EpicSave' -and $null -ne $saveTeam) { $m.SaveAt[[int]$saveTeam] = Get-Date }
+      $saver = Get-Prop $data 'MainTarget'; $saveTeam = Get-Prop $saver 'TeamNum'
+      if ($kind -in 'Save', 'EpicSave' -and $null -ne $saveTeam) {
+        $m.SaveAt[[int]$saveTeam] = Get-Date
+        # The save is credited after the saver's touch, so their latest BallHit is where it happened.
+        $name = [string](Get-Prop $saver 'Name'); $hit = $m.LastHitBy[$name]; $at = $null
+        if ($hit) { $at = $hit.location }
+        [void]$m.Saves.Add([ordered]@{ player = $name; team = $saveTeam; epic = $kind -eq 'EpicSave'; location = $at; ours = $null })
+      }
     }
     'RoundStarted'  { $m.Kickoffs++; $m.SaveAt = @{} }
     'BoostPickup'   {

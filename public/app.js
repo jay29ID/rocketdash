@@ -107,7 +107,7 @@ function makeSample(names){
       }
       for(let g=0;g<them;g++)goals.push({team:1-my,ours:false,goal_time:rnd()<.08?9+Math.floor(rnd()*3):14+Math.floor(rnd()*120),scorer:'Opponent',speed:Math.round(clamp(norm(86,18),35,140)),...pos(spot(1.1),-f)});
       for(let i=goals.length-1;i>0;i--){const k=Math.floor(rnd()*(i+1));[goals[i],goals[k]]=[goals[k],goals[i]];}   // in match order
-      const players=prof.map((p,j)=>{
+      const lineup=prof.map((p,j)=>{
         const L=lines[j],shots=L.goals+pois(Math.max(.4,p.sh-p.g)),saves=pois(p.sv*(them>2?1.25:1)),demos=pois(p.d),touches=Math.max(8,Math.round(norm(p.t,5)));
         const air=+clamp(norm(p.air,1.8),1,20).toFixed(1),wall=+clamp(norm(p.wall,2.5),3,25).toFixed(1);
         return {name:names[j],team:my,tracked:true,goals:L.goals,assists:L.assists,shots,saves,demos,touches,
@@ -115,16 +115,21 @@ function makeSample(names){
           car_touches:pois(p.bump),boost_pickups:Math.round(clamp(norm(j?34:29,6),8,70)),loadout:{Car:j?'Fennec':'Octane'},avg_boost:Math.round(clamp(norm(p.boost,5),20,70)),pct_supersonic:+clamp(norm(p.ss,3),3,35).toFixed(1),pct_zero_boost:+clamp(norm(j?9:7,3),1,25).toFixed(1),zero_boost_fixed:true,
           avg_speed:Math.round(clamp(norm(j?1380:1320,60),1100,1600)),max_speed:2300,pct_air:air,pct_wall:wall,pct_ground:+(100-air-wall).toFixed(1),hardest_hit:Math.round(clamp(norm(p.gs+25,15),60,160))};
       });
+      const saves=lineup.flatMap(p=>Array.from({length:p.saves},()=>{const x=clamp(norm(0,1300),-3900,3900),y=-clamp(norm(4200,700),1500,5100);
+        return {player:p.name,team:my,ours:true,epic:rnd()<.12,location:{X:Math.round(f*x),Y:Math.round(f*y),Z:93}};}));
       // Two opponents, and now and then one of them redirects one of our shots on its way in.
       const foes=[pick(['Zephyr','BallChaser99','nxtLvl','Mochi','RocketRalph','ghostpepper']),pick(['Tidal','Vex','sir_flips','Kiwi','B0ost','Nova'])];
-      foes.forEach(n=>players.push({name:n,team:1-my,tracked:false,platform:'Epic'}));
+      const opp=foes.map(n=>({name:n,team:1-my,tracked:false,platform:'Epic',goals:0,shots:0}));
+      for(let g=0;g<them;g++)opp[g%2].goals++;
+      const miss=saves.length+pois(1.6);opp.forEach((o,i)=>o.shots=o.goals+(i?Math.floor(miss/2):Math.ceil(miss/2)));
+      const players=[...lineup,...opp];
       goals.forEach(g=>{if(g.ours&&rnd()<.14){const s=g.shot_from,ix=g.impact.X,f=Math.sign(g.impact.Y)||1;
         g.scorer_from=s;g.last_touch=pick(foes);g.shot_from={X:Math.round(s.X+(ix-s.X)*.6+norm(0,250)),Y:Math.round(s.Y+(f*5120-s.Y)*.6),Z:Math.round(clamp(norm(260,140),60,700))};}
         // Newer recorders save the last 3 touches; give the sample's assisted goals some.
         if(g.ours&&g.assist_from&&rnd()<.7){const t=[{player:g.assister,team:my,location:g.assist_from},{player:g.scorer,team:my,location:g.scorer_from||g.shot_from}];
           if(g.last_touch)t.push({player:g.last_touch,team:1-my,location:g.shot_from});g.touches=t.slice(-3);}});
       matches.push({match_guid:'sample-'+si+'-'+k,started_at:new Date(t).toISOString(),duration_seconds:dur,playlist:warm?'Casual Doubles':'Ranked Doubles',arena:pick(arenas),
-        overtime:ot,my_team:my,result:win?'Win':'Loss',team_score:us,opponent_score:them,goals,players,
+        overtime:ot,my_team:my,result:win?'Win':'Loss',team_score:us,opponent_score:them,goals,saves,players,
         replay_created:rnd()<.2?new Date(t+dur*1000).toISOString():null,
         kickoffs:us+them+1,players_left:rnd()<.08?[{name:'Opponent',team:1-my}]:[],spectators:crowd,drinks:{[names[0]]:Math.floor(k*.7)}});
       t+=(dur+60+Math.floor(rnd()*90))*1000;
@@ -201,6 +206,12 @@ function toMatch(r){
       goalSpeeds:(r.goals||[]).filter(g=>g&&!(+g.goal_time<=0&&(r.goals||[]).some(x=>x&&+x.goal_time>0))&&g.scorer===p.name&&num(g.speed)!=null).map(g=>+g.speed)};
   });
   const myTeam=num(r.my_team);
+  const opp=myTeam==null?[]:rows.filter(x=>x&&num(x.team)!=null&&num(x.team)!==myTeam);
+  // Only matches recorded since saves were tracked have a saves list.
+  const saves=Array.isArray(r.saves)?r.saves.filter(s=>s&&(s.ours!=null?s.ours:myTeam!=null&&num(s.team)===myTeam)).map(s=>{
+    const f=num(s.team)===1?-1:1,l=s.location;
+    return {who:PLAYERS.findIndex(p=>p.name===s.player),epic:!!s.epic,x:co(l,'X')!=null?f*co(l,'X'):null,y:co(l,'Y')!=null?f*co(l,'Y'):null};
+  }):null;
   // The game sends a second, empty GoalScored for most goals (no goal time, no scorer), so a match
   // stored twice as many goals as were scored. Real goals always have a goal time.
   const rawGoals=(r.goals||[]).filter(Boolean), timed=rawGoals.some(g=>+g.goal_time>0);
@@ -231,7 +242,8 @@ function toMatch(r){
   return {guid:r.match_guid,when:new Date(r.started_at),win:r.result==='Win',us:num(r.team_score)||0,them:num(r.opponent_score)||0,
     ot:!!r.overtime,dur,swing,arena:arenaName(r.arena),playlist:r.playlist||'Unknown playlist',lines,
     first:goals.length?(goals[0].ours?'us':'them'):null,goals,secs:matchSecs(r),deficit:maxDeficit(goals),lead:maxDeficit(goals,-1),
-    ourGoals:goals.filter(g=>g.ours),theirGoals:goals.filter(g=>!g.ours),
+    ourGoals:goals.filter(g=>g.ours),theirGoals:goals.filter(g=>!g.ours),saves,
+    oppShots:opp.length?opp.reduce((a,x)=>a+(num(x.shots)||0),0):null,oppGoals:opp.reduce((a,x)=>a+(num(x.goals)||0),0),
     replay:!!r.replay_created,left,opps,ff:!!r.ff,
     spectators:Array.isArray(r.spectators)?r.spectators.map(String):null,
     drinks:r.drinks&&num(r.drinks[PLAYERS[0].name])!=null?num(r.drinks[PLAYERS[0].name]):null};
@@ -452,6 +464,27 @@ function renderMMR(){
 }
 
 // ---------- goal map ----------
+function fieldMap(pts,noun,tip,top,bottom){
+  // Whole pitch, the attacked goal at the top. Goal lines at Y=±5120, nets 880 deep, corners cut 1152.
+  const W=480,Y0=-6000,Y1=6000,H=Math.round(W*(Y1-Y0)/8192);
+  const sx=x=>(x+4096)/8192*W,sy=y=>(Y1-y)/(Y1-Y0)*H,su=u=>u/8192*W;
+  const cell=512,bins={};
+  pts.forEach(g=>{const c=Math.floor((clamp(g.x,-4096,4095)+4096)/cell),r=Math.floor((clamp(g.y,-5120,5119)+5120)/cell);const k=c+','+r;bins[k]=(bins[k]||0)+1;});
+  const bmax=Math.max(1,...Object.values(bins)),ch=1152;
+  const ends=s=>{const g=5120*s,c=(5120-ch)*s,n=6000*s;return `L${sx(-4096)},${sy(c)} L${sx(-4096+ch)},${sy(g)} L${sx(-893)},${sy(g)} L${sx(-893)},${sy(n)} L${sx(893)},${sy(n)} L${sx(893)},${sy(g)} L${sx(4096-ch)},${sy(g)} L${sx(4096)},${sy(c)}`;};
+  const outline=`M${sx(-4096)},${sy(0)} ${ends(1)} L${sx(4096)},${sy(-(5120-ch))} L${sx(4096-ch)},${sy(-5120)} L${sx(893)},${sy(-5120)} L${sx(893)},${sy(-6000)} L${sx(-893)},${sy(-6000)} L${sx(-893)},${sy(-5120)} L${sx(-4096+ch)},${sy(-5120)} L${sx(-4096)},${sy(-(5120-ch))} Z`;
+  let f=`<path d="${outline}" fill="var(--pitch)"/>`;
+  Object.entries(bins).forEach(([k,n])=>{const [c,r]=k.split(',').map(Number);
+    f+=`<rect x="${sx(c*cell-4096)+.5}" y="${sy(-5120+(r+1)*cell)+.5}" width="${su(cell)-1}" height="${su(cell)-1}" rx="2" fill="${heatColor(n/bmax)}" opacity=".85"><title>${n} ${noun}${n>1?'s':''} from here</title></rect>`;});
+  const ln='stroke="var(--pitch-line)" stroke-width="1.5" fill="none"';
+  f+=`<path d="${outline}" ${ln}/>`;
+  f+=`<line x1="${sx(-4096)}" x2="${sx(4096)}" y1="${sy(0)}" y2="${sy(0)}" ${ln}/><circle cx="${sx(0)}" cy="${sy(0)}" r="${su(1000)}" ${ln}/>`;
+  f+=`<rect x="${sx(-1800)}" y="${sy(5120)}" width="${su(3600)}" height="${su(1100)}" ${ln}/><rect x="${sx(-1800)}" y="${sy(-4020)}" width="${su(3600)}" height="${su(1100)}" ${ln}/>`;
+  f+=`<text x="${W/2}" y="${sy(6000)-6}" text-anchor="middle">${top}</text><text x="${W/2}" y="${sy(-6000)+14}" text-anchor="middle">${bottom}</text>`;
+  // Pins stay neutral so they don't fight the blue-to-red heat.
+  pts.forEach(g=>{f+=rlBall(sx(clamp(g.x,-4096,4096)),sy(clamp(g.y,-5120,5120)),4.5,'#0b1017',1,'rlb-'+noun,tip(g),g.k);});
+  return `<svg viewBox="0 -18 ${W} ${H+36}" role="img" aria-label="Top-down field with ${pts.length} ${noun} locations">${rlBallDefs('rlb-'+noun)}${f}</svg>`;
+}
 // Cold to hot: blue, through violet, to red. t runs 0..1.
 const HEAT=[[47,111,214],[124,77,196],[214,51,57]];
 function heatColor(t){
@@ -478,25 +511,7 @@ function renderMaps(list){
   $('mapWho').style.visibility=mapSide==='us'&&PLAYERS.length>1?'visible':'hidden';
   const col=g=>g.who>=0?PLAYERS[g.who].color:'var(--opp)';
   const tip=g=>`${g.who>=0?PLAYERS[g.who].short:mapSide==='us'?'Us':'Opponent'}${g.assister?' (assist '+(PLAYERS.find(q=>q.name===g.assister)?.short||g.assister)+')':''}${g.defl?' · redirected by '+g.defl:''}${g.spd!=null?' · '+fSpd(g.spd):''} · ${g.m.us}–${g.m.them} ${g.m.win?'win':'loss'}, ${fmtDate(g.m.when)}`;
-  // Whole pitch, their goal at the top. Goal lines at Y=±5120, nets 880 deep, corners cut 1152.
-  const W=480,Y0=-6000,Y1=6000,H=Math.round(W*(Y1-Y0)/8192);
-  const sx=x=>(x+4096)/8192*W,sy=y=>(Y1-y)/(Y1-Y0)*H,su=u=>u/8192*W;
-  const cell=512,bins={};
-  shots.forEach(g=>{const c=Math.floor((clamp(g.x,-4096,4095)+4096)/cell),r=Math.floor((clamp(g.y,-5120,5119)+5120)/cell);const k=c+','+r;bins[k]=(bins[k]||0)+1;});
-  const bmax=Math.max(1,...Object.values(bins)),ch=1152;
-  const ends=s=>{const g=5120*s,c=(5120-ch)*s,n=6000*s;return `L${sx(-4096)},${sy(c)} L${sx(-4096+ch)},${sy(g)} L${sx(-893)},${sy(g)} L${sx(-893)},${sy(n)} L${sx(893)},${sy(n)} L${sx(893)},${sy(g)} L${sx(4096-ch)},${sy(g)} L${sx(4096)},${sy(c)}`;};
-  const outline=`M${sx(-4096)},${sy(0)} ${ends(1)} L${sx(4096)},${sy(-(5120-ch))} L${sx(4096-ch)},${sy(-5120)} L${sx(893)},${sy(-5120)} L${sx(893)},${sy(-6000)} L${sx(-893)},${sy(-6000)} L${sx(-893)},${sy(-5120)} L${sx(-4096+ch)},${sy(-5120)} L${sx(-4096)},${sy(-(5120-ch))} Z`;
-  let f=`<path d="${outline}" fill="var(--pitch)"/>`;
-  Object.entries(bins).forEach(([k,n])=>{const [c,r]=k.split(',').map(Number);
-    f+=`<rect x="${sx(c*cell-4096)+.5}" y="${sy(-5120+(r+1)*cell)+.5}" width="${su(cell)-1}" height="${su(cell)-1}" rx="2" fill="${heatColor(n/bmax)}" opacity=".85"><title>${n} goal${n>1?'s':''} from here</title></rect>`;});
-  const ln='stroke="var(--pitch-line)" stroke-width="1.5" fill="none"';
-  f+=`<path d="${outline}" ${ln}/>`;
-  f+=`<line x1="${sx(-4096)}" x2="${sx(4096)}" y1="${sy(0)}" y2="${sy(0)}" ${ln}/><circle cx="${sx(0)}" cy="${sy(0)}" r="${su(1000)}" ${ln}/>`;
-  f+=`<rect x="${sx(-1800)}" y="${sy(5120)}" width="${su(3600)}" height="${su(1100)}" ${ln}/><rect x="${sx(-1800)}" y="${sy(-4020)}" width="${su(3600)}" height="${su(1100)}" ${ln}/>`;
-  f+=`<text x="${W/2}" y="${sy(6000)-6}" text-anchor="middle">${mapSide==='us'?'Their goal':'Our goal'}</text><text x="${W/2}" y="${sy(-6000)+14}" text-anchor="middle">${mapSide==='us'?'Our goal':'Their goal'}</text>`;
-  // Dots stay neutral here so they don't fight the blue-to-red heat; the net view carries who scored.
-  shots.forEach(g=>{f+=rlBall(sx(clamp(g.x,-4096,4096)),sy(clamp(g.y,-5120,5120)),4.5,'#0b1017',1,'rlbF',tip(g),g.k);});
-  $('fieldMap').innerHTML=`<svg viewBox="0 -18 ${W} ${H+36}" role="img" aria-label="Top-down field with ${shots.length} shot locations">${rlBallDefs('rlbF')}${f}</svg>`;
+  $('fieldMap').innerHTML=fieldMap(shots,'goal',tip,mapSide==='us'?'Their goal':'Our goal',mapSide==='us'?'Our goal':'Their goal');
   // Front elevation of the goal, drawn like a technical drawing. Mouth 1786 x 642 uu, 880 deep (1 uu = 1 cm).
   const NW=460,ml=30,mr=58,mt=46,mb=66,iw=NW-ml-mr,ih=Math.round(iw*642/1786),NH=mt+ih+mb;
   const nx=x=>ml+(clamp(x,-893,893)+893)/1786*iw,nz=z=>mt+(642-clamp(z,0,642))/642*ih;
@@ -706,6 +721,21 @@ function loop3D(){if(looping)return;looping=true;const step=()=>{if(RP.k==null&&
   requestAnimationFrame(sway);
 })();
 
+// ---------- defense ----------
+function renderDefense(list){
+  const sl=list.filter(m=>m.saves),saves=sl.flatMap(m=>m.saves.map(s=>({...s,m}))),pts=saves.filter(s=>s.x!=null&&s.y!=null);
+  const tip=s=>`${s.who>=0?PLAYERS[s.who].short:'Us'}${s.epic?' · epic save':''} · ${s.m.us}–${s.m.them} ${s.m.win?'win':'loss'}, ${fmtDate(s.m.when)}`;
+  $('saveMap').innerHTML=fieldMap(pts,'save',tip,'Their goal','Our goal');
+  const ol=list.filter(m=>m.oppShots!=null),shots=ol.reduce((a,m)=>a+m.oppShots,0),goals=ol.reduce((a,m)=>a+m.oppGoals,0);
+  $('defCallouts').innerHTML=[['Opponent shots / game',ol.length?(shots/ol.length).toFixed(1):'–'],['Opponent shooting %',shots?Math.round(100*goals/shots)+'%':'–']]
+    .map(c=>`<div class="callout"><span class="k">${c[0]}</span><span class="v num">${c[1]}</span></div>`).join('');
+  // Our box is the rectangle drawn in front of our goal.
+  const box=pts.filter(s=>s.y<=-4020&&Math.abs(s.x)<=1800).length;
+  const by=PLAYERS.map((p,j)=>{const n=saves.filter(s=>s.who===j).length;return n?p.short+' '+n:null;}).filter(Boolean).join(', ');
+  $('saveNote').textContent=!sl.length?'No saves recorded with positions in this period yet.':
+    `${saves.length} save${saves.length===1?'':'s'} in ${sl.length} game${sl.length===1?'':'s'}${by?' ('+by+')':''}.`+(pts.length?` ${Math.round(100*box/pts.length)}% were inside our box.`:'');
+}
+
 // ---------- playstyle ----------
 function renderPlay(list){
   const A=agg(list),f=(v,d=0,u='')=>v==null?'–':v.toFixed(d)+u;
@@ -876,7 +906,7 @@ function syncButtons(){
   document.querySelectorAll('#mode button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.m===mode));
   document.querySelectorAll('#metric button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.k===metric));
 }
-function renderPeriod(){renderRecords();const list=inPeriod();renderSummary(list);renderCmp(list);renderMaps(list);renderPlay(list);renderCrowd(list);renderSwing(list);renderLog(list);syncButtons();}
+function renderPeriod(){renderRecords();const list=inPeriod();renderSummary(list);renderCmp(list);renderMaps(list);renderDefense(list);renderPlay(list);renderCrowd(list);renderSwing(list);renderLog(list);syncButtons();}
 // ---------- warm-ups ----------
 // A night is every match with gaps under 90 minutes. Its warm-ups are the Casual Doubles games
 // played before the first Ranked Doubles game; the ranked games that night are what follows.
