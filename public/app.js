@@ -158,8 +158,8 @@ function isKickoffGoal(g){
   const s=num(g.since_kickoff);if(s!=null)return s<=KICKOFF_SECS;
   const t=num(g.goal_time);return t!=null&&t>0&&t<=KICKOFF_GOAL_TIME;
 }
-// Biggest gap we were behind by at any point, from the goals in the order they were scored.
-function maxDeficit(goals){let d=0,worst=0;goals.forEach(g=>{d+=g.ours?-1:1;if(d>worst)worst=d;});return worst;}
+// Biggest gap we were behind (or ahead) by at any point, from the goals in the order they were scored.
+function maxDeficit(goals,sign=1){let d=0,worst=0;goals.forEach(g=>{d+=g.ours?-sign:sign;if(d>worst)worst=d;});return worst;}
 function toMatch(r){
   const rows=r.players||[];
   const lines=PLAYERS.map(p=>{
@@ -191,7 +191,7 @@ function toMatch(r){
   const left=(r.players_left||[]).filter(Boolean).map(x=>({name:x.name,ours:myTeam!=null&&num(x.team)===myTeam}));
   return {guid:r.match_guid,when:new Date(r.started_at),win:r.result==='Win',us:num(r.team_score)||0,them:num(r.opponent_score)||0,
     ot:!!r.overtime,dur,arena:arenaName(r.arena),playlist:r.playlist||'Unknown playlist',lines,
-    first:goals.length?(goals[0].ours?'us':'them'):null,deficit:maxDeficit(goals),
+    first:goals.length?(goals[0].ours?'us':'them'):null,deficit:maxDeficit(goals),lead:maxDeficit(goals,-1),
     ourGoals:goals.filter(g=>g.ours),theirGoals:goals.filter(g=>!g.ours),
     replay:!!r.replay_created,left,opps,ff:!!r.ff,
     spectators:Array.isArray(r.spectators)?r.spectators.map(String):null,
@@ -481,7 +481,9 @@ function renderPlay(list){
   const teamRows=[['Win % when we score first',pct(list.filter(m=>m.first==='us'))],['Win % when they score first',pct(list.filter(m=>m.first==='them'))],
     ['Kickoff goals for',String(koFor)],['Kickoff goals against',String(koAgainst)],
     ...[1,2,3,4].map(n=>{const down=list.filter(m=>n<4?m.deficit===n:m.deficit>=4),won=down.filter(m=>m.win).length;
-      return [`Comebacks from ${n}${n<4?'':'+'} goal${n>1?'s':''} down`,down.length?`<span title="Won ${won} of ${down.length} games where the biggest deficit was ${n}${n<4?'':' or more'}">${won}</span> <small class="muted">of ${down.length}</small>`:'0'];})];
+      return [`Comebacks from ${n}${n<4?'':'+'} goal${n>1?'s':''} down`,down.length?`<span title="Won ${won} of ${down.length} games where the biggest deficit was ${n}${n<4?'':' or more'}">${won}</span> <small class="muted">of ${down.length}</small>`:'0'];}),
+    ...[1,2,3,4].map(n=>{const up=list.filter(m=>n<4?m.lead===n:m.lead>=4),lost=up.filter(m=>!m.win).length;
+      return [`Blown ${n}${n<4?'':'+'} goal lead${n>1?'s':''}`,up.length?`<span title="Lost ${lost} of ${up.length} games where the biggest lead was ${n}${n<4?'':' or more'}">${lost}</span> <small class="muted">of ${up.length}</small>`:'0'];})];
   $('teamKv').innerHTML=list.length?'<div class="h">Team</div><div class="h v"></div>'+teamRows.map(r=>`<div>${r[0]}</div><div class="v">${r[1]}</div>`).join(''):'';
   $('koNote').textContent=list.length?`A kickoff goal is scored within about ${KICKOFF_SECS}s of play after the kickoff.`:'';
   $('playKv').innerHTML=`<div class="h">Stat</div><div class="h v">${esc(PLAYERS[0].short)}</div><div class="h v">${esc(PLAYERS[1].short)}</div>`+rows.map(r=>`<div>${r[0]}</div><div class="v">${r[1](A[0])}</div><div class="v">${r[1](A[1])}</div>`).join('');
@@ -750,6 +752,7 @@ async function load(){
 const CHANGELOG=[
   {v:'1.6',date:'2026-10-14',items:[
     'Comebacks: wins after being 1, 2, 3 or 4+ goals down',
+    'Blown leads: losses after being 1, 2, 3 or 4+ goals up',
     'km/h or mph toggle at the top switches every unit: speeds to mph, distances to miles, lengths to yards',
     'Distance driven, in total and per game',
     'Technical drawing of each of your main cars under Playstyle, with its hitbox size',
