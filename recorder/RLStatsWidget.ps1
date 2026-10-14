@@ -72,6 +72,11 @@ function Start-Splash {
       $blue = [System.Drawing.ColorTranslator]::FromHtml('#4DA3FF'); $track = [System.Drawing.ColorTranslator]::FromHtml('#262C3A')
       $muted = [System.Drawing.ColorTranslator]::FromHtml('#8A93A6'); $font = New-Object System.Drawing.Font('Segoe UI', 11); $caption = 'Loading RL Stats...'
     }
+    $splash = @{ neon = @('#050507', '#39FF14', '#2C1450', '#79E88F'); night = @('#07080B', '#4F9CF5', '#252A34', '#717986'); midnight = @('#000000', '#8E8E8E', '#171717', '#5C5C5C') }
+    if ($p -and $splash.ContainsKey([string]$p.theme)) {
+      $sc = $splash[[string]$p.theme]; $f.BackColor = [System.Drawing.ColorTranslator]::FromHtml($sc[0])
+      $blue = [System.Drawing.ColorTranslator]::FromHtml($sc[1]); $track = [System.Drawing.ColorTranslator]::FromHtml($sc[2]); $muted = [System.Drawing.ColorTranslator]::FromHtml($sc[3])
+    }
     if ($p -and $p.theme -eq 'rl') {
       $f.BackColor = [System.Drawing.ColorTranslator]::FromHtml('#07142B')
       $blue = [System.Drawing.ColorTranslator]::FromHtml('#2A8CFF'); $track = [System.Drawing.ColorTranslator]::FromHtml('#16376B')
@@ -148,14 +153,16 @@ $ErrorActionPreference = 'Continue'
 # ---- look -------------------------------------------------------------------------------------
 function RGB([string]$Hex) { [System.Drawing.ColorTranslator]::FromHtml($Hex) }
 # Themes: 'cyber' (framed neon panels), 'rl' (Rocket League menus: navy, blue and orange, slanted
-# tabs) or 'classic' (the original plain dark look). Picked from the
+# tabs), 'classic' (the original plain dark look), or the dashboard's 'neon', 'night' (blacks, greys
+# and blues) and 'midnight' (pure dark monotone), which use the framed cyber layout. Picked from the
 # theme button in the title bar and saved in widget.json; switching restarts the widget.
 $script:Theme = 'cyber'
 try {
   $tp = Join-Path $OutDir 'widget.json'
-  if (Test-Path $tp) { $t = (Get-Content $tp -Raw | ConvertFrom-Json).theme; if ($t -in 'cyber', 'rl', 'classic') { $script:Theme = $t } }
+  if (Test-Path $tp) { $t = (Get-Content $tp -Raw | ConvertFrom-Json).theme; if ($t -in 'cyber', 'rl', 'classic', 'neon', 'night', 'midnight') { $script:Theme = $t } }
 } catch { }
-$script:Themes = [ordered]@{ cyber = 'Cyber'; rl = 'Rocket League'; classic = 'Classic' }
+$script:Themes = [ordered]@{ cyber = 'Cyber'; rl = 'Rocket League'; classic = 'Classic'; neon = 'Neon'; night = 'Night'; midnight = 'Midnight' }
+$script:Framed = $script:Theme -in 'cyber', 'neon', 'night', 'midnight'
 $script:C = @{
   # neon-on-black: cyan for structure, magenta for secondary accents
   Bg = RGB '#080C12'; Panel = RGB '#0E1520'; Line = RGB '#1B2A3A'; Text = RGB '#DDE8F5'; Muted = RGB '#6D7F96'
@@ -178,6 +185,30 @@ if ($script:Theme -eq 'rl') {
     Bg = RGB '#061127'; Panel = RGB '#0B1E42'; Line = RGB '#16376B'; Text = RGB '#FFFFFF'; Muted = RGB '#9DB4D8'
     Blue = RGB '#2A8CFF'; Orange = RGB '#FF7A1A'; Win = RGB '#4CE38A'; Loss = RGB '#FF4D4D'; Amber = RGB '#FFC940'
     Cyan = RGB '#2A8CFF'; Magenta = RGB '#FF7A1A'; Frame = RGB '#1F4C8F'
+  }
+}
+if ($script:Theme -eq 'neon') {
+  # the dashboard's Neon: black, fluorescent green and purple
+  $script:C = @{
+    Bg = RGB '#050507'; Panel = RGB '#0B0912'; Line = RGB '#2C1450'; Text = RGB '#E2FFE6'; Muted = RGB '#79A88A'
+    Blue = RGB '#00F0FF'; Orange = RGB '#FFE600'; Win = RGB '#39FF14'; Loss = RGB '#FF2BD6'; Amber = RGB '#FFE600'
+    Cyan = RGB '#39FF14'; Magenta = RGB '#C04DFF'; Frame = RGB '#3D1F63'
+  }
+}
+if ($script:Theme -eq 'night') {
+  # the dashboard's Night: blacks, blue-tinted greys and blues, nothing else
+  $script:C = @{
+    Bg = RGB '#07080B'; Panel = RGB '#0F1116'; Line = RGB '#252A34'; Text = RGB '#E2E6EE'; Muted = RGB '#7A8291'
+    Blue = RGB '#4F9CF5'; Orange = RGB '#C9D0DC'; Win = RGB '#5AA2F2'; Loss = RGB '#6B7382'; Amber = RGB '#A8D4FF'
+    Cyan = RGB '#4F9CF5'; Magenta = RGB '#2F62B8'; Frame = RGB '#252A34'
+  }
+}
+if ($script:Theme -eq 'midnight') {
+  # the dashboard's Midnight: pure, very dark monotone; teams and results told apart by shade
+  $script:C = @{
+    Bg = RGB '#000000'; Panel = RGB '#080808'; Line = RGB '#171717'; Text = RGB '#AEAEAE'; Muted = RGB '#5C5C5C'
+    Blue = RGB '#B2B2B2'; Orange = RGB '#6E6E6E'; Win = RGB '#AEAEAE'; Loss = RGB '#555555'; Amber = RGB '#C8C8C8'
+    Cyan = RGB '#7A7A7A'; Magenta = RGB '#4A4A4A'; Frame = RGB '#1C1C1C'
   }
 }
 $script:F = @{
@@ -551,7 +582,7 @@ function Draw-RlFrames($g) {
 $script:form.add_Paint({
   param($s, $e)
   if ($script:Theme -eq 'rl') { Draw-RlFrames $e.Graphics; return }
-  if ($script:Theme -ne 'cyber') { return }
+  if (-not $script:Framed) { return }
   $g = $e.Graphics; $g.SmoothingMode = 'AntiAlias'; $g.TextRenderingHint = 'ClearTypeGridFit'
   $k = [single]$script:UiScale
   $frame = New-Object System.Drawing.Pen($script:C.Frame, [single](1 * $k))
