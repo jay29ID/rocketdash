@@ -199,9 +199,6 @@ form.log button{background:var(--ink);color:var(--surface);border:0;border-radiu
 @media (max-width:760px){.maps{grid-template-columns:minmax(0,1fr)}}
 .map-col{display:flex;flex-direction:column;gap:8px;min-width:0}
 .map-col h3{font-size:13px;font-weight:600;color:var(--ink-2);letter-spacing:.04em}
-.replay{position:fixed;z-index:30;width:340px;height:210px;pointer-events:none;border:1px solid rgba(95,225,255,.55);border-radius:6px;overflow:hidden;
-  box-shadow:0 0 0 1px rgba(5,11,20,.6),0 0 24px rgba(95,225,255,.25),0 12px 30px rgba(0,0,0,.45);background:#050b14}
-.replay canvas{display:block;width:100%;height:100%}
 .map3d-stage{position:relative}
 .knob{position:absolute;top:10px;right:10px;width:104px;height:104px;z-index:2;touch-action:none;cursor:grab;user-select:none}
 .knob svg{width:100%;height:100%;display:block}
@@ -247,10 +244,10 @@ form.log button{background:var(--ink);color:var(--surface);border:0;border-radiu
 .heat-key .ramp{display:block;width:80px;height:10px;border-radius:3px;background:linear-gradient(90deg,rgb(47,111,214),rgb(124,77,196),rgb(214,51,57));opacity:.85}
 .map-note{font-size:12px;color:var(--muted)}
 .maps{align-items:stretch}
-.mini3d{position:relative;flex:1 1 auto;min-height:220px;margin-top:6px;padding:0;border:1px solid var(--grid);border-radius:8px;background:var(--surface-2);cursor:pointer;overflow:hidden;font:inherit;color:inherit}
+.mini3d{position:relative;flex:1 1 auto;min-height:220px;margin-top:6px;padding:0;border:1px solid rgba(95,225,255,.55);border-radius:6px;background:#050b14;box-shadow:0 0 0 1px rgba(5,11,20,.6),0 0 24px rgba(95,225,255,.18);cursor:pointer;overflow:hidden;font:inherit;color:inherit}
 .mini3d canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
-.mini3d span{position:absolute;left:10px;bottom:8px;font-family:var(--mono);font-size:10px;letter-spacing:.06em;color:var(--muted);text-transform:uppercase}
-.mini3d:hover{border-color:var(--p1)}
+.mini3d span{position:absolute;left:12px;bottom:8px;font-family:var(--mono);font-size:10px;letter-spacing:.06em;color:rgba(95,225,255,.6);text-transform:uppercase}
+.mini3d:hover{border-color:rgba(95,225,255,.9);box-shadow:0 0 0 1px rgba(5,11,20,.6),0 0 30px rgba(95,225,255,.35)}
 @media (max-width:760px){.mini3d{display:none}}
 
 .chip{display:inline-block;font-size:11px;font-weight:600;padding:1px 7px;border-radius:4px;border:1px solid var(--line);color:var(--ink-2);white-space:nowrap}
@@ -546,7 +543,6 @@ footer{font-size:12px;color:var(--muted);max-width:70ch}
     <div class="panel-head"><h2 id="changesTitle">Update log</h2><button type="button" class="x" id="changesClose" aria-label="Close">&times;</button></div>
     <div id="changesBody"></div>
   </dialog>
-  <div class="replay" id="replay" hidden aria-hidden="true"><canvas id="replayCv"></canvas></div>
   <dialog class="changes match" id="matchDlg" aria-labelledby="matchTitle">
     <div class="panel-head"><h2 id="matchTitle">Match</h2><button type="button" class="x" id="matchClose" aria-label="Close">&times;</button></div>
     <div id="matchBody"></div>

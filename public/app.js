@@ -712,16 +712,27 @@ function render3D(cv,V){
     }
   }
 }
-// The mini 3D map under the goal mouth: same goals, a slow turntable, a click away from the full view.
+// The mini 3D map under the goal mouth, in the replay's HUD style: a slow turntable of every goal,
+// and the replay of whichever ball is hovered. A click jumps to the full view.
 const MINI={seen:false,on:false};
 function drawMini(){const cv=$('mini3d');if(!cv||!cv.clientWidth)return;const t=performance.now();
-  render3D(cv,{goals:G3.goals,side:G3.side,T:[0,2400,300],D:13000,F:Math.min(cv.clientWidth,cv.clientHeight*1.7)*1.25,
-    yaw:MINI.still?-.5:-.5+t/9000,pitch:.55,focus:G3.focus,ft:G3.ft});}
+  if(RP.k!=null)return drawReplay();
+  render3D(cv,{hud:true,goals:G3.goals,side:G3.side,T:[0,2400,300],D:13000,F:Math.min(cv.clientWidth,cv.clientHeight*1.7)*1.25,
+    yaw:MINI.still?-.5:-.5+t/9000,pitch:.55,focus:G3.focus,ft:G3.ft});
+  if(G3.focus!=null)return;
+  // Idle frame: corner brackets, a scan line and a readout, like the replay.
+  const c=cv.getContext('2d'),W=cv.clientWidth,H=cv.clientHeight,n=G3.goals.length;
+  c.strokeStyle='rgba(95,225,255,.7)';c.lineWidth=1.5;const br=(x,y,dx,dy)=>{c.beginPath();c.moveTo(x+dx*12,y);c.lineTo(x,y);c.lineTo(x,y+dy*12);c.stroke();};
+  br(4,4,1,1);br(W-4,4,-1,1);br(4,H-4,1,-1);br(W-4,H-4,-1,-1);
+  c.fillStyle='rgba(95,225,255,.07)';c.fillRect(0,(t/12)%H,W,2);
+  c.font='10px '+(getComputedStyle(document.documentElement).getPropertyValue('--mono').trim()||'monospace');c.textAlign='left';
+  c.fillStyle='rgba(95,225,255,.6)';c.fillText(G3.side==='saves'?'SAVES':G3.side==='them'?'AGAINST':'GOALS',12,20);c.fillStyle='#d8f6ff';c.fillText(String(n),78,20);
+  c.fillStyle='rgba(95,225,255,.6)';c.fillText('STATUS',12,34);c.fillStyle='#d8f6ff';c.fillText(n?'HOVER A BALL':'NO DATA',78,34);}
 function miniLoop(){if(MINI.on)return;MINI.on=true;const step=()=>{if(!MINI.seen||document.visibilityState!=='visible'||MINI.still){MINI.on=false;return;}drawMini();requestAnimationFrame(step);};requestAnimationFrame(step);}
 function draw3D(){const cv=$('map3d');if(!cv)return;
   render3D(cv,{goals:G3.goals,side:G3.side,T:G3.T,D:11500,F:Math.min(cv.clientWidth,cv.clientHeight*1.6)*1.45*G3.zoom,yaw:G3.yaw,pitch:G3.pitch,focus:G3.focus,ft:G3.ft});
   const nm=G3.side==='saves'?'saves with a position':'goals with a shot and net position';
-  $('map3dNote').textContent=G3.goals.length?`${G3.goals.length} ${nm}. Drag or use the knob to turn it, arrow keys to move, scroll to zoom. Hover a goal here or a ball on the flat maps for a replay.`+(G3.pad&&G3.pad()?` Controller found: ${G3.pad().id.replace(/\s*\(.*$/,'').slice(0,40)}${G3.pad().std?'':' (non-standard layout)'}. Left stick moves, right stick turns, triggers zoom, A or RB next goal, LB previous, B stops, Y resets.`:''):`No ${G3.side==='saves'?'saves':'goals'} with positions in this period.`;
+  $('map3dNote').textContent=G3.goals.length?`${G3.goals.length} ${nm}. Drag or use the knob to turn it, arrow keys to move, scroll to zoom. Hover a goal here or a ball on the flat maps to replay it, here and in the mini map.`+(G3.pad&&G3.pad()?` Controller found: ${G3.pad().id.replace(/\s*\(.*$/,'').slice(0,40)}${G3.pad().std?'':' (non-standard layout)'}. Left stick moves, right stick turns, triggers zoom, A or RB next goal, LB previous, B stops, Y resets.`:''):`No ${G3.side==='saves'?'saves':'goals'} with positions in this period.`;
   syncKnob();if(MINI.still||!MINI.on)drawMini();
 }
 // The knob: its ring turns with the camera (N = looking at the attacked goal), the needle shows tilt.
@@ -730,21 +741,19 @@ function syncKnob(){const r=$('knobRing');if(!r)return;r.setAttribute('transform
 function nudge3D(f){G3.auto=false;f();G3.pitch=Math.max(.05,Math.min(1.45,G3.pitch));G3.zoom=Math.max(.6,Math.min(3,G3.zoom));
   G3.T[0]=Math.max(-4096,Math.min(4096,G3.T[0]));G3.T[1]=Math.max(-5120,Math.min(6000,G3.T[1]));draw3D();}
 function drawReplay(){
-  const cv=$('replayCv'),g=G3.goals.find(x=>x.k===RP.k);if(!g)return;
+  const cv=$('mini3d'),g=G3.goals.find(x=>x.k===RP.k);if(!cv||!cv.clientWidth||!g)return;
   const wp=waypoints(g),xs=[g.ix].concat(wp.map(t=>t.p[0])),ys=[5120].concat(wp.map(t=>t.p[1])),ox=g.x!=null?g.x:wp[0].p[0],oy=g.y!=null?g.y:wp[0].p[1]-1500;
   const mid=[(Math.min(...xs)+Math.max(...xs))/2,(Math.min(...ys)+Math.max(...ys))/2,300],dx=g.ix-ox,dy=5120-oy,span=Math.hypot(Math.max(...xs)-Math.min(...xs),Math.max(...ys)-Math.min(...ys))+1800;
   const yaw=Math.atan2(dx,dy)+0.75+Math.sin((performance.now()-RP.t)/2500)*.12;
-  render3D(cv,{hud:true,goals:[g],side:G3.side,T:mid,D:span*1.25,F:cv.clientWidth*1.05,yaw,pitch:.38,focus:g.k,ft:RP.t});
+  render3D(cv,{hud:true,goals:[g],side:G3.side,T:mid,D:span*1.25,F:Math.min(cv.clientWidth,cv.clientHeight*1.6)*1.05,yaw,pitch:.38,focus:g.k,ft:RP.t});
 }
 function showReplay(k,ev){
   if(!G3.goals.some(x=>x.k===+k))return;
-  if(RP.k===+k){placeReplay(ev);return;}
-  RP.k=+k;RP.t=performance.now();G3.focus=+k;G3.ft=RP.t;
-  const r=$('replay');r.hidden=false;placeReplay(ev);loop3D();
+  if(RP.k===+k)return;
+  RP.k=+k;RP.t=performance.now();G3.focus=+k;G3.ft=RP.t;loop3D();
 }
-function placeReplay(ev){const r=$('replay'),w=r.offsetWidth,h=r.offsetHeight;let x=ev.clientX+18,y=ev.clientY+18;
-  if(x+w>innerWidth-8)x=ev.clientX-w-18;if(y+h>innerHeight-8)y=ev.clientY-h-18;r.style.left=Math.max(8,x)+'px';r.style.top=Math.max(8,y)+'px';}
-function hideReplay(){RP.k=null;G3.focus=null;$('replay').hidden=true;draw3D();}
+function placeReplay(){}
+function hideReplay(){RP.k=null;G3.focus=null;draw3D();drawMini();}
 let looping=false;
 function loop3D(){if(looping)return;looping=true;const step=()=>{if(RP.k==null&&!G3.auto){looping=false;return;}
   if(RP.k!=null)drawReplay();if(G3.seen&&document.visibilityState==='visible')draw3D();requestAnimationFrame(step);};requestAnimationFrame(step);}
@@ -1220,6 +1229,7 @@ $('matchLog').addEventListener('click',e=>{const a=e.target.closest('a.mlink');i
 // Add a release at the top whenever something visible changes (dashboard or widget).
 const CHANGELOG=[
   {v:'1.6',date:'2026-10-14',items:[
+    'The mini 3D map now has the cyberpunk replay look and plays the hovered goal itself, instead of a pop-up',
     'Controller support works with more wireless and PlayStation pads, survives Bluetooth drop-outs, and any button jumps to the 3D map',
     'Mini spinning 3D goal map under the goal mouth; click it for the full view',
     'Hover a goal in the 3D view to play its replay',
