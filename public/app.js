@@ -101,9 +101,9 @@ function makeSample(names){
       const pos=(s,flip)=>({shot_from:{X:Math.round(flip*s.x),Y:Math.round(flip*s.y),Z:93},impact:{X:Math.round(flip*s.ix),Y:Math.round(flip*5120),Z:Math.round(s.iz)}});
       for(let g=0;g<us;g++){
         const who=rnd()<.55?0:1;lines[who].goals++;const as=rnd()<.55;if(as)lines[1-who].assists++;
-        goals.push({team:my,ours:true,scorer:names[who],assister:as?names[1-who]:null,speed:Math.round(clamp(norm(prof[who].gs,18),35,140)),...pos(spot(who?.8:1),f)});
+        goals.push({team:my,ours:true,goal_time:rnd()<.08?3+Math.floor(rnd()*3):8+Math.floor(rnd()*120),scorer:names[who],assister:as?names[1-who]:null,speed:Math.round(clamp(norm(prof[who].gs,18),35,140)),...pos(spot(who?.8:1),f)});
       }
-      for(let g=0;g<them;g++)goals.push({team:1-my,ours:false,scorer:'Opponent',speed:Math.round(clamp(norm(86,18),35,140)),...pos(spot(1.1),-f)});
+      for(let g=0;g<them;g++)goals.push({team:1-my,ours:false,goal_time:rnd()<.08?3+Math.floor(rnd()*3):8+Math.floor(rnd()*120),scorer:'Opponent',speed:Math.round(clamp(norm(86,18),35,140)),...pos(spot(1.1),-f)});
       const players=prof.map((p,j)=>{
         const L=lines[j],shots=L.goals+pois(Math.max(.4,p.sh-p.g)),saves=pois(p.sv*(them>2?1.25:1)),demos=pois(p.d),touches=Math.max(8,Math.round(norm(p.t,5)));
         const air=+clamp(norm(p.air,1.8),1,20).toFixed(1),wall=+clamp(norm(p.wall,2.5),3,25).toFixed(1);
@@ -141,6 +141,8 @@ function forfeit(r){
   if(us==null||them==null||us===them)return r;
   return {...r,result:us>them?'Win':'Loss',ff:true};
 }
+// A goal within this many seconds of the kickoff counts as a kickoff goal (goal_time is time since kickoff).
+const KICKOFF_SECS=6;
 function toMatch(r){
   const rows=r.players||[];
   const lines=PLAYERS.map(p=>{
@@ -161,7 +163,7 @@ function toMatch(r){
     const ours=g.ours!=null?!!g.ours:(myTeam!=null&&team===myTeam);
     // Credit the goal to whoever the game credits; the last hit can be an opponent's deflection.
     const who=ours?PLAYERS.findIndex(p=>p.name===(PLAYERS.some(q=>q.name===g.scorer)?g.scorer:g.shot_from_player)):-1;
-    return {ours,who,spd:num(g.speed)!=null?Math.round(+g.speed):null,
+    return {ours,who,ko:num(g.goal_time)!=null&&+g.goal_time>0&&+g.goal_time<=KICKOFF_SECS,spd:num(g.speed)!=null?Math.round(+g.speed):null,
       x:co(s,'X')!=null?f*co(s,'X'):null,y:co(s,'Y')!=null?f*co(s,'Y'):null,
       ix:co(i,'X')!=null?f*co(i,'X'):null,iz:co(i,'Z')};
   });
@@ -227,6 +229,7 @@ function agg(list){
     t.gsAvg=sp.length?sp.reduce((a,b)=>a+b,0)/sp.length:null;t.gsMax=sp.length?Math.max(...sp):null;
     const nb=L.map(l=>l.noBoost).filter(v=>v!=null);t.noBoost=nb.length?nb.reduce((a,b)=>a+b,0):null;t.noBoostGames=nb.length;
     const hh=L.map(l=>l.hardest).filter(v=>v!=null);t.hardest=hh.length?Math.max(...hh):null;
+    t.kickoff=list.reduce((s,m)=>s+m.ourGoals.filter(g=>g.ko&&g.who===j).length,0);
     const ts=L.map(l=>l.topSpeed).filter(v=>v!=null);t.topSpeed=ts.length?Math.max(...ts):null;
     list.forEach(m=>{const a=m.lines[j],b=m.lines[1-j];if(a&&b){t.both++;if(a.score>b.score)t.mvp++;}});
     return t;
@@ -450,7 +453,9 @@ function renderPlay(list){
     PLAYERS.map((p,j)=>{const a=A[j];if(a.ground==null)return `<div class="split-row"><span class="tag p${j+1}" style="padding:1px 8px"><i></i>${esc(p.short)}</span><span class="note">No movement data yet</span></div>`;
       return `<div class="split-row"><span class="tag p${j+1}" style="padding:1px 8px"><i></i>${esc(p.short)}</span><div class="stack" title="Ground ${f(a.ground)}%, wall ${f(a.wall)}%, air ${f(a.air)}%">
       <div style="width:${a.ground}%;background:var(--ink-2)">${f(a.ground)}%</div><div style="width:${a.wall}%;background:var(--muted)">${f(a.wall)}%</div><div style="width:${a.air}%;background:${p.color}">${f(a.air)}%</div></div></div>`;}).join('');
-  const rows=[['Avg speed',a=>f(a.speed,0,' km/h')],['Top speed',a=>f(a.topSpeed,0,' km/h')],['Avg boost held',a=>f(a.boost)],['Time supersonic',a=>f(a.ss,1,'%')],['Avg goal speed',a=>f(a.gsAvg,0,' km/h')],['Hardest goal',a=>f(a.gsMax,0,' km/h')],['Hardest hit',a=>f(a.hardest,0,' km/h')],['Bumps / game',a=>f(a.bumps,1)],['Boost pads / game',a=>f(a.pickups,1)],['Main car',a=>a.car?esc(a.car):'–'],['I Got No Boost',a=>a.noBoost==null?'–':`<span title="${fmtDur(a.noBoost/a.noBoostGames)} a game">${fmtDur(a.noBoost)}</span>`]];
+  const rows=[['Kickoff goals',a=>a.games?String(a.kickoff):'–'],['Avg speed',a=>f(a.speed,0,' km/h')],['Top speed',a=>f(a.topSpeed,0,' km/h')],['Avg boost held',a=>f(a.boost)],['Time supersonic',a=>f(a.ss,1,'%')],['Avg goal speed',a=>f(a.gsAvg,0,' km/h')],['Hardest goal',a=>f(a.gsMax,0,' km/h')],['Hardest hit',a=>f(a.hardest,0,' km/h')],['Bumps / game',a=>f(a.bumps,1)],['Boost pads / game',a=>f(a.pickups,1)],['Main car',a=>a.car?esc(a.car):'–'],['I Got No Boost',a=>a.noBoost==null?'–':`<span title="${fmtDur(a.noBoost/a.noBoostGames)} a game">${fmtDur(a.noBoost)}</span>`]];
+  const koFor=list.reduce((s,m)=>s+m.ourGoals.filter(g=>g.ko).length,0),koAgainst=list.reduce((s,m)=>s+m.theirGoals.filter(g=>g.ko).length,0);
+  $('koNote').textContent=list.length?`Kickoff goals as a team: ${koFor} for, ${koAgainst} against (scored within ${KICKOFF_SECS}s of the kickoff).`:'';
   $('playKv').innerHTML=`<div class="h">Stat</div><div class="h v">${esc(PLAYERS[0].short)}</div><div class="h v">${esc(PLAYERS[1].short)}</div>`+rows.map(r=>`<div>${r[0]}</div><div class="v">${r[1](A[0])}</div><div class="v">${r[1](A[1])}</div>`).join('');
 }
 
