@@ -277,6 +277,9 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`rocketdash listening on ${PORT}, data in ${DATA_DIR}`);
+  try { let n=0,ours=0,red=0,redThem=0; Object.values(store.matches).forEach(m=>{const t={};(m.players||[]).forEach(p=>{if(p&&p.name)t[p.name]=Number(p.team);});
+    (m.goals||[]).filter(g=>g&&+g.goal_time>0).forEach(g=>{n++;const lt=g.last_touch;const d=lt&&g.scorer&&lt!==g.scorer&&t[lt]!=null&&t[lt]!==Number(g.team);if(Number(g.team)===Number(m.my_team)){ours++;if(d)red++;}else if(d)redThem++;});});
+    console.log('DIAG redirects', JSON.stringify({goals:n,ours,redirectedOurs:red,redirectedTheirs:redThem})); } catch (e) { console.log('DIAG err', e.message); }
   if (process.env.GIPHY_KEY) {
     gifList(GIF_QUERY, 3, 0).then(l => console.log(l.length ? `goal GIFs ready: ${l.length} for "${GIF_QUERY}"` : 'goal GIFs: GIPHY returned nothing (check GIPHY_KEY)'));
     gifList(AGAINST_GIF_QUERY, 1, 6, WHOOPS).then(l => console.log(`goals-against GIFs: ${l.map(g => g.title).join(' | ') || 'none'}`));

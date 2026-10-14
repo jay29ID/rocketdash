@@ -113,6 +113,11 @@ function makeSample(names){
           car_touches:pois(p.bump),boost_pickups:Math.round(clamp(norm(j?34:29,6),8,70)),loadout:{Car:j?'Fennec':'Octane'},avg_boost:Math.round(clamp(norm(p.boost,5),20,70)),pct_supersonic:+clamp(norm(p.ss,3),3,35).toFixed(1),pct_zero_boost:+clamp(norm(j?9:7,3),1,25).toFixed(1),zero_boost_fixed:true,
           avg_speed:Math.round(clamp(norm(j?1380:1320,60),1100,1600)),max_speed:2300,pct_air:air,pct_wall:wall,pct_ground:+(100-air-wall).toFixed(1),hardest_hit:Math.round(clamp(norm(p.gs+25,15),60,160))};
       });
+      // Two opponents, and now and then one of them redirects one of our shots on its way in.
+      const foes=[pick(['Zephyr','BallChaser99','nxtLvl','Mochi','RocketRalph','ghostpepper']),pick(['Tidal','Vex','sir_flips','Kiwi','B0ost','Nova'])];
+      foes.forEach(n=>players.push({name:n,team:1-my,tracked:false,platform:'Epic'}));
+      goals.forEach(g=>{if(g.ours&&rnd()<.14){const s=g.shot_from,ix=g.impact.X,f=Math.sign(g.impact.Y)||1;
+        g.scorer_from=s;g.last_touch=pick(foes);g.shot_from={X:Math.round(s.X+(ix-s.X)*.6+norm(0,250)),Y:Math.round(s.Y+(f*5120-s.Y)*.6),Z:Math.round(clamp(norm(260,140),60,700))};}});
       matches.push({match_guid:'sample-'+si+'-'+k,started_at:new Date(t).toISOString(),duration_seconds:dur,playlist:warm?'Casual Doubles':'Ranked Doubles',arena:pick(arenas),
         overtime:ot,my_team:my,result:win?'Win':'Loss',team_score:us,opponent_score:them,goals,players,
         replay_created:rnd()<.2?new Date(t+dur*1000).toISOString():null,
@@ -189,14 +194,20 @@ function toMatch(r){
   // The game sends a second, empty GoalScored for most goals (no goal time, no scorer), so a match
   // stored twice as many goals as were scored. Real goals always have a goal time.
   const rawGoals=(r.goals||[]).filter(Boolean), timed=rawGoals.some(g=>+g.goal_time>0);
+  const teamOf={};(r.players||[]).forEach(p=>{if(p&&p.name)teamOf[p.name]=num(p.team);});
   const goals=rawGoals.filter(g=>!timed||+g.goal_time>0).map(g=>{
-    const team=num(g.team), f=team===1?-1:1, s=g.shot_from, i=g.impact;
+    const team=num(g.team), f=team===1?-1:1, i=g.impact;
+    // Redirect: the game's last touch belongs to the other team from the scorer. Then shot_from is
+    // where that player touched it, and scorer_from (newer recorders) is where the scorer hit it.
+    const lt=g.last_touch, defl=lt&&g.scorer&&lt!==g.scorer&&teamOf[lt]!=null&&team!=null&&teamOf[lt]!==team?String(lt):null;
+    const s=defl&&g.scorer_from?g.scorer_from:g.shot_from, dp=defl?g.shot_from:null;
     const ours=g.ours!=null?!!g.ours:(myTeam!=null&&team===myTeam);
     // Credit the goal to whoever the game credits; the last hit can be an opponent's deflection.
     const who=ours?PLAYERS.findIndex(p=>p.name===(PLAYERS.some(q=>q.name===g.scorer)?g.scorer:g.shot_from_player)):-1;
     return {ours,who,scorer:g.scorer||null,assister:g.assister||null,ko:isKickoffGoal(g),spd:num(g.speed)!=null?Math.round(+g.speed):null,
       z:co(s,'Z'),x:co(s,'X')!=null?f*co(s,'X'):null,y:co(s,'Y')!=null?f*co(s,'Y'):null,
-      ix:co(i,'X')!=null?f*co(i,'X'):null,iz:co(i,'Z')};
+      ix:co(i,'X')!=null?f*co(i,'X'):null,iz:co(i,'Z'),
+      defl,dx:co(dp,'X')!=null?f*co(dp,'X'):null,dy:co(dp,'Y')!=null?f*co(dp,'Y'):null,dz:co(dp,'Z'),deflOnly:!!defl&&!g.scorer_from};
   });
   const dur=num(r.duration_seconds)||300;
   const opps=(r.players||[]).filter(p=>p&&p.name&&!p.tracked&&myTeam!=null&&num(p.team)!==myTeam).map(p=>({name:String(p.name),url:trackerUrl(p)}));
@@ -446,7 +457,7 @@ function renderMaps(list){
   const shots=goals.filter(g=>g.x!=null&&g.y!=null), hits=goals.filter(g=>g.ix!=null&&g.iz!=null);
   $('mapWho').style.visibility=mapSide==='us'?'visible':'hidden';
   const col=g=>g.who>=0?PLAYERS[g.who].color:'var(--opp)';
-  const tip=g=>`${g.who>=0?PLAYERS[g.who].short:mapSide==='us'?'Us':'Opponent'}${g.spd!=null?' · '+fSpd(g.spd):''} · ${g.m.us}–${g.m.them} ${g.m.win?'win':'loss'}, ${fmtDate(g.m.when)}`;
+  const tip=g=>`${g.who>=0?PLAYERS[g.who].short:mapSide==='us'?'Us':'Opponent'}${g.defl?' · redirected by '+g.defl:''}${g.spd!=null?' · '+fSpd(g.spd):''} · ${g.m.us}–${g.m.them} ${g.m.win?'win':'loss'}, ${fmtDate(g.m.when)}`;
   // Whole pitch, their goal at the top. Goal lines at Y=±5120, nets 880 deep, corners cut 1152.
   const W=480,Y0=-6000,Y1=6000,H=Math.round(W*(Y1-Y0)/8192);
   const sx=x=>(x+4096)/8192*W,sy=y=>(Y1-y)/(Y1-Y0)*H,su=u=>u/8192*W;
@@ -516,10 +527,14 @@ function renderMaps(list){
 // plays that goal back in a small "replay" view and highlights it in the big one.
 const G3={T:[0,3300,300],goals:[],side:'us',yaw:-0.5,pitch:0.42,zoom:1,auto:true,t0:performance.now(),focus:null,ft:0};
 const RP={k:null,t:0};
+const REDIR='#ff4d6d';   // redirect marker and the ball's path after it
+function bez(a,b,n){const d=Math.hypot(b[0]-a[0],b[1]-a[1]),lift=Math.max(a[2],b[2])+Math.min(900,d*.09);
+  return Array.from({length:n},(_,i)=>{const t=i/(n-1),u=1-t;return [u*a[0]+t*b[0],u*a[1]+t*b[1],u*u*a[2]+2*u*t*lift+t*t*b[2]];});}
+// 41 points from shot to net. A redirected goal with both points known bends at index 15 (pts.kink).
 function arcOf(g){
-  const a=[g.x,g.y,g.z!=null?g.z:93],b=[g.ix,5120,g.iz],d=Math.hypot(b[0]-a[0],b[1]-a[1]);
-  const lift=Math.max(a[2],b[2])+Math.min(900,d*.09);
-  return Array.from({length:41},(_,i)=>{const t=i/40,u=1-t;return [u*a[0]+t*b[0],u*a[1]+t*b[1],u*u*a[2]+2*u*t*lift+t*t*b[2]];});
+  const a=[g.x,g.y,g.z!=null?g.z:93],b=[g.ix,5120,g.iz];
+  if(g.defl&&!g.deflOnly&&g.dx!=null&&g.dy!=null){const k=[g.dx,g.dy,g.dz!=null?g.dz:93];const pts=bez(a,k,16).concat(bez(k,b,26).slice(1));pts.kink=15;return pts;}
+  const pts=bez(a,b,41);if(g.defl)pts.kink=0;return pts;
 }
 // Flight time for the replay: real distance over the goal's speed, squeezed into 0.9 to 2.2 s.
 function flightMs(g,pts){let d=0;for(let i=1;i<pts.length;i++)d+=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1],pts[i][2]-pts[i-1][2]);
@@ -552,6 +567,7 @@ function render3D(cv,V){
   list.forEach(({g,pts})=>{if(g.k===fk)return;const col=g.who>=0?pcol[g.who]:opp;
     c.globalAlpha=fk==null?.55:.1;c.strokeStyle=col;c.lineWidth=1.3;path(pts);c.stroke();
     const s=P(pts[0]);c.fillStyle=col;c.beginPath();c.arc(s[0],s[1],2,0,7);c.fill();
+    if(pts.kink!=null){const q=P(pts[pts.kink]);c.strokeStyle=REDIR;c.lineWidth=1.2;c.beginPath();c.moveTo(q[0]-3,q[1]-3);c.lineTo(q[0]+3,q[1]+3);c.moveTo(q[0]+3,q[1]-3);c.lineTo(q[0]-3,q[1]+3);c.stroke();}
     const e=P(pts[40]);c.globalAlpha=fk==null?1:.15;ball(e[0],e[1],Math.max(2.5,F*92/e[2]*.6),col);c.globalAlpha=1;});
   const it=fk==null?null:list.find(a=>a.g.k===fk);
   if(it){
@@ -562,16 +578,25 @@ function render3D(cv,V){
     const s0=P(pts[0]),sp=P([pts[0][0],pts[0][1],0]);c.strokeStyle='#5fe1ff';c.lineWidth=1.2;
     c.beginPath();c.arc(sp[0],sp[1],9,0,7);c.moveTo(sp[0]-14,sp[1]);c.lineTo(sp[0]+14,sp[1]);c.moveTo(sp[0],sp[1]-8);c.lineTo(sp[0],sp[1]+8);c.stroke();
     c.save();c.shadowColor=col;c.shadowBlur=14;c.lineCap='round';
-    for(let i=1;i<=n;i++){const a=P(pts[i-1]),b=P(pts[i]);c.globalAlpha=.25+.75*(i/n);c.strokeStyle=col;c.lineWidth=1+3*(i/n);c.beginPath();c.moveTo(a[0],a[1]);c.lineTo(b[0],b[1]);c.stroke();}
+    const kk=pts.kink;
+    for(let i=1;i<=n;i++){const a=P(pts[i-1]),b=P(pts[i]);c.globalAlpha=.25+.75*(i/n);c.strokeStyle=kk!=null&&i>kk?REDIR:col;c.shadowColor=c.strokeStyle;c.lineWidth=1+3*(i/n);c.beginPath();c.moveTo(a[0],a[1]);c.lineTo(b[0],b[1]);c.stroke();}
     c.restore();c.globalAlpha=1;
     const fi=p*40,i0=Math.floor(fi),i1=Math.min(40,i0+1),tt=fi-i0,hp=[0,1,2].map(d=>pts[i0][d]*(1-tt)+pts[i1][d]*tt),h=P(hp),fl=P([hp[0],hp[1],0]);
     c.setLineDash([2,3]);c.strokeStyle='rgba(95,225,255,.6)';c.beginPath();c.moveTo(h[0],h[1]);c.lineTo(fl[0],fl[1]);c.stroke();c.setLineDash([]);
     c.strokeStyle='rgba(95,225,255,.7)';c.beginPath();c.ellipse(fl[0],fl[1],7,3,0,0,7);c.stroke();
     c.save();c.shadowColor='#5fe1ff';c.shadowBlur=18;ball(h[0],h[1],Math.max(4,F*92/h[2]*.75),col);c.restore();
+    if(kk!=null&&p*40>=kk){
+      // Redirect: a diamond and a pulse where the other team touched it, with their name.
+      const q=P(pts[kk]),age=Math.min(1,(p*40-kk)/8),rr=6+age*14;c.strokeStyle=REDIR;c.lineWidth=1.6;
+      c.beginPath();c.moveTo(q[0],q[1]-7);c.lineTo(q[0]+7,q[1]);c.lineTo(q[0],q[1]+7);c.lineTo(q[0]-7,q[1]);c.closePath();c.stroke();
+      c.globalAlpha=1-age;c.beginPath();c.arc(q[0],q[1],rr,0,7);c.stroke();c.globalAlpha=1;
+      c.font='bold 10px '+(tok('--mono')||'monospace');c.textAlign='left';c.fillStyle=REDIR;
+      c.fillText((kk===0?'REDIRECTED BY ':'REDIRECT · ')+g.defl.toUpperCase(),q[0]+10,q[1]-8);
+    }
     if(p>=1){const e=P(pts[40]),q=(el-dur)/900;c.strokeStyle=col;c.globalAlpha=1-q;c.lineWidth=2;c.beginPath();c.arc(e[0],e[1],6+q*28,0,7);c.stroke();c.globalAlpha=1;}
     if(V.hud){
       const kmh=g.spd,d=Math.hypot(g.ix-g.x,5120-g.y)/100,lbl=g.who>=0?PLAYERS[g.who].short.toUpperCase():(V.side==='us'?'US':'OPPONENT');
-      const rows=[[`GOAL`,lbl],['SPEED',kmh!=null?fSpd(kmh).toUpperCase():'—'],['RANGE',fLen(d).toUpperCase()],['IMPACT H',IMP()?(g.iz/100*3.28084).toFixed(1)+' FT':(g.iz/100).toFixed(2)+' M'],['T',(Math.min(el,dur)/1000).toFixed(2)+' S']];
+      const rows=[[`GOAL`,lbl],...(g.defl?[['REDIRECT',g.defl.toUpperCase()]]:[]),['SPEED',kmh!=null?fSpd(kmh).toUpperCase():'—'],['RANGE',fLen(d).toUpperCase()],['IMPACT H',IMP()?(g.iz/100*3.28084).toFixed(1)+' FT':(g.iz/100).toFixed(2)+' M'],['T',(Math.min(el,dur)/1000).toFixed(2)+' S']];
       c.textAlign='left';c.font='10px '+(tok('--mono')||'monospace');
       rows.forEach(([k,v],i)=>{c.fillStyle='rgba(95,225,255,.6)';c.fillText(k,12,20+i*14);c.fillStyle='#d8f6ff';c.fillText(v,78,20+i*14);});
       c.strokeStyle='rgba(95,225,255,.7)';c.lineWidth=1.5;const br=(x,y,dx,dy)=>{c.beginPath();c.moveTo(x+dx*12,y);c.lineTo(x,y);c.lineTo(x,y+dy*12);c.stroke();};
@@ -942,7 +967,7 @@ function openMatch(guid){
   let a=0,b=0;
   const story=m.goals.map(g=>{g.ours?a++:b++;const who=g.who>=0?PLAYERS[g.who].short:g.ours?'Us':esc(g.scorer&&g.scorer!=='Opponent'?g.scorer:'Opponent');
     const as=g.assister?` <span class="muted">(assist ${esc(PLAYERS.find(p=>p.name===g.assister)?.short||g.assister)})</span>`:'';
-    return `<li class="${g.ours?'us':'them'}"><b class="num">${a}–${b}</b> ${who}${as}${g.spd!=null?` <span class="muted">· ${fSpd(g.spd)}</span>`:''}${g.ko?' <span class="chip">Kickoff</span>':''}</li>`;}).join('');
+    return `<li class="${g.ours?'us':'them'}"><b class="num">${a}–${b}</b> ${who}${as}${g.spd!=null?` <span class="muted">· ${fSpd(g.spd)}</span>`:''}${g.ko?' <span class="chip">Kickoff</span>':''}${g.defl?` <span class="chip" title="Last touched by ${esc(g.defl)} before it went in">Redirected by ${esc(g.defl)}</span>`:''}</li>`;}).join('');
   $('matchTitle').innerHTML=`<span class="pill ${m.win?'w':'l'}">${m.win?'W':'L'}</span> ${m.us}–${m.them}${m.ot?' <span class="muted">OT</span>':''} on ${esc(m.arena)}`;
   $('matchBody').innerHTML=`<p class="muted">${fmtDate(m.when)} ${fmtTime(m.when)} · ${esc(m.playlist)}${m.secs?' · '+fmtDur(m.secs):''}</p>`+
     (m.ff||m.replay||m.left.length?`<div class="mnotes">${notes(m)}</div>`:'')+
@@ -978,6 +1003,7 @@ const CHANGELOG=[
     'Goal map pins are now little Rocket League balls',
     'Loading screen while your stats load, instead of briefly showing sample data',
     'Goal mouth on the goal map drawn as a technical diagram with real dimensions',
+    'Goals the other team redirected are marked, with a red redirect point in the 3D replay',
     'Hover a ball on the goal map for a 3D replay of that goal',
     '3D goal map: arrow keys move the camera, and a control knob turns, tilts and zooms it',
     '3D goal map you can drag to rotate, showing every goal from shot to net',
