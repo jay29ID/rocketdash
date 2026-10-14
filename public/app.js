@@ -526,7 +526,7 @@ function fieldMap(pts,noun,tip,top,bottom){
   return `<svg viewBox="0 -18 ${W} ${H+36}" role="img" aria-label="Top-down field with ${pts.length} ${noun} locations">${rlBallDefs('rlb-'+noun)}${f}</svg>`;
 }
 // Cold to hot: blue, through violet, to red. t runs 0..1.
-const HEAT_C=[[47,111,214],[124,77,196],[214,51,57]],HEAT_NEON=[[52,12,100],[165,45,235],[57,255,20]],HEAT_NIGHT=[[28,32,42],[70,96,140],[74,150,245]],HEAT_DARK=[[14,14,14],[72,72,72],[178,178,178]];
+const HEAT_C=[[47,111,214],[124,77,196],[214,51,57]],HEAT_NEON=[[52,12,100],[165,45,235],[57,255,20]],HEAT_NIGHT=[[22,32,52],[48,92,160],[110,180,255]],HEAT_DARK=[[14,14,14],[72,72,72],[178,178,178]];
 function heatColor(t){const HEAT=hmTheme==='neon'?HEAT_NEON:hmTheme==='night'?HEAT_NIGHT:hmTheme==='dark'?HEAT_DARK:HEAT_C;
   t=clamp(t,0,1)*(HEAT.length-1);const i=Math.min(HEAT.length-2,Math.floor(t)),f=t-i;
   const c=HEAT[i].map((v,k)=>Math.round(v+(HEAT[i+1][k]-v)*f));
@@ -660,14 +660,14 @@ function flightMs(g,pts){let d=0;for(let i=1;i<pts.length;i++)d+=Math.hypot(pts[
 const PAL3={classic:{ink:'#8fdcff',muted:'rgba(120,200,255,.55)',line:'rgba(90,180,255,.28)',bg:'#050b14',floor:'rgba(20,60,110,.35)',ghost:'rgba(140,220,255,.45)',acc:'#5fe1ff',accA:a=>`rgba(95,225,255,${a})`,text:'#d8f6ff',mate:'#9fb4c8'},
   neon:{ink:'#39ff88',muted:'rgba(57,255,136,.55)',line:'rgba(57,255,20,.2)',bg:'#020203',floor:'rgba(110,30,190,.24)',ghost:'rgba(192,77,255,.5)',acc:'#c04dff',accA:a=>`rgba(192,77,255,${a})`,text:'#eaffe4',mate:'#b9a3d6',
     pcol:['#39ff14','#c04dff','#00f0ff','#ffe600'],opp:'#ff2bd6'},
-  night:{ink:'#d6dce6',muted:'rgba(190,200,216,.5)',line:'rgba(190,200,216,.16)',bg:'#06070a',floor:'rgba(46,54,70,.32)',ghost:'rgba(79,156,245,.45)',acc:'#4f9cf5',accA:a=>`rgba(79,156,245,${a})`,text:'#e8ecf2',mate:'#8a93a3',
+  night:{ink:'#d6dce6',muted:'rgba(190,200,216,.5)',line:'rgba(190,200,216,.16)',bg:'#06070a',floor:'rgba(46,54,70,.32)',ghost:'rgba(79,156,245,.45)',acc:'#4f9cf5',accA:a=>`rgba(79,156,245,${a})`,text:'#e8ecf2',mate:'#8a93a3',redir:'#a8d4ff',
     pcol:['#e2e8f0','#4f9cf5','#8a93a3','#2f62b8'],opp:'#646c7a'},
-  dark:{ink:'#8e8e8e',muted:'rgba(128,128,128,.45)',line:'rgba(128,128,128,.11)',bg:'#000',floor:'rgba(30,30,30,.4)',ghost:'rgba(165,165,165,.35)',acc:'#aeaeae',accA:a=>`rgba(174,174,174,${a})`,text:'#aeaeae',mate:'#595959',
+  dark:{ink:'#8e8e8e',muted:'rgba(128,128,128,.45)',line:'rgba(128,128,128,.11)',bg:'#000',floor:'rgba(30,30,30,.4)',ghost:'rgba(165,165,165,.35)',acc:'#aeaeae',accA:a=>`rgba(174,174,174,${a})`,text:'#aeaeae',mate:'#595959',redir:'#d8d8d8',
     pcol:['#b2b2b2','#696969','#8e8e8e','#464646'],opp:'#383838'}};
 function render3D(cv,V){
   const W=cv.clientWidth,H=cv.clientHeight,dpr=window.devicePixelRatio||1;if(!W||!H)return;
   if(cv.width!==Math.round(W*dpr)||cv.height!==Math.round(H*dpr)){cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);}
-  const c=cv.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,W,H);
+  const c=cv.getContext('2d'),RD=(PAL3[V.theme]||{}).redir||REDIR;c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,W,H);
   const css=getComputedStyle(document.documentElement),tok=n=>css.getPropertyValue(n).trim();
   const K=PAL3[V.theme]||PAL3.classic,NE=!!K.pcol,HU=V.hud||NE;
   const ink=HU?K.ink:tok('--ink-2'),muted=HU?K.muted:tok('--muted'),line=HU?K.line:tok('--line'),pcol=PLAYERS.map((p,j)=>NE?K.pcol[j%4]:tok('--p'+(j+1))),opp=NE?K.opp:(tok('--opp')||muted);
@@ -694,7 +694,7 @@ function render3D(cv,V){
   list.forEach(({g,pts})=>{if(g.k===fk)return;const col=g.who>=0?pcol[g.who]:opp;
     c.globalAlpha=fk==null?.55:.1;c.strokeStyle=col;c.lineWidth=1.3;path(pts);c.stroke();
     const s=P(pts[0]);c.fillStyle=col;c.beginPath();c.arc(s[0],s[1],2,0,7);c.fill();
-    if(pts.kink!=null){const q=P(pts[pts.kink]);c.strokeStyle=REDIR;c.lineWidth=1.2;c.beginPath();c.moveTo(q[0]-3,q[1]-3);c.lineTo(q[0]+3,q[1]+3);c.moveTo(q[0]+3,q[1]-3);c.lineTo(q[0]-3,q[1]+3);c.stroke();}
+    if(pts.kink!=null){const q=P(pts[pts.kink]);c.strokeStyle=RD;c.lineWidth=1.2;c.beginPath();c.moveTo(q[0]-3,q[1]-3);c.lineTo(q[0]+3,q[1]+3);c.moveTo(q[0]+3,q[1]-3);c.lineTo(q[0]-3,q[1]+3);c.stroke();}
     const e=P(pts[pts.length-1]);c.globalAlpha=fk==null?1:.15;ball(e[0],e[1],Math.max(2.5,F*92/e[2]*.6),col);c.globalAlpha=1;});
   const it=fk==null?null:list.find(a=>a.g.k===fk);
   if(it){
@@ -706,8 +706,8 @@ function render3D(cv,V){
     const s0=P(pts[0]),sp=P([pts[0][0],pts[0][1],0]);c.strokeStyle=K.acc;c.lineWidth=1.2;
     c.beginPath();c.arc(sp[0],sp[1],9,0,7);c.moveTo(sp[0]-14,sp[1]);c.lineTo(sp[0]+14,sp[1]);c.moveTo(sp[0],sp[1]-8);c.lineTo(sp[0],sp[1]+8);c.stroke();
     c.save();c.shadowColor=col;c.shadowBlur=14;c.lineCap='round';
-    const kk=pts.kink,kc=k=>k[0]==='p'?pcol[+k.slice(1)]:k==='opp'?REDIR:(HU?K.mate:muted);
-    const segCol=i=>{let m=pts.marks[0];pts.marks.forEach(x=>{if(x.i<i)m=x;});return m.i===kk?REDIR:kc(m.kind);};
+    const kk=pts.kink,kc=k=>k[0]==='p'?pcol[+k.slice(1)]:k==='opp'?RD:(HU?K.mate:muted);
+    const segCol=i=>{let m=pts.marks[0];pts.marks.forEach(x=>{if(x.i<i)m=x;});return m.i===kk?RD:kc(m.kind);};
     for(let i=1;i<=n;i++){const a=P(pts[i-1]),b=P(pts[i]);c.globalAlpha=.25+.75*(i/n);c.strokeStyle=segCol(i);c.shadowColor=c.strokeStyle;c.lineWidth=1+3*(i/n);c.beginPath();c.moveTo(a[0],a[1]);c.lineTo(b[0],b[1]);c.stroke();}
     c.restore();c.globalAlpha=1;
     const fi=p*Lx,i0=Math.floor(fi),i1=Math.min(Lx,i0+1),tt=fi-i0,hp=[0,1,2].map(d=>pts[i0][d]*(1-tt)+pts[i1][d]*tt),h=P(hp),fl=P([hp[0],hp[1],0]);
@@ -718,14 +718,14 @@ function render3D(cv,V){
     pts.marks.forEach((m,mi)=>{if(m.i===kk||p*Lx<m.i-0.01)return;const q=P(pts[m.i]),cc=kc(m.kind);c.strokeStyle=cc;c.lineWidth=1.3;c.beginPath();c.arc(q[0],q[1],5,0,7);c.stroke();
       if(pts.marks.length>1||V.hud){c.font='bold 10px '+(tok('--mono')||'monospace');c.textAlign='left';c.fillStyle=cc;c.fillText(m.label||`${mi+1} · ${(PLAYERS.find(x=>x.name===m.name)?.short||m.name||'?').toUpperCase()}`,q[0]+8,q[1]-8);}});
     // Saves: a dashed line from the save to where the shot was heading, with a cross on the goal line.
-    if(g.save){const sm=pts.marks.find(m=>m.save);if(sm&&p*Lx>=sm.i){const a=P(pts[sm.i]),e=P([g.ix,5120,g.iz]);c.setLineDash([3,4]);c.strokeStyle=REDIR;c.globalAlpha=.8;c.lineWidth=1.2;c.beginPath();c.moveTo(a[0],a[1]);c.lineTo(e[0],e[1]);c.stroke();c.setLineDash([]);
-      c.beginPath();c.moveTo(e[0]-4,e[1]-4);c.lineTo(e[0]+4,e[1]+4);c.moveTo(e[0]+4,e[1]-4);c.lineTo(e[0]-4,e[1]+4);c.stroke();c.globalAlpha=1;if(V.hud){c.font='bold 10px '+(tok('--mono')||'monospace');c.textAlign='left';c.fillStyle=REDIR;c.textAlign='center';c.fillText('WAS HEADING HERE',e[0],e[1]+16);}}}
+    if(g.save){const sm=pts.marks.find(m=>m.save);if(sm&&p*Lx>=sm.i){const a=P(pts[sm.i]),e=P([g.ix,5120,g.iz]);c.setLineDash([3,4]);c.strokeStyle=RD;c.globalAlpha=.8;c.lineWidth=1.2;c.beginPath();c.moveTo(a[0],a[1]);c.lineTo(e[0],e[1]);c.stroke();c.setLineDash([]);
+      c.beginPath();c.moveTo(e[0]-4,e[1]-4);c.lineTo(e[0]+4,e[1]+4);c.moveTo(e[0]+4,e[1]-4);c.lineTo(e[0]-4,e[1]+4);c.stroke();c.globalAlpha=1;if(V.hud){c.font='bold 10px '+(tok('--mono')||'monospace');c.textAlign='left';c.fillStyle=RD;c.textAlign='center';c.fillText('WAS HEADING HERE',e[0],e[1]+16);}}}
     if(kk!=null&&!inA&&p*Lx>=kk){
       // Redirect: a diamond and a pulse where the other team touched it, with their name.
-      const q=P(pts[kk]),age=Math.min(1,(p*Lx-kk)/8),rr=6+age*14;c.strokeStyle=REDIR;c.lineWidth=1.6;
+      const q=P(pts[kk]),age=Math.min(1,(p*Lx-kk)/8),rr=6+age*14;c.strokeStyle=RD;c.lineWidth=1.6;
       c.beginPath();c.moveTo(q[0],q[1]-7);c.lineTo(q[0]+7,q[1]);c.lineTo(q[0],q[1]+7);c.lineTo(q[0]-7,q[1]);c.closePath();c.stroke();
       c.globalAlpha=1-age;c.beginPath();c.arc(q[0],q[1],rr,0,7);c.stroke();c.globalAlpha=1;
-      c.font='bold 10px '+(tok('--mono')||'monospace');c.textAlign='left';c.fillStyle=REDIR;
+      c.font='bold 10px '+(tok('--mono')||'monospace');c.textAlign='left';c.fillStyle=RD;
       c.fillText((kk===0?'REDIRECTED BY ':'REDIRECT · ')+String(g.defl||pts.marks[pts.marks.length-1].name).toUpperCase(),q[0]+10,q[1]-8);
     }
     if(!inA&&p>=1){const e=P(pts[Lx]),q=(el-dur)/900;c.strokeStyle=col;c.globalAlpha=1-q;c.lineWidth=2;c.beginPath();c.arc(e[0],e[1],6+q*28,0,7);c.stroke();c.globalAlpha=1;}
@@ -1159,7 +1159,7 @@ function closeWheel(){const w=$('themeWheel');if(w)w.hidden=true;const t=$('them
 $('themeBtn').addEventListener('click',e=>{e.stopPropagation();const w=$('themeWheel'),open=w.hidden;w.hidden=!open;$('themeBtn').setAttribute('aria-expanded',String(open));});
 document.addEventListener('click',e=>{if(!e.target.closest('#themeWheel,#themeBtn'))closeWheel();});
 document.addEventListener('keydown',e=>{if(e.key==='Escape')closeWheel();});
-$('hmTheme').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;hmTheme=b.dataset.t;saveUi();applyThemes();renderAll();});
+$('hmTheme').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;hmTheme=g3Theme=b.dataset.t;saveUi();applyThemes();renderAll();draw3D();drawMini();});
 $('g3Theme').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;g3Theme=b.dataset.t;saveUi();applyThemes();draw3D();drawMini();});
 $('mapSide').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;mapSide=b.dataset.s;document.querySelectorAll('#mapSide button').forEach(x=>x.setAttribute('aria-pressed',x===b));renderMaps(inPeriod());});
 $('mapWho').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;mapWho=b.dataset.w;document.querySelectorAll('#mapWho button').forEach(x=>x.setAttribute('aria-pressed',x===b));renderMaps(inPeriod());});
@@ -1823,6 +1823,7 @@ $('matchLog').addEventListener('click',e=>{const a=e.target.closest('a.mlink');i
 // Add a release at the top whenever something visible changes (dashboard or widget).
 const CHANGELOG=[
   {v:'1.7',date:'2026-10-14',items:[
+    'Goal map Night: blue-tinted field and blue heat scale; picking a look on the goal map now sets its 3D view too, and 3D redirect markers follow Night and Midnight instead of staying red.',
     'Night theme is now blacks, greys and shades of blue (no red): Kobra and wins in blue, Jay light grey, losses dim grey; heatmap and 3D map follow.',
     'Midnight theme is about 25% darker: dimmer greys, panels and maps, text still readable.',
     'Midnight theme fills the last slot of the theme wheel: pure, very dark monotone with no colour, players told apart by shade; the heatmap and 3D map can use it too',
