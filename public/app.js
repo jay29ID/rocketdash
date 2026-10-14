@@ -194,7 +194,7 @@ function toMatch(r){
     const ours=g.ours!=null?!!g.ours:(myTeam!=null&&team===myTeam);
     // Credit the goal to whoever the game credits; the last hit can be an opponent's deflection.
     const who=ours?PLAYERS.findIndex(p=>p.name===(PLAYERS.some(q=>q.name===g.scorer)?g.scorer:g.shot_from_player)):-1;
-    return {ours,who,ko:isKickoffGoal(g),spd:num(g.speed)!=null?Math.round(+g.speed):null,
+    return {ours,who,scorer:g.scorer||null,assister:g.assister||null,ko:isKickoffGoal(g),spd:num(g.speed)!=null?Math.round(+g.speed):null,
       x:co(s,'X')!=null?f*co(s,'X'):null,y:co(s,'Y')!=null?f*co(s,'Y'):null,
       ix:co(i,'X')!=null?f*co(i,'X'):null,iz:co(i,'Z')};
   });
@@ -203,7 +203,7 @@ function toMatch(r){
   const left=(r.players_left||[]).filter(Boolean).map(x=>({name:x.name,ours:myTeam!=null&&num(x.team)===myTeam}));
   return {guid:r.match_guid,when:new Date(r.started_at),win:r.result==='Win',us:num(r.team_score)||0,them:num(r.opponent_score)||0,
     ot:!!r.overtime,dur,arena:arenaName(r.arena),playlist:r.playlist||'Unknown playlist',lines,
-    first:goals.length?(goals[0].ours?'us':'them'):null,deficit:maxDeficit(goals),lead:maxDeficit(goals,-1),
+    first:goals.length?(goals[0].ours?'us':'them'):null,goals,secs:matchSecs(r),deficit:maxDeficit(goals),lead:maxDeficit(goals,-1),
     ourGoals:goals.filter(g=>g.ours),theirGoals:goals.filter(g=>!g.ours),
     replay:!!r.replay_created,left,opps,ff:!!r.ff,
     spectators:Array.isArray(r.spectators)?r.spectators.map(String):null,
@@ -431,17 +431,18 @@ function heatColor(t){
 // Goal-map markers drawn as little Rocket League balls: a grey sphere with the hex panel
 // seams, ringed in the scorer's colour (neutral on the field view, where the heat carries colour).
 function rlBallDefs(id){return `<defs><radialGradient id="${id}" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#f4f6f8"/><stop offset=".6" stop-color="#c3cad2"/><stop offset="1" stop-color="#7d8692"/></radialGradient></defs>`;}
-function rlBall(x,y,r,ring,rw,id,tip){
+function rlBall(x,y,r,ring,rw,id,tip,gid){
   const hex=[0,1,2,3,4,5].map(k=>{const a=Math.PI/3*k-Math.PI/2;return [Math.cos(a),Math.sin(a)];});
   const seam=hex.map(([c,s])=>`${(.38*c).toFixed(3)},${(.38*s).toFixed(3)}`).join(' ');
   const spokes=hex.map(([c,s])=>`M${(.38*c).toFixed(3)} ${(.38*s).toFixed(3)}L${(.92*c).toFixed(3)} ${(.92*s).toFixed(3)}`).join('');
-  return `<g class="dot" transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(${r})"><title>${esc(tip)}</title>`+
+  return `<g class="dot" data-g="${gid}" transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(${r})"><title>${esc(tip)}</title>`+
     `<circle r="1" fill="url(#${id})"/><g fill="none" stroke="#3a424c" stroke-opacity=".55" stroke-width=".5" vector-effect="non-scaling-stroke"><polygon points="${seam}"/><path d="${spokes}"/></g>`+
     `<circle r="1" fill="none" stroke="${ring}" stroke-width="${rw}" vector-effect="non-scaling-stroke"/></g>`;
 }
 function renderMaps(list){
   let goals=list.flatMap(m=>(mapSide==='us'?m.ourGoals:m.theirGoals).map(g=>({...g,m})));
   if(mapSide==='us'&&mapWho!=='all')goals=goals.filter(g=>g.who===+mapWho);
+  goals.forEach((g,k)=>g.k=k);
   const shots=goals.filter(g=>g.x!=null&&g.y!=null), hits=goals.filter(g=>g.ix!=null&&g.iz!=null);
   $('mapWho').style.visibility=mapSide==='us'?'visible':'hidden';
   const col=g=>g.who>=0?PLAYERS[g.who].color:'var(--opp)';
@@ -463,7 +464,7 @@ function renderMaps(list){
   f+=`<rect x="${sx(-1800)}" y="${sy(5120)}" width="${su(3600)}" height="${su(1100)}" ${ln}/><rect x="${sx(-1800)}" y="${sy(-4020)}" width="${su(3600)}" height="${su(1100)}" ${ln}/>`;
   f+=`<text x="${W/2}" y="${sy(6000)-6}" text-anchor="middle">${mapSide==='us'?'Their goal':'Our goal'}</text><text x="${W/2}" y="${sy(-6000)+14}" text-anchor="middle">${mapSide==='us'?'Our goal':'Their goal'}</text>`;
   // Dots stay neutral here so they don't fight the blue-to-red heat; the net view carries who scored.
-  shots.forEach(g=>{f+=rlBall(sx(clamp(g.x,-4096,4096)),sy(clamp(g.y,-5120,5120)),4.5,'#0b1017',1,'rlbF',tip(g));});
+  shots.forEach(g=>{f+=rlBall(sx(clamp(g.x,-4096,4096)),sy(clamp(g.y,-5120,5120)),4.5,'#0b1017',1,'rlbF',tip(g),g.k);});
   $('fieldMap').innerHTML=`<svg viewBox="0 -18 ${W} ${H+36}" role="img" aria-label="Top-down field with ${shots.length} shot locations">${rlBallDefs('rlbF')}${f}</svg>`;
   // Front elevation of the goal, drawn like a technical drawing. Mouth 1786 x 642 uu, 880 deep (1 uu = 1 cm).
   const NW=460,ml=30,mr=58,mt=46,mb=66,iw=NW-ml-mr,ih=Math.round(iw*642/1786),NH=mt+ih+mb;
@@ -482,7 +483,7 @@ function renderMaps(list){
   // Frame: posts and crossbar as hollow members outside the mouth, centreline, ground.
   const t=fr(34),L=nx(-893),R=nx(893),T=nz(642),G=nz(0);
   n+=`<path d="M${L-t},${G} V${T-t} H${R+t} V${G} H${R} V${T} H${L} V${G} Z" fill="var(--surface)" stroke="var(--ink-2)" stroke-width="1.5" stroke-linejoin="miter"/>`;
-  n+=`<line x1="${NW/2}" x2="${NW/2}" y1="${T-t-12}" y2="${G+8}" stroke="var(--muted)" stroke-width=".8" stroke-dasharray="10 3 2 3"/><text x="${NW/2+4}" y="${T-t-14}" class="dimt">℄</text>`;
+  n+=`<line x1="${NW/2}" x2="${NW/2}" y1="${T-t-12}" y2="${G+8}" stroke="var(--muted)" stroke-width=".8" stroke-dasharray="10 3 2 3"/><text x="${NW/2+4}" y="${T-t-14}" class="dimt">CL</text>`;
   n+=`<line x1="6" x2="${NW-6}" y1="${G}" y2="${G}" stroke="var(--ink-2)" stroke-width="1.5"/>`;
   for(let x=10;x<NW-6;x+=8)n+=`<line x1="${x}" x2="${x-5}" y1="${G+1}" y2="${G+6}" stroke="var(--line)" stroke-width=".8"/>`;
   // Width dimension under the goal, height dimension to the right, depth as a note.
@@ -493,7 +494,7 @@ function renderMaps(list){
   n+=`<text transform="translate(${hx+13} ${(T+G)/2}) rotate(-90)" text-anchor="middle" class="dimt">${fM(642)} · 642 uu</text>`;
   n+=`<text x="${L-t}" y="${T-t-14}" class="dimt">CROSSBAR</text><text x="${R+t}" y="${T-t-14}" text-anchor="end" class="dimt">DEPTH ${fM(880)} · 880 uu</text>`;
   n+=`<text x="${L}" y="${NH-8}" class="dimt">L. POST</text><text x="${NW/2}" y="${NH-8}" text-anchor="middle" class="dimt">FRONT ELEVATION · GOAL MOUTH</text><text x="${R}" y="${NH-8}" text-anchor="end" class="dimt">R. POST</text>`;
-  hits.forEach(g=>{n+=rlBall(nx(g.ix),nz(g.iz),6,col(g),2.2,'rlbN',tip(g));});
+  hits.forEach(g=>{n+=rlBall(nx(g.ix),nz(g.iz),6,col(g),2.2,'rlbN',tip(g),g.k);});
   n+=labels.join('');
   $('netMap').innerHTML=`<svg viewBox="0 0 ${NW} ${NH}" role="img" aria-label="Goal mouth with ${hits.length} impact points">${rlBallDefs('rlbN')}${n}</svg>`;
   $('fieldTitle').textContent=mapSide==='us'?'Where our goals were shot from':'Where their goals were shot from';
@@ -649,7 +650,7 @@ function renderLog(list){
   const line=L=>L?`${L.goals}·${L.assists}·${L.saves}`:'–';
   $('matchLog').innerHTML=`<thead><tr><th>When</th><th>Result</th><th>Score</th><th>Arena</th><th>${esc(PLAYERS[0].short)} G·A·Sv</th><th>${esc(PLAYERS[1].short)} G·A·Sv</th><th>Top score</th><th>Opponents</th><th>Notes</th></tr></thead><tbody>`+
     rows.map(m=>{const L=m.lines;const top=L[0]&&L[1]?(L[0].score>=L[1].score?0:1):L[0]?0:L[1]?1:-1;
-      return `<tr><td>${fmtDate(m.when)} ${fmtTime(m.when)}</td><td><span class="pill ${m.win?'w':'l'}">${m.win?'W':'L'}</span></td><td>${m.us}–${m.them}${m.ot?' <span class="muted">OT</span>':''}</td><td>${esc(m.arena)}</td><td>${line(L[0])}</td><td>${line(L[1])}</td><td>${top<0?'–':`<span class="tag p${top+1}" style="padding:0 7px"><i></i>${esc(PLAYERS[top].short)} ${L[top].score}</span>`}</td><td class="opps">${m.opps.length?m.opps.map(o=>`<a href="${esc(o.url)}" target="_blank" rel="noopener" title="View ${esc(o.name)} on tracker.gg">${esc(o.name)}</a>`).join('<br>'):'–'}</td><td class="notes">${notes(m)}</td></tr>`;}).join('')+'</tbody>';
+      return `<tr><td><a href="#m-${esc(m.guid)}" class="mlink" title="Open this match">${fmtDate(m.when)} ${fmtTime(m.when)}</a></td><td><span class="pill ${m.win?'w':'l'}">${m.win?'W':'L'}</span></td><td>${m.us}–${m.them}${m.ot?' <span class="muted">OT</span>':''}</td><td>${esc(m.arena)}</td><td>${line(L[0])}</td><td>${line(L[1])}</td><td>${top<0?'–':`<span class="tag p${top+1}" style="padding:0 7px"><i></i>${esc(PLAYERS[top].short)} ${L[top].score}</span>`}</td><td class="opps">${m.opps.length?m.opps.map(o=>`<a href="${esc(o.url)}" target="_blank" rel="noopener" title="View ${esc(o.name)} on tracker.gg">${esc(o.name)}</a>`).join('<br>'):'–'}</td><td class="notes">${notes(m)}</td></tr>`;}).join('')+'</tbody>';
 }
 
 function notes(m){
@@ -793,8 +794,48 @@ async function load(){
   $('banner').hidden=!SAMPLE;
   $('banner').textContent=SAMPLE?'No matches have been uploaded yet, so this shows sample data. It switches to your real stats as soon as the recorder sends the first finished match.':'';
   renderAll();
+  const first=document.body.classList.contains('is-loading');
   document.body.classList.remove('is-loading');
+  if(first)matchFromHash();
 }
+// ---------- match detail ----------
+// Opened from the match log (or a #m-<guid> link): the whole scoreboard and goal-by-goal story.
+function openMatch(guid){
+  const m=DONE.find(x=>String(x.guid)===guid)||ALL.find(x=>String(x.guid)===guid);if(!m)return false;
+  const L=m.lines,cols=[['Score','score',0],['Goals','goals',0],['Assists','assists',0],['Saves','saves',0],['Shots','shots',0],['Demos','demos',0],['Touches','touches',0]];
+  const extra=[['Avg speed',l=>fSpd(l.speed)],['Top speed',l=>fSpd(l.topSpeed)],['Avg boost',l=>l.boost==null?'–':Math.round(l.boost)],['Supersonic',l=>l.ss==null?'–':l.ss.toFixed(1)+'%'],['Distance',l=>fDist(l.dist,2)],['Car',l=>l.car?esc(l.car):'–']];
+  const head=`<tr><th></th>${PLAYERS.map((p,j)=>`<th class="v"><span class="tag p${j+1}" style="padding:0 7px"><i></i>${esc(p.short)}</span></th>`).join('')}</tr>`;
+  const body=cols.map(([lab,k])=>`<tr><td>${lab}</td>${L.map(l=>`<td class="v">${l?l[k]:'–'}</td>`).join('')}</tr>`).join('')+
+    extra.map(([lab,f])=>`<tr><td>${lab}</td>${L.map(l=>`<td class="v">${l?f(l):'–'}</td>`).join('')}</tr>`).join('');
+  let a=0,b=0;
+  const story=m.goals.map(g=>{g.ours?a++:b++;const who=g.who>=0?PLAYERS[g.who].short:g.ours?'Us':esc(g.scorer&&g.scorer!=='Opponent'?g.scorer:'Opponent');
+    const as=g.assister?` <span class="muted">(assist ${esc(PLAYERS.find(p=>p.name===g.assister)?.short||g.assister)})</span>`:'';
+    return `<li class="${g.ours?'us':'them'}"><b class="num">${a}–${b}</b> ${who}${as}${g.spd!=null?` <span class="muted">· ${fSpd(g.spd)}</span>`:''}${g.ko?' <span class="chip">Kickoff</span>':''}</li>`;}).join('');
+  $('matchTitle').innerHTML=`<span class="pill ${m.win?'w':'l'}">${m.win?'W':'L'}</span> ${m.us}–${m.them}${m.ot?' <span class="muted">OT</span>':''} on ${esc(m.arena)}`;
+  $('matchBody').innerHTML=`<p class="muted">${fmtDate(m.when)} ${fmtTime(m.when)} · ${esc(m.playlist)}${m.secs?' · '+fmtDur(m.secs):''}</p>`+
+    (m.ff||m.replay||m.left.length?`<div class="mnotes">${notes(m)}</div>`:'')+
+    `<table class="lines mtable num"><thead>${head}</thead><tbody>${body}</tbody></table>`+
+    `<h3>Goals</h3>${story?`<ol class="story">${story}</ol>`:'<p class="muted">No goal details for this match.</p>'}`+
+    `<h3>Opponents</h3><p>${m.opps.length?m.opps.map(o=>`<a href="${esc(o.url)}" target="_blank" rel="noopener">${esc(o.name)}</a>`).join(' · '):'<span class="muted">Not recorded</span>'}</p>`;
+  const d=$('matchDlg');if(!d.open){if(d.showModal)d.showModal();else d.setAttribute('open','');}
+  return true;
+}
+function matchFromHash(){const h=location.hash;if(h.startsWith('#m-'))openMatch(decodeURIComponent(h.slice(3)));}
+window.addEventListener('hashchange',matchFromHash);
+$('matchClose').addEventListener('click',()=>$('matchDlg').close());
+$('matchDlg').addEventListener('click',e=>{if(e.target===$('matchDlg'))$('matchDlg').close();});
+$('matchDlg').addEventListener('close',()=>{if(location.hash.startsWith('#m-'))history.replaceState(null,'',location.pathname+location.search);});
+$('matchLog').addEventListener('click',e=>{const a=e.target.closest('a.mlink');if(!a)return;e.preventDefault();history.replaceState(null,'',a.getAttribute('href'));matchFromHash();});
+// Hovering a ball on one goal map lights up the same goal on the other.
+['fieldMap','netMap'].forEach(id=>{
+  $(id).addEventListener('mouseover',e=>{const d=e.target.closest('.dot');if(!d)return;const k=d.dataset.g;
+    document.querySelectorAll('#fieldMap,#netMap').forEach(el=>el.classList.add('linking'));
+    document.querySelectorAll(`#fieldMap .dot[data-g="${k}"],#netMap .dot[data-g="${k}"]`).forEach(el=>{el.classList.add('lit');if(el!==d)el.parentNode.appendChild(el);});});
+  $(id).addEventListener('mouseout',e=>{if(!e.target.closest('.dot'))return;
+    document.querySelectorAll('#fieldMap,#netMap').forEach(el=>el.classList.remove('linking'));
+    document.querySelectorAll('.dot.lit').forEach(el=>el.classList.remove('lit'));});
+});
+
 // ---------- version and update log ----------
 // Add a release at the top whenever something visible changes (dashboard or widget).
 const CHANGELOG=[
@@ -803,6 +844,8 @@ const CHANGELOG=[
     'Goal map pins are now little Rocket League balls',
     'Loading screen while your stats load, instead of briefly showing sample data',
     'Goal mouth on the goal map drawn as a technical diagram with real dimensions',
+    'Click a match in the match log to see its full stats and goal-by-goal story',
+    'Hover a ball on either goal map to light up the same goal on the other one',
     'Win % for each of you by goals scored in the game: 1, 2, 3, 4 and 5+',
     'Comebacks: wins after being 1, 2, 3 or 4+ goals down',
     'Blown leads: losses after being 1, 2, 3 or 4+ goals up',
