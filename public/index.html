@@ -243,6 +243,14 @@ form.log button{background:var(--ink);color:var(--surface);border:0;border-radiu
 .heat-key{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
 .heat-key .ramp{display:block;width:80px;height:10px;border-radius:3px;background:linear-gradient(90deg,rgb(47,111,214),rgb(124,77,196),rgb(214,51,57));opacity:.85}
 .map-note{font-size:12px;color:var(--muted)}
+/* Neon look for the heatmaps: black boards, fluorescent green and purple. */
+body.hm-neon .maps .map-col{--pitch:#050507;--pitch-line:#3d1f63;--opp:#ff2bd6;--p1:#39ff14;--p2:#c04dff;--p3:#00f0ff;--p4:#ffe600;--muted:#79e88f;--ink:#e2ffe6;--ink-2:#9dffb3;--line:#3d1f63}
+body.hm-neon .maps .map-col > div > svg{background:#000;border-radius:8px;box-shadow:0 0 0 1px #2c1450,0 0 24px rgba(192,77,255,.18)}
+body.hm-neon .heat-key .ramp{background:linear-gradient(90deg,rgb(52,12,100),rgb(165,45,235),rgb(57,255,20))}
+body.hm-neon #fieldMap.linking .dot.lit,body.hm-neon #netMap.linking .dot.lit{filter:drop-shadow(0 0 2px #39ff14) drop-shadow(0 0 6px #39ff14) drop-shadow(0 0 10px #c04dff)}
+body.g3-neon .mini3d{border-color:rgba(192,77,255,.6);background:#020203;box-shadow:0 0 0 1px rgba(5,5,10,.6),0 0 24px rgba(192,77,255,.22)}
+body.g3-neon .mini3d span{color:rgba(57,255,20,.7)}
+body.g3-neon .mini3d:hover{border-color:#39ff14;box-shadow:0 0 0 1px rgba(5,5,10,.6),0 0 30px rgba(57,255,20,.3)}
 .maps{align-items:stretch}
 .mini3d{position:relative;flex:1 1 auto;min-height:220px;margin-top:6px;padding:0;border:1px solid rgba(95,225,255,.55);border-radius:6px;background:#050b14;box-shadow:0 0 0 1px rgba(5,11,20,.6),0 0 24px rgba(95,225,255,.18);cursor:pointer;overflow:hidden;font:inherit;color:inherit}
 .mini3d canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
@@ -420,6 +428,7 @@ footer{font-size:12px;color:var(--muted);max-width:70ch}
           <button type="button" data-s="saves">Our saves</button>
         </div>
         <div class="seg" role="group" aria-label="Scorer" id="mapWho"></div>
+        <div class="seg" role="group" aria-label="Heatmap look" id="hmTheme"><button type="button" data-t="classic" aria-pressed="true">Classic</button><button type="button" data-t="neon">Neon</button></div>
       </div>
     </div>
     <div class="maps">
@@ -437,7 +446,7 @@ footer{font-size:12px;color:var(--muted);max-width:70ch}
       </div>
     </div>
     <div class="map3d-wrap">
-      <div class="map3d-head"><h3 id="map3dTitle">In 3D: every goal from shot to net</h3><button type="button" class="chipbtn" id="map3dReset">Reset view</button></div>
+      <div class="map3d-head"><h3 id="map3dTitle">In 3D: every goal from shot to net</h3><div style="display:flex;gap:8px;align-items:center"><div class="seg" role="group" aria-label="3D look" id="g3Theme"><button type="button" data-t="classic" aria-pressed="true">Classic</button><button type="button" data-t="neon">Neon</button></div><button type="button" class="chipbtn" id="map3dReset">Reset view</button></div></div>
       <div class="map3d-stage">
       <div class="knob" id="knob" aria-label="Camera controls">
         <svg viewBox="0 0 100 100" aria-hidden="true">

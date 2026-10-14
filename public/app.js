@@ -161,8 +161,9 @@ let PLAYERS=[], RAW={matches:[],mmr:[]}, SAMPLE=false;
 let ALL=[], DONE=[], sessions=[], NOW=Date.now();
 const SPECTATORS=['Morgan','Chance','Nick'];
 let period='30', mode='avg', metric='winpct', playlist=null, units='metric', mapSide='us', mapWho='all';
-try{const s=JSON.parse(localStorage.getItem('rl-duo-ui')||'{}');if(s.period)period=s.period;if(s.mode)mode=s.mode;if(s.metric)metric=s.metric;if(s.playlist)playlist=s.playlist;if(s.units)units=s.units;}catch(e){}
-const saveUi=()=>{try{localStorage.setItem('rl-duo-ui',JSON.stringify({period,mode,metric,playlist,units}))}catch(e){}};
+let hmTheme='classic',g3Theme='classic';
+try{const s=JSON.parse(localStorage.getItem('rl-duo-ui')||'{}');if(s.hm)hmTheme=s.hm;if(s.g3)g3Theme=s.g3;if(s.period)period=s.period;if(s.mode)mode=s.mode;if(s.metric)metric=s.metric;if(s.playlist)playlist=s.playlist;if(s.units)units=s.units;}catch(e){}
+const saveUi=()=>{try{localStorage.setItem('rl-duo-ui',JSON.stringify({period,mode,metric,playlist,units,hm:hmTheme,g3:g3Theme}))}catch(e){}};
 
 // A forfeit never sends the game's "match ended" event, so the recorder saves it as Incomplete.
 // When one side was ahead, that side won (the team behind forfeited, or quit, which is a loss too).
@@ -506,8 +507,8 @@ function fieldMap(pts,noun,tip,top,bottom){
   return `<svg viewBox="0 -18 ${W} ${H+36}" role="img" aria-label="Top-down field with ${pts.length} ${noun} locations">${rlBallDefs('rlb-'+noun)}${f}</svg>`;
 }
 // Cold to hot: blue, through violet, to red. t runs 0..1.
-const HEAT=[[47,111,214],[124,77,196],[214,51,57]];
-function heatColor(t){
+const HEAT_C=[[47,111,214],[124,77,196],[214,51,57]],HEAT_NEON=[[52,12,100],[165,45,235],[57,255,20]];
+function heatColor(t){const HEAT=hmTheme==='neon'?HEAT_NEON:HEAT_C;
   t=clamp(t,0,1)*(HEAT.length-1);const i=Math.min(HEAT.length-2,Math.floor(t)),f=t-i;
   const c=HEAT[i].map((v,k)=>Math.round(v+(HEAT[i+1][k]-v)*f));
   return `rgb(${c[0]},${c[1]},${c[2]})`;
@@ -636,19 +637,24 @@ function arcOf(g){
 // Flight time for the replay: real distance over the goal's speed, squeezed into 0.9 to 2.2 s.
 function flightMs(g,pts){let d=0;for(let i=1;i<pts.length;i++)d+=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1],pts[i][2]-pts[i-1][2]);
   const v=g.spd?g.spd/0.036:2000,legs=(pts.marks||[0]).length;return Math.max(900,Math.min(1500+700*legs,d/v*1000*1.6));}
+// 3D colour themes: the cyan HUD and a neon one (black, fluorescent green and purple).
+const PAL3={classic:{ink:'#8fdcff',muted:'rgba(120,200,255,.55)',line:'rgba(90,180,255,.28)',bg:'#050b14',floor:'rgba(20,60,110,.35)',ghost:'rgba(140,220,255,.45)',acc:'#5fe1ff',accA:a=>`rgba(95,225,255,${a})`,text:'#d8f6ff',mate:'#9fb4c8'},
+  neon:{ink:'#39ff88',muted:'rgba(57,255,136,.55)',line:'rgba(57,255,20,.2)',bg:'#020203',floor:'rgba(110,30,190,.24)',ghost:'rgba(192,77,255,.5)',acc:'#c04dff',accA:a=>`rgba(192,77,255,${a})`,text:'#eaffe4',mate:'#b9a3d6',
+    pcol:['#39ff14','#c04dff','#00f0ff','#ffe600'],opp:'#ff2bd6'}};
 function render3D(cv,V){
   const W=cv.clientWidth,H=cv.clientHeight,dpr=window.devicePixelRatio||1;if(!W||!H)return;
   if(cv.width!==Math.round(W*dpr)||cv.height!==Math.round(H*dpr)){cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);}
   const c=cv.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,W,H);
   const css=getComputedStyle(document.documentElement),tok=n=>css.getPropertyValue(n).trim();
-  const ink=V.hud?'#8fdcff':tok('--ink-2'),muted=V.hud?'rgba(120,200,255,.55)':tok('--muted'),line=V.hud?'rgba(90,180,255,.28)':tok('--line'),pcol=PLAYERS.map((p,j)=>tok('--p'+(j+1))),opp=tok('--opp')||muted;
+  const K=PAL3[V.theme]||PAL3.classic,NE=V.theme==='neon',HU=V.hud||NE;
+  const ink=HU?K.ink:tok('--ink-2'),muted=HU?K.muted:tok('--muted'),line=HU?K.line:tok('--line'),pcol=PLAYERS.map((p,j)=>NE?K.pcol[j%4]:tok('--p'+(j+1))),opp=NE?K.opp:(tok('--opp')||muted);
   const T=V.T,D=V.D,F=V.F,ca=Math.cos(V.yaw),sa=Math.sin(V.yaw),cb=Math.cos(V.pitch),sb=Math.sin(V.pitch);
   const P=([x,y,z])=>{x-=T[0];y-=T[1];z-=T[2];const x1=x*ca-y*sa,y1=x*sa+y*ca;const up=z*cb+y1*sb,dp=Math.max(300,y1*cb-z*sb+D);return [W/2+F*x1/dp,H*.55-F*up/dp,dp];};
   const path=(pts,close)=>{c.beginPath();pts.forEach((p,i)=>{const q=P(p);i?c.lineTo(q[0],q[1]):c.moveTo(q[0],q[1]);});if(close)c.closePath();};
   const ch=1152,floor=[[-4096,-5120+ch],[-4096+ch,-5120],[4096-ch,-5120],[4096,-5120+ch],[4096,5120-ch],[4096-ch,5120],[-4096+ch,5120],[-4096,5120-ch]].map(([x,y])=>[x,y,0]);
-  if(V.hud){c.fillStyle='#050b14';c.fillRect(0,0,W,H);}
-  path(floor,true);c.fillStyle=V.hud?'rgba(20,60,110,.35)':(tok('--pitch')||'rgba(40,80,50,.3)');c.globalAlpha=V.hud?1:.55;c.fill();c.globalAlpha=1;c.strokeStyle=line;c.lineWidth=1.2;c.stroke();
-  if(V.hud){c.lineWidth=.6;for(let x=-4096;x<=4096;x+=512){path([[x,-5120,0],[x,5120,0]]);c.stroke();}for(let y=-5120;y<=5120;y+=512){path([[-4096,y,0],[4096,y,0]]);c.stroke();}c.lineWidth=1.2;}
+  if(HU){c.fillStyle=K.bg;c.fillRect(0,0,W,H);}
+  path(floor,true);c.fillStyle=HU?K.floor:(tok('--pitch')||'rgba(40,80,50,.3)');c.globalAlpha=HU?1:.55;c.fill();c.globalAlpha=1;c.strokeStyle=line;c.lineWidth=1.2;c.stroke();
+  if(HU){c.lineWidth=.6;for(let x=-4096;x<=4096;x+=512){path([[x,-5120,0],[x,5120,0]]);c.stroke();}for(let y=-5120;y<=5120;y+=512){path([[-4096,y,0],[4096,y,0]]);c.stroke();}c.lineWidth=1.2;}
   path([[-4096,0,0],[4096,0,0]]);c.stroke();
   path(Array.from({length:49},(_,i)=>{const a=i/48*Math.PI*2;return [1000*Math.cos(a),1000*Math.sin(a),0];}));c.stroke();
   c.globalAlpha=.5;path([[-4096+ch,5120,0],[-4096+ch,5120,2044],[4096-ch,5120,2044],[4096-ch,5120,0]]);c.stroke();c.globalAlpha=1;
@@ -673,18 +679,18 @@ function render3D(cv,V){
     // a crosshair where it was struck and a ring pulse where it went in.
     const {g,pts}=it,col=g.who>=0?pcol[g.who]:opp,dur=flightMs(g,pts);
     const Lx=pts.length-1,tl=(performance.now()-V.ft)%(dur+900),inA=false,el=tl,p=Math.min(1,el/dur),n=Math.max(1,Math.round(p*Lx));
-    c.setLineDash([4,5]);c.strokeStyle=V.hud?'rgba(140,220,255,.45)':muted;c.lineWidth=1;path(pts);c.stroke();c.setLineDash([]);
-    const s0=P(pts[0]),sp=P([pts[0][0],pts[0][1],0]);c.strokeStyle='#5fe1ff';c.lineWidth=1.2;
+    c.setLineDash([4,5]);c.strokeStyle=HU?K.ghost:muted;c.lineWidth=1;path(pts);c.stroke();c.setLineDash([]);
+    const s0=P(pts[0]),sp=P([pts[0][0],pts[0][1],0]);c.strokeStyle=K.acc;c.lineWidth=1.2;
     c.beginPath();c.arc(sp[0],sp[1],9,0,7);c.moveTo(sp[0]-14,sp[1]);c.lineTo(sp[0]+14,sp[1]);c.moveTo(sp[0],sp[1]-8);c.lineTo(sp[0],sp[1]+8);c.stroke();
     c.save();c.shadowColor=col;c.shadowBlur=14;c.lineCap='round';
-    const kk=pts.kink,kc=k=>k[0]==='p'?pcol[+k.slice(1)]:k==='opp'?REDIR:(V.hud?'#9fb4c8':muted);
+    const kk=pts.kink,kc=k=>k[0]==='p'?pcol[+k.slice(1)]:k==='opp'?REDIR:(HU?K.mate:muted);
     const segCol=i=>{let m=pts.marks[0];pts.marks.forEach(x=>{if(x.i<i)m=x;});return m.i===kk?REDIR:kc(m.kind);};
     for(let i=1;i<=n;i++){const a=P(pts[i-1]),b=P(pts[i]);c.globalAlpha=.25+.75*(i/n);c.strokeStyle=segCol(i);c.shadowColor=c.strokeStyle;c.lineWidth=1+3*(i/n);c.beginPath();c.moveTo(a[0],a[1]);c.lineTo(b[0],b[1]);c.stroke();}
     c.restore();c.globalAlpha=1;
     const fi=p*Lx,i0=Math.floor(fi),i1=Math.min(Lx,i0+1),tt=fi-i0,hp=[0,1,2].map(d=>pts[i0][d]*(1-tt)+pts[i1][d]*tt),h=P(hp),fl=P([hp[0],hp[1],0]);
-    c.setLineDash([2,3]);c.strokeStyle='rgba(95,225,255,.6)';c.beginPath();c.moveTo(h[0],h[1]);c.lineTo(fl[0],fl[1]);c.stroke();c.setLineDash([]);
-    c.strokeStyle='rgba(95,225,255,.7)';c.beginPath();c.ellipse(fl[0],fl[1],7,3,0,0,7);c.stroke();
-    if(!inA){c.save();c.shadowColor='#5fe1ff';c.shadowBlur=18;ball(h[0],h[1],Math.max(4,F*92/h[2]*.75),col);c.restore();}
+    c.setLineDash([2,3]);c.strokeStyle=K.accA(.6);c.beginPath();c.moveTo(h[0],h[1]);c.lineTo(fl[0],fl[1]);c.stroke();c.setLineDash([]);
+    c.strokeStyle=K.accA(.7);c.beginPath();c.ellipse(fl[0],fl[1],7,3,0,0,7);c.stroke();
+    if(!inA){c.save();c.shadowColor=K.acc;c.shadowBlur=18;ball(h[0],h[1],Math.max(4,F*92/h[2]*.75),col);c.restore();}
     // Each touch: a ring and the player's name once the ball has reached it.
     pts.marks.forEach((m,mi)=>{if(m.i===kk||p*Lx<m.i-0.01)return;const q=P(pts[m.i]),cc=kc(m.kind);c.strokeStyle=cc;c.lineWidth=1.3;c.beginPath();c.arc(q[0],q[1],5,0,7);c.stroke();
       if(pts.marks.length>1||V.hud){c.font='bold 10px '+(tok('--mono')||'monospace');c.textAlign='left';c.fillStyle=cc;c.fillText(m.label||`${mi+1} · ${(PLAYERS.find(x=>x.name===m.name)?.short||m.name||'?').toUpperCase()}`,q[0]+8,q[1]-8);}});
@@ -704,11 +710,11 @@ function render3D(cv,V){
       const kmh=g.spd,d=g.save?0:Math.hypot(g.ix-g.x,5120-g.y)/100,lbl=g.who>=0?PLAYERS[g.who].short.toUpperCase():(V.side==='them'?'OPPONENT':'US');
       const rows=g.save?[[g.epic?'EPIC SAVE':'SAVE',lbl],['SHOT BY',String(g.shooter||'—').toUpperCase()],['SHOT SPD',kmh!=null?fSpd(kmh).toUpperCase():'—'],['FROM LINE',fLen(Math.max(0,5120-g.sy)/100).toUpperCase()],['SAVE H',IMP()?((g.sz||93)/100*3.28084).toFixed(1)+' FT':((g.sz||93)/100).toFixed(2)+' M'],['T',(Math.min(el,dur)/1000).toFixed(2)+' S']]:[[`GOAL`,lbl],...(g.assister?[['ASSIST',(PLAYERS.find(q=>q.name===g.assister)?.short||g.assister).toUpperCase()]]:[]),...(g.defl?[['REDIRECT',g.defl.toUpperCase()]]:[]),['SPEED',kmh!=null?fSpd(kmh).toUpperCase():'—'],['RANGE',fLen(d).toUpperCase()],['IMPACT H',IMP()?(g.iz/100*3.28084).toFixed(1)+' FT':(g.iz/100).toFixed(2)+' M'],['T',(Math.min(el,dur)/1000).toFixed(2)+' S']];
       c.textAlign='left';c.font='10px '+(tok('--mono')||'monospace');
-      rows.forEach(([k,v],i)=>{c.fillStyle='rgba(95,225,255,.6)';c.fillText(k,12,20+i*14);c.fillStyle='#d8f6ff';c.fillText(v,78,20+i*14);});
-      c.strokeStyle='rgba(95,225,255,.7)';c.lineWidth=1.5;const br=(x,y,dx,dy)=>{c.beginPath();c.moveTo(x+dx*12,y);c.lineTo(x,y);c.lineTo(x,y+dy*12);c.stroke();};
+      rows.forEach(([k,v],i)=>{c.fillStyle=K.accA(.6);c.fillText(k,12,20+i*14);c.fillStyle=K.text;c.fillText(v,78,20+i*14);});
+      c.strokeStyle=K.accA(.7);c.lineWidth=1.5;const br=(x,y,dx,dy)=>{c.beginPath();c.moveTo(x+dx*12,y);c.lineTo(x,y);c.lineTo(x,y+dy*12);c.stroke();};
       br(4,4,1,1);br(W-4,4,-1,1);br(4,H-4,1,-1);br(W-4,H-4,-1,-1);
-      c.fillStyle='rgba(95,225,255,.07)';const sy=(performance.now()/12)%H;c.fillRect(0,sy,W,2);
-      c.textAlign='right';c.fillStyle='rgba(95,225,255,.6)';c.fillText(fmtDate(g.m.when)+' · '+g.m.us+'–'+g.m.them+(g.m.win?' W':' L'),W-12,H-10);
+      c.fillStyle=K.accA(.07);const sy=(performance.now()/12)%H;c.fillRect(0,sy,W,2);
+      c.textAlign='right';c.fillStyle=K.accA(.6);c.fillText(fmtDate(g.m.when)+' · '+g.m.us+'–'+g.m.them+(g.m.win?' W':' L'),W-12,H-10);
     }
   }
 }
@@ -717,20 +723,21 @@ function render3D(cv,V){
 const MINI={seen:false,on:false};
 function drawMini(){const cv=$('mini3d');if(!cv||!cv.clientWidth)return;const t=performance.now();
   if(RP.k!=null)return drawReplay();
-  render3D(cv,{hud:true,goals:G3.goals,side:G3.side,T:[0,2400,300],D:13000,F:Math.min(cv.clientWidth,cv.clientHeight*1.7)*1.25,
+  render3D(cv,{hud:true,theme:g3Theme,goals:G3.goals,side:G3.side,T:[0,2400,300],D:13000,F:Math.min(cv.clientWidth,cv.clientHeight*1.7)*1.25,
     yaw:MINI.still?-.5:-.5+t/9000,pitch:.55,focus:G3.focus,ft:G3.ft});
   if(G3.focus!=null)return;
   // Idle frame: corner brackets, a scan line and a readout, like the replay.
+  const K=PAL3[g3Theme]||PAL3.classic;
   const c=cv.getContext('2d'),W=cv.clientWidth,H=cv.clientHeight,n=G3.goals.length;
-  c.strokeStyle='rgba(95,225,255,.7)';c.lineWidth=1.5;const br=(x,y,dx,dy)=>{c.beginPath();c.moveTo(x+dx*12,y);c.lineTo(x,y);c.lineTo(x,y+dy*12);c.stroke();};
+  c.strokeStyle=K.accA(.7);c.lineWidth=1.5;const br=(x,y,dx,dy)=>{c.beginPath();c.moveTo(x+dx*12,y);c.lineTo(x,y);c.lineTo(x,y+dy*12);c.stroke();};
   br(4,4,1,1);br(W-4,4,-1,1);br(4,H-4,1,-1);br(W-4,H-4,-1,-1);
-  c.fillStyle='rgba(95,225,255,.07)';c.fillRect(0,(t/12)%H,W,2);
+  c.fillStyle=K.accA(.07);c.fillRect(0,(t/12)%H,W,2);
   c.font='10px '+(getComputedStyle(document.documentElement).getPropertyValue('--mono').trim()||'monospace');c.textAlign='left';
-  c.fillStyle='rgba(95,225,255,.6)';c.fillText(G3.side==='saves'?'SAVES':G3.side==='them'?'AGAINST':'GOALS',12,20);c.fillStyle='#d8f6ff';c.fillText(String(n),78,20);
-  c.fillStyle='rgba(95,225,255,.6)';c.fillText('STATUS',12,34);c.fillStyle='#d8f6ff';c.fillText(n?'HOVER A BALL':'NO DATA',78,34);}
+  c.fillStyle=K.accA(.6);c.fillText(G3.side==='saves'?'SAVES':G3.side==='them'?'AGAINST':'GOALS',12,20);c.fillStyle=K.text;c.fillText(String(n),78,20);
+  c.fillStyle=K.accA(.6);c.fillText('STATUS',12,34);c.fillStyle=K.text;c.fillText(n?'HOVER A BALL':'NO DATA',78,34);}
 function miniLoop(){if(MINI.on)return;MINI.on=true;const step=()=>{if(!MINI.seen||document.visibilityState!=='visible'||MINI.still){MINI.on=false;return;}drawMini();requestAnimationFrame(step);};requestAnimationFrame(step);}
 function draw3D(){const cv=$('map3d');if(!cv)return;
-  render3D(cv,{goals:G3.goals,side:G3.side,T:G3.T,D:11500,F:Math.min(cv.clientWidth,cv.clientHeight*1.6)*1.45*G3.zoom,yaw:G3.yaw,pitch:G3.pitch,focus:G3.focus,ft:G3.ft});
+  render3D(cv,{theme:g3Theme,goals:G3.goals,side:G3.side,T:G3.T,D:11500,F:Math.min(cv.clientWidth,cv.clientHeight*1.6)*1.45*G3.zoom,yaw:G3.yaw,pitch:G3.pitch,focus:G3.focus,ft:G3.ft});
   const nm=G3.side==='saves'?'saves with a position':'goals with a shot and net position';
   $('map3dNote').textContent=G3.goals.length?`${G3.goals.length} ${nm}. Drag or use the knob to turn it, arrow keys to move, scroll to zoom. Hover a goal here or a ball on the flat maps to replay it, here and in the mini map.`+(G3.pad&&G3.pad()?` Controller found: ${G3.pad().id.replace(/\s*\(.*$/,'').slice(0,40)}${G3.pad().std?'':' (non-standard layout)'}. Left stick moves, right stick turns, triggers zoom, A or RB next goal, LB previous, B stops, Y resets.`:''):`No ${G3.side==='saves'?'saves':'goals'} with positions in this period.`;
   syncKnob();if(MINI.still||!MINI.on)drawMini();
@@ -745,7 +752,7 @@ function drawReplay(){
   const wp=waypoints(g),xs=[g.ix].concat(wp.map(t=>t.p[0])),ys=[5120].concat(wp.map(t=>t.p[1])),ox=g.x!=null?g.x:wp[0].p[0],oy=g.y!=null?g.y:wp[0].p[1]-1500;
   const mid=[(Math.min(...xs)+Math.max(...xs))/2,(Math.min(...ys)+Math.max(...ys))/2,300],dx=g.ix-ox,dy=5120-oy,span=Math.hypot(Math.max(...xs)-Math.min(...xs),Math.max(...ys)-Math.min(...ys))+1800;
   const yaw=Math.atan2(dx,dy)+0.75+Math.sin((performance.now()-RP.t)/2500)*.12;
-  render3D(cv,{hud:true,goals:[g],side:G3.side,T:mid,D:span*1.25,F:Math.min(cv.clientWidth,cv.clientHeight*1.6)*1.05,yaw,pitch:.38,focus:g.k,ft:RP.t});
+  render3D(cv,{hud:true,theme:g3Theme,goals:[g],side:G3.side,T:mid,D:span*1.25,F:Math.min(cv.clientWidth,cv.clientHeight*1.6)*1.05,yaw,pitch:.38,focus:g.k,ft:RP.t});
 }
 function showReplay(k,ev){
   if(!G3.goals.some(x=>x.k===+k))return;
@@ -1082,6 +1089,13 @@ $('mode').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)
 $('metric').innerHTML=METRICS.map(m=>`<button type="button" data-k="${m.k}">${m.label}</button>`).join('');
 $('metric').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;metric=b.dataset.k;saveUi();syncButtons();renderTrend();});
 $('playlist').addEventListener('change',e=>{playlist=e.target.value;saveUi();renderAll();});
+// Look of the heatmaps and of the 3D maps, each picked on its own and remembered.
+function applyThemes(){document.body.classList.toggle('hm-neon',hmTheme==='neon');document.body.classList.toggle('g3-neon',g3Theme==='neon');
+  document.querySelectorAll('#hmTheme button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.t===hmTheme));
+  document.querySelectorAll('#g3Theme button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.t===g3Theme));}
+applyThemes();
+$('hmTheme').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;hmTheme=b.dataset.t;saveUi();applyThemes();renderAll();});
+$('g3Theme').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;g3Theme=b.dataset.t;saveUi();applyThemes();draw3D();drawMini();});
 $('mapSide').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;mapSide=b.dataset.s;document.querySelectorAll('#mapSide button').forEach(x=>x.setAttribute('aria-pressed',x===b));renderMaps(inPeriod());});
 $('mapWho').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;mapWho=b.dataset.w;document.querySelectorAll('#mapWho button').forEach(x=>x.setAttribute('aria-pressed',x===b));renderMaps(inPeriod());});
 
@@ -1229,6 +1243,7 @@ $('matchLog').addEventListener('click',e=>{const a=e.target.closest('a.mlink');i
 // Add a release at the top whenever something visible changes (dashboard or widget).
 const CHANGELOG=[
   {v:'1.6',date:'2026-10-14',items:[
+    'Neon look (black, fluorescent green and purple) for the heatmaps and the 3D maps, each switched on its own',
     'The mini 3D map now has the cyberpunk replay look and plays the hovered goal itself, instead of a pop-up',
     'Controller support works with more wireless and PlayStation pads, survives Bluetooth drop-outs, and any button jumps to the 3D map',
     'Mini spinning 3D goal map under the goal mouth; click it for the full view',
