@@ -521,8 +521,8 @@ function fieldMap(pts,noun,tip,top,bottom){
   return `<svg viewBox="0 -18 ${W} ${H+36}" role="img" aria-label="Top-down field with ${pts.length} ${noun} locations">${rlBallDefs('rlb-'+noun)}${f}</svg>`;
 }
 // Cold to hot: blue, through violet, to red. t runs 0..1.
-const HEAT_C=[[47,111,214],[124,77,196],[214,51,57]],HEAT_NEON=[[52,12,100],[165,45,235],[57,255,20]];
-function heatColor(t){const HEAT=hmTheme==='neon'?HEAT_NEON:HEAT_C;
+const HEAT_C=[[47,111,214],[124,77,196],[214,51,57]],HEAT_NEON=[[52,12,100],[165,45,235],[57,255,20]],HEAT_NIGHT=[[38,38,42],[120,120,126],[214,52,48]];
+function heatColor(t){const HEAT=hmTheme==='neon'?HEAT_NEON:hmTheme==='night'?HEAT_NIGHT:HEAT_C;
   t=clamp(t,0,1)*(HEAT.length-1);const i=Math.min(HEAT.length-2,Math.floor(t)),f=t-i;
   const c=HEAT[i].map((v,k)=>Math.round(v+(HEAT[i+1][k]-v)*f));
   return `rgb(${c[0]},${c[1]},${c[2]})`;
@@ -654,13 +654,15 @@ function flightMs(g,pts){let d=0;for(let i=1;i<pts.length;i++)d+=Math.hypot(pts[
 // 3D colour themes: the cyan HUD and a neon one (black, fluorescent green and purple).
 const PAL3={classic:{ink:'#8fdcff',muted:'rgba(120,200,255,.55)',line:'rgba(90,180,255,.28)',bg:'#050b14',floor:'rgba(20,60,110,.35)',ghost:'rgba(140,220,255,.45)',acc:'#5fe1ff',accA:a=>`rgba(95,225,255,${a})`,text:'#d8f6ff',mate:'#9fb4c8'},
   neon:{ink:'#39ff88',muted:'rgba(57,255,136,.55)',line:'rgba(57,255,20,.2)',bg:'#020203',floor:'rgba(110,30,190,.24)',ghost:'rgba(192,77,255,.5)',acc:'#c04dff',accA:a=>`rgba(192,77,255,${a})`,text:'#eaffe4',mate:'#b9a3d6',
-    pcol:['#39ff14','#c04dff','#00f0ff','#ffe600'],opp:'#ff2bd6'}};
+    pcol:['#39ff14','#c04dff','#00f0ff','#ffe600'],opp:'#ff2bd6'},
+  night:{ink:'#d4d4d6',muted:'rgba(200,200,204,.5)',line:'rgba(200,200,204,.16)',bg:'#070708',floor:'rgba(60,60,66,.32)',ghost:'rgba(224,68,62,.45)',acc:'#e0443e',accA:a=>`rgba(224,68,62,${a})`,text:'#ededee',mate:'#9a9a9e',
+    pcol:['#e6e6e8','#e0443e','#9a9a9e','#a83a36'],opp:'#6c6c72'}};
 function render3D(cv,V){
   const W=cv.clientWidth,H=cv.clientHeight,dpr=window.devicePixelRatio||1;if(!W||!H)return;
   if(cv.width!==Math.round(W*dpr)||cv.height!==Math.round(H*dpr)){cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);}
   const c=cv.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,W,H);
   const css=getComputedStyle(document.documentElement),tok=n=>css.getPropertyValue(n).trim();
-  const K=PAL3[V.theme]||PAL3.classic,NE=V.theme==='neon',HU=V.hud||NE;
+  const K=PAL3[V.theme]||PAL3.classic,NE=!!K.pcol,HU=V.hud||NE;
   const ink=HU?K.ink:tok('--ink-2'),muted=HU?K.muted:tok('--muted'),line=HU?K.line:tok('--line'),pcol=PLAYERS.map((p,j)=>NE?K.pcol[j%4]:tok('--p'+(j+1))),opp=NE?K.opp:(tok('--opp')||muted);
   const T=V.T,D=V.D,F=V.F,ca=Math.cos(V.yaw),sa=Math.sin(V.yaw),cb=Math.cos(V.pitch),sb=Math.sin(V.pitch);
   const P=([x,y,z])=>{x-=T[0];y-=T[1];z-=T[2];const x1=x*ca-y*sa,y1=x*sa+y*ca;const up=z*cb+y1*sb,dp=Math.max(300,y1*cb-z*sb+D);return [W/2+F*x1/dp,H*.55-F*up/dp,dp];};
@@ -1115,14 +1117,21 @@ $('metric').innerHTML=METRICS.map(m=>`<button type="button" data-k="${m.k}">${m.
 $('metric').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;metric=b.dataset.k;saveUi();syncButtons();renderTrend();});
 $('playlist').addEventListener('change',e=>{playlist=e.target.value;saveUi();renderAll();});
 // Look of the heatmaps and of the 3D maps, each picked on its own and remembered.
-function applyThemes(){document.documentElement.classList.toggle('neon',look==='neon');
+function applyThemes(){document.documentElement.classList.toggle('neon',look==='neon');document.documentElement.classList.toggle('night',look==='night');
+  document.body.classList.toggle('hm-night',hmTheme==='night');document.body.classList.toggle('g3-night',g3Theme==='night');
+  const tb=$('themeBtn');if(tb){tb.dataset.t=look;tb.title='Theme: '+look[0].toUpperCase()+look.slice(1);}
   document.querySelectorAll('#lookTheme button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.t===look));
   document.body.classList.toggle('hm-neon',hmTheme==='neon');document.body.classList.toggle('g3-neon',g3Theme==='neon');
   document.querySelectorAll('#hmTheme button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.t===hmTheme));
   document.querySelectorAll('#g3Theme button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.t===g3Theme));}
 applyThemes();
 // The global Look switch themes the whole page and sets both map looks to match; each map can still be changed after.
-$('lookTheme').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;look=hmTheme=g3Theme=b.dataset.t;saveUi();applyThemes();renderAll();draw3D();drawMini();if(ART.m)artStart(ART.m);});
+$('lookTheme').addEventListener('click',e=>{const b=e.target.closest('button');if(!b||b.disabled||!b.dataset.t)return;closeWheel();look=hmTheme=g3Theme=b.dataset.t;saveUi();applyThemes();renderAll();draw3D();drawMini();if(ART.m)artStart(ART.m);});
+// Theme icon: opens a round four-way picker. The fourth slot is kept for a theme still to come.
+function closeWheel(){const w=$('themeWheel');if(w)w.hidden=true;const t=$('themeBtn');if(t)t.setAttribute('aria-expanded','false');}
+$('themeBtn').addEventListener('click',e=>{e.stopPropagation();const w=$('themeWheel'),open=w.hidden;w.hidden=!open;$('themeBtn').setAttribute('aria-expanded',String(open));});
+document.addEventListener('click',e=>{if(!e.target.closest('#themeWheel,#themeBtn'))closeWheel();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeWheel();});
 $('hmTheme').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;hmTheme=b.dataset.t;saveUi();applyThemes();renderAll();});
 $('g3Theme').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;g3Theme=b.dataset.t;saveUi();applyThemes();draw3D();drawMini();});
 $('mapSide').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;mapSide=b.dataset.s;document.querySelectorAll('#mapSide button').forEach(x=>x.setAttribute('aria-pressed',x===b));renderMaps(inPeriod());});
@@ -1786,6 +1795,7 @@ $('matchLog').addEventListener('click',e=>{const a=e.target.closest('a.mlink');i
 // Add a release at the top whenever something visible changes (dashboard or widget).
 const CHANGELOG=[
   {v:'1.7',date:'2026-10-14',items:[
+    'Night theme: mellow greyscale with red accents. The look switch is now a theme icon that opens a round picker (Classic, Neon, Night, and one slot saved for later); the heatmap and 3D map can also be set to Night on their own',
     'Small calendar at the top right of the header: this month, with the days we played lit up (hover a day for the game count)',
     'Since-last-goal timer restyled: the width of the name card, time in a green pill, "since last goal" in purple digital type underneath',
     'Played before: opponents we have met before get a badge with how many games and our record against them, in the match log and match details; the widget shows it on its MMR line during a live match',
