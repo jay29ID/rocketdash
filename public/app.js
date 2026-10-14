@@ -1239,10 +1239,64 @@ $('matchLog').addEventListener('click',e=>{const a=e.target.closest('a.mlink');i
   });
 })();
 
+// ---------- customizable layout ----------
+// Every panel is a module you can drag into a new order, set to full or half width, or hide.
+// The layout is saved in this browser only, so Jay's and Kobra's dashboards can differ.
+(function(){
+  const wrap=document.querySelector('.wrap'),banner=$('banner');if(!wrap)return;
+  const board=document.createElement('div');board.className='board';board.id='board';
+  const bar=document.createElement('div');bar.className='editbar';
+  bar.innerHTML='<span class="hint">Drag a panel by ⠿ to move it. ½ switches half or full width, ✕ hides it.</span><button type="button" class="chipbtn" id="layoutReset">Reset layout</button><button type="button" class="chipbtn" id="layoutDone">Done</button>';
+  // Panels that share a row become their own modules, side by side at half width.
+  const mods=[];const add=(el,half)=>{el.classList.add('mod');if(half)el.dataset.half='1';mods.push(el);};
+  [...wrap.children].forEach(el=>{if(el.tagName!=='SECTION')return;
+    if(el.matches('.grid.g-2,.grid.g-2b')&&el.children.length){[...el.children].forEach(ch=>add(ch,true));el.remove();}else add(el,false);});
+  const label=el=>{const h=el.querySelector('h2,h3');return (h&&h.textContent.trim())||el.getAttribute('aria-label')||'Panel';};
+  mods.forEach(el=>{const h=el.querySelector('h2,h3');el.dataset.mod=(el.getAttribute('aria-labelledby')||(h&&h.id)||el.getAttribute('aria-label')||label(el)).replace(/\W+/g,'-').toLowerCase();
+    const mb=document.createElement('div');mb.className='modbar';
+    mb.innerHTML=`<span class="grip" title="Drag to move" aria-hidden="true">⠿</span><b>${esc(label(el))}</b><button type="button" data-a="up" title="Move up" aria-label="Move up">↑</button><button type="button" data-a="down" title="Move down" aria-label="Move down">↓</button><button type="button" data-a="w" title="Half or full width" aria-label="Width">½</button><button type="button" data-a="hide" title="Hide or show" aria-label="Hide">✕</button>`;
+    el.prepend(mb);});
+  const KEY='rl-duo-layout',defOrder=mods.map(m=>m.dataset.mod);
+  let L={order:defOrder.slice(),w:{},hidden:[]};
+  try{const x=JSON.parse(localStorage.getItem(KEY)||'null');if(x&&Array.isArray(x.order))L={order:x.order,w:x.w||{},hidden:x.hidden||[]};}catch(e){}
+  const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(L));}catch(e){}};
+  const byId=id=>mods.find(m=>m.dataset.mod===id);
+  const apply=()=>{const ord=L.order.filter(byId).concat(defOrder.filter(id=>!L.order.includes(id)));
+    ord.forEach(id=>{const m=byId(id),half=L.w[id]?L.w[id]==='half':!!m.dataset.half;m.classList.toggle('half',half);m.classList.toggle('gone',L.hidden.includes(id));
+      const mb=m.querySelector('.modbar');mb.querySelector('[data-a="w"]').textContent=half?'▭':'½';mb.querySelector('[data-a="hide"]').textContent=L.hidden.includes(id)?'👁':'✕';board.appendChild(m);});
+    L.order=ord;};
+  const changed=()=>{save();apply();setTimeout(()=>{window.dispatchEvent(new Event('resize'));try{renderAll();}catch(e){}},30);};
+  (banner||wrap.querySelector('header')).after(bar);bar.after(board);apply();
+  board.addEventListener('click',e=>{const b=e.target.closest('.modbar button[data-a]');if(!b)return;const m=b.closest('.mod'),id=m.dataset.mod,i=L.order.indexOf(id);
+    if(b.dataset.a==='up'&&i>0)[L.order[i-1],L.order[i]]=[L.order[i],L.order[i-1]];
+    if(b.dataset.a==='down'&&i<L.order.length-1)[L.order[i+1],L.order[i]]=[L.order[i],L.order[i+1]];
+    if(b.dataset.a==='w')L.w[id]=m.classList.contains('half')?'full':'half';
+    if(b.dataset.a==='hide')L.hidden=L.hidden.includes(id)?L.hidden.filter(x=>x!==id):L.hidden.concat(id);
+    changed();});
+  // Drag and drop by the grip.
+  let dragId=null;
+  board.addEventListener('pointerdown',e=>{const g=e.target.closest('.grip');if(g)g.closest('.mod').draggable=true;});
+  board.addEventListener('pointerup',()=>board.querySelectorAll('.mod[draggable="true"]').forEach(m=>m.draggable=false));
+  board.addEventListener('dragstart',e=>{const m=e.target.closest&&e.target.closest('.mod');if(!m||!m.draggable)return;dragId=m.dataset.mod;m.classList.add('dragging');e.dataTransfer.effectAllowed='move';try{e.dataTransfer.setData('text/plain',dragId);e.dataTransfer.setDragImage(m,20,20);}catch(x){}});
+  const clear=()=>board.querySelectorAll('.drop-before,.drop-after,.dragging').forEach(x=>x.classList.remove('drop-before','drop-after','dragging'));
+  const side=(m,e)=>{const r=m.getBoundingClientRect();return m.classList.contains('half')&&!matchMedia('(max-width:900px)').matches?(e.clientX<r.left+r.width/2?'before':'after'):(e.clientY<r.top+r.height/2?'before':'after');};
+  board.addEventListener('dragover',e=>{if(!dragId)return;const m=e.target.closest('.mod');if(!m||m.dataset.mod===dragId)return;e.preventDefault();
+    board.querySelectorAll('.drop-before,.drop-after').forEach(x=>x.classList.remove('drop-before','drop-after'));m.classList.add('drop-'+side(m,e));});
+  board.addEventListener('drop',e=>{if(!dragId)return;const m=e.target.closest('.mod');e.preventDefault();
+    if(m&&m.dataset.mod!==dragId){const s=side(m,e);L.order=L.order.filter(x=>x!==dragId);let i=L.order.indexOf(m.dataset.mod);if(s==='after')i++;L.order.splice(i,0,dragId);}
+    dragId=null;clear();changed();});
+  board.addEventListener('dragend',()=>{dragId=null;clear();board.querySelectorAll('.mod[draggable="true"]').forEach(m=>m.draggable=false);});
+  const setEdit=on=>{document.body.classList.toggle('editing',on);$('layoutBtn').setAttribute('aria-pressed',on);$('layoutBtn').textContent=on?'Done':'Customize';};
+  $('layoutBtn').addEventListener('click',()=>setEdit(!document.body.classList.contains('editing')));
+  $('layoutDone').addEventListener('click',()=>setEdit(false));
+  $('layoutReset').addEventListener('click',()=>{L={order:defOrder.slice(),w:{},hidden:[]};changed();});
+})();
+
 // ---------- version and update log ----------
 // Add a release at the top whenever something visible changes (dashboard or widget).
 const CHANGELOG=[
   {v:'1.6',date:'2026-10-14',items:[
+    'Customize your dashboard: drag panels into any order, make them half or full width, or hide them (saved in your browser)',
     'Neon look (black, fluorescent green and purple) for the heatmaps and the 3D maps, each switched on its own',
     'The mini 3D map now has the cyberpunk replay look and plays the hovered goal itself, instead of a pop-up',
     'Controller support works with more wireless and PlayStation pads, survives Bluetooth drop-outs, and any button jumps to the 3D map',
