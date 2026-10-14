@@ -712,11 +712,17 @@ function render3D(cv,V){
     }
   }
 }
+// The mini 3D map under the goal mouth: same goals, a slow turntable, a click away from the full view.
+const MINI={seen:false,on:false};
+function drawMini(){const cv=$('mini3d');if(!cv||!cv.clientWidth)return;const t=performance.now();
+  render3D(cv,{goals:G3.goals,side:G3.side,T:[0,2400,300],D:13000,F:Math.min(cv.clientWidth,cv.clientHeight*1.7)*1.25,
+    yaw:MINI.still?-.5:-.5+t/9000,pitch:.55,focus:G3.focus,ft:G3.ft});}
+function miniLoop(){if(MINI.on)return;MINI.on=true;const step=()=>{if(!MINI.seen||document.visibilityState!=='visible'||MINI.still){MINI.on=false;return;}drawMini();requestAnimationFrame(step);};requestAnimationFrame(step);}
 function draw3D(){const cv=$('map3d');if(!cv)return;
   render3D(cv,{goals:G3.goals,side:G3.side,T:G3.T,D:11500,F:Math.min(cv.clientWidth,cv.clientHeight*1.6)*1.45*G3.zoom,yaw:G3.yaw,pitch:G3.pitch,focus:G3.focus,ft:G3.ft});
   const nm=G3.side==='saves'?'saves with a position':'goals with a shot and net position';
   $('map3dNote').textContent=G3.goals.length?`${G3.goals.length} ${nm}. Drag or use the knob to turn it, arrow keys to move, scroll to zoom. Hover a goal here or a ball on the flat maps for a replay.`+(G3.pad&&G3.pad()?' Controller: left stick moves, right stick turns, triggers zoom, A or RB next goal, LB previous, B stops, Y resets.':''):`No ${G3.side==='saves'?'saves':'goals'} with positions in this period.`;
-  syncKnob();
+  syncKnob();if(MINI.still||!MINI.on)drawMini();
 }
 // The knob: its ring turns with the camera (N = looking at the attacked goal), the needle shows tilt.
 function syncKnob(){const r=$('knobRing');if(!r)return;r.setAttribute('transform',`rotate(${(-G3.yaw*180/Math.PI).toFixed(1)} 50 50)`);
@@ -779,6 +785,10 @@ function loop3D(){if(looping)return;looping=true;const step=()=>{if(RP.k==null&&
   hold('kTiltUp',()=>G3.pitch+=.06);hold('kTiltDn',()=>G3.pitch-=.06);hold('kRotL',()=>G3.yaw+=.08);hold('kRotR',()=>G3.yaw-=.08);
   hold('kZoomIn',()=>G3.zoom*=1.06);hold('kZoomOut',()=>G3.zoom/=1.06);
   window.addEventListener('resize',()=>draw3D());
+  {const mc=$('mini3d');if(mc){MINI.still=matchMedia('(prefers-reduced-motion: reduce)').matches;
+    new IntersectionObserver(es=>{MINI.seen=es[0].isIntersecting;if(MINI.seen){drawMini();miniLoop();}}).observe(mc);
+    $('mini3dBtn').addEventListener('click',()=>cv.scrollIntoView({behavior:'smooth',block:'center'}));
+    window.addEventListener('resize',drawMini);}}
   G3.seen=false;new IntersectionObserver(es=>{G3.seen=es[0].isIntersecting;if(G3.seen&&G3.auto)loop3D();}).observe(cv);
   // Game controller (any pad the browser maps to the standard layout): left stick moves the camera,
   // right stick turns and tilts, triggers zoom, A / RB next goal, LB previous, B stops, Y resets.
@@ -1192,6 +1202,7 @@ $('matchLog').addEventListener('click',e=>{const a=e.target.closest('a.mlink');i
 // Add a release at the top whenever something visible changes (dashboard or widget).
 const CHANGELOG=[
   {v:'1.6',date:'2026-10-14',items:[
+    'Mini spinning 3D goal map under the goal mouth; click it for the full view',
     'Hover a goal in the 3D view to play its replay',
     'Up to four players: pick the names you track from the widget\'s Players... menu (it asks the first time)',
     'Defense panel: where our saves happen, opponent shots per game and their shooting %',
