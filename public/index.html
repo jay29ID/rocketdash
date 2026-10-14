@@ -348,7 +348,7 @@ body.hm-night .maps .map-col{--pitch:#0b0b0d;--pitch-line:#2e2e33;--opp:#6c6c72;
 body.hm-night .heat-key .ramp{background:linear-gradient(90deg,rgb(38,38,42),rgb(120,120,126),rgb(214,52,48))}
 body.g3-night .mini3d{border-color:#3a3a40;background:#070708}
 body.g3-night .mini3d span{color:rgba(224,68,62,.75)}
-/* Dark: pure, very dark monotone. No colour at all; players differ by shade. */
+/* Midnight (key "dark"): pure, very dark monotone. No colour at all; players differ by shade. */
 :root.dark{color-scheme:dark;
   --bg:#000; --veil:rgba(0,0,0,.94); --glow-a:0; --surface:#0a0a0a; --surface-2:#111;
   --ink:#e8e8e8; --ink-2:#a6a6a6; --muted:#6b6b6b; --line:#1f1f1f; --grid:#161616;
@@ -468,7 +468,7 @@ body.g3-dark .mini3d span{color:#777}
         <button type="button" class="q tl" data-t="classic" aria-pressed="true"><i style="background:linear-gradient(135deg,#3987e5,#d95926)"></i>Classic</button>
         <button type="button" class="q tr" data-t="neon"><i style="background:linear-gradient(135deg,#39ff14,#c04dff)"></i>Neon</button>
         <button type="button" class="q bl" data-t="night"><i style="background:linear-gradient(135deg,#d4d4d6,#e0443e)"></i>Night</button>
-        <button type="button" class="q br" data-t="dark"><i style="background:linear-gradient(135deg,#000,#5a5a5a);box-shadow:0 0 0 2px var(--surface),0 0 0 3px #666"></i>Dark</button>
+        <button type="button" class="q br" data-t="dark"><i style="background:linear-gradient(135deg,#000,#5a5a5a);box-shadow:0 0 0 2px var(--surface),0 0 0 3px #666"></i>Midnight</button>
       </div><span class="hub" aria-hidden="true"></span></div></div>
     <button type="button" class="chipbtn" id="layoutBtn" aria-pressed="false">Customize</button>
     </div>
@@ -576,7 +576,7 @@ body.g3-dark .mini3d span{color:#777}
           <button type="button" data-s="saves">Our saves</button>
         </div>
         <div class="seg" role="group" aria-label="Scorer" id="mapWho"></div>
-        <div class="seg" role="group" aria-label="Heatmap look" id="hmTheme"><button type="button" data-t="classic" aria-pressed="true">Classic</button><button type="button" data-t="neon">Neon</button><button type="button" data-t="night">Night</button><button type="button" data-t="dark">Dark</button></div>
+        <div class="seg" role="group" aria-label="Heatmap look" id="hmTheme"><button type="button" data-t="classic" aria-pressed="true">Classic</button><button type="button" data-t="neon">Neon</button><button type="button" data-t="night">Night</button><button type="button" data-t="dark">Midnight</button></div>
       </div>
     </div>
     <div class="maps">
@@ -597,7 +597,7 @@ body.g3-dark .mini3d span{color:#777}
 
   <section class="panel" aria-labelledby="map3dTitle">
     <div class="map3d-wrap">
-      <div class="map3d-head"><h3 id="map3dTitle">In 3D: every goal from shot to net</h3><div style="display:flex;gap:8px;align-items:center"><div class="seg" role="group" aria-label="3D look" id="g3Theme"><button type="button" data-t="classic" aria-pressed="true">Classic</button><button type="button" data-t="neon">Neon</button><button type="button" data-t="night">Night</button><button type="button" data-t="dark">Dark</button></div><button type="button" class="chipbtn" id="map3dReset">Reset view</button></div></div>
+      <div class="map3d-head"><h3 id="map3dTitle">In 3D: every goal from shot to net</h3><div style="display:flex;gap:8px;align-items:center"><div class="seg" role="group" aria-label="3D look" id="g3Theme"><button type="button" data-t="classic" aria-pressed="true">Classic</button><button type="button" data-t="neon">Neon</button><button type="button" data-t="night">Night</button><button type="button" data-t="dark">Midnight</button></div><button type="button" class="chipbtn" id="map3dReset">Reset view</button></div></div>
       <div class="map3d-stage">
       <div class="knob" id="knob" aria-label="Camera controls">
         <svg viewBox="0 0 100 100" aria-hidden="true">

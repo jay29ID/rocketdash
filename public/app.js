@@ -1146,7 +1146,7 @@ $('playlist').addEventListener('change',e=>{playlist=e.target.value;saveUi();ren
 // Look of the heatmaps and of the 3D maps, each picked on its own and remembered.
 function applyThemes(){document.documentElement.classList.toggle('neon',look==='neon');document.documentElement.classList.toggle('night',look==='night');document.documentElement.classList.toggle('dark',look==='dark');
   document.body.classList.toggle('hm-night',hmTheme==='night');document.body.classList.toggle('hm-dark',hmTheme==='dark');document.body.classList.toggle('g3-dark',g3Theme==='dark');document.body.classList.toggle('g3-night',g3Theme==='night');
-  const tb=$('themeBtn');if(tb){tb.dataset.t=look;tb.title='Theme: '+look[0].toUpperCase()+look.slice(1);}
+  const tb=$('themeBtn');if(tb){tb.dataset.t=look;tb.title='Theme: '+({classic:'Classic',neon:'Neon',night:'Night',dark:'Midnight'}[look]||look);}
   document.querySelectorAll('#lookTheme button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.t===look));
   document.body.classList.toggle('hm-neon',hmTheme==='neon');document.body.classList.toggle('g3-neon',g3Theme==='neon');
   document.querySelectorAll('#hmTheme button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.t===hmTheme));
@@ -1823,7 +1823,7 @@ $('matchLog').addEventListener('click',e=>{const a=e.target.closest('a.mlink');i
 // Add a release at the top whenever something visible changes (dashboard or widget).
 const CHANGELOG=[
   {v:'1.7',date:'2026-10-14',items:[
-    'Dark theme fills the last slot of the theme wheel: pure, very dark monotone with no colour, players told apart by shade; the heatmap and 3D map can use it too',
+    'Midnight theme fills the last slot of the theme wheel: pure, very dark monotone with no colour, players told apart by shade; the heatmap and 3D map can use it too',
     'Header: the Jay & Kobra headline is gone; the name cards, pictures and timers lead the page',
     'Player pictures are three times bigger on the name cards at the top, and a little bigger in tables',
     'Fixed: the picture menu under a player name now closes when you click away, press Escape, click the name again or finish an upload',
