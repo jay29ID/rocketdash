@@ -140,6 +140,7 @@ function Get-Match([string]$Guid) {
       Hits = @{}         # per-player ball hits and hardest hit
       Crossbars = @{}; BallTeam = @{}; LastSecond = $null; ClockStart = $null   # clock at the first update, for time played
       LastHitBy = @{}; LastHit = $null   # where the ball was on each player's latest touch (shot origin for goals)
+      Recent = (New-Object System.Collections.ArrayList)   # the last 3 touches, oldest first, saved with each goal
       Loadouts = @{}     # per-player car and cosmetics, from UpdateState
       Pickups = @{}      # per-player boost pad pickups (BoostPickup events)
       Left = New-Object System.Collections.ArrayList   # players who quit before the end (PlayerLeft)
@@ -439,10 +440,12 @@ function Invoke-Message($Msg) {
         shot_from = $shot.location; shot_from_player = $shot.player; shot_speed = $shot.speed
         scorer_from = $(if ($scorerHit) { $scorerHit.location } else { $null })
         assist_from = $(if ($assistHit) { $assistHit.location } else { $null })
+        touches = @($m.Recent | ForEach-Object { [ordered]@{ player = $_.player; team = $_.team; location = $_.location; speed = $_.speed } })
         since_kickoff = $since
         since_save = Get-Since $m.SaveAt[[int](Get-Prop (Get-Prop $data 'Scorer') 'TeamNum' -1)]
         ours = $null
       })
+      $m.Recent.Clear()
       if ($script:OnGoal) { try { & $script:OnGoal $m.Goals[$m.Goals.Count - 1] } catch { } }
     }
     'BallHit'       {
@@ -453,6 +456,7 @@ function Invoke-Message($Msg) {
         $spd = Get-Prop (Get-Prop $data 'Ball') 'PostHitSpeed'
         $hitInfo = @{ player = $name; team = Get-Prop $p 'TeamNum'; speed = $spd; location = Get-Prop (Get-Prop $data 'Ball') 'Location' }
         $m.LastHitBy[$name] = $hitInfo; $m.LastHit = $hitInfo
+        [void]$m.Recent.Add($hitInfo); while ($m.Recent.Count -gt 3) { $m.Recent.RemoveAt(0) }
         if ($null -ne $spd -and [double]$spd -gt $m.Hits[$name].Max) { $m.Hits[$name].Max = [double]$spd }
       }
     }

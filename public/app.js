@@ -119,7 +119,10 @@ function makeSample(names){
       const foes=[pick(['Zephyr','BallChaser99','nxtLvl','Mochi','RocketRalph','ghostpepper']),pick(['Tidal','Vex','sir_flips','Kiwi','B0ost','Nova'])];
       foes.forEach(n=>players.push({name:n,team:1-my,tracked:false,platform:'Epic'}));
       goals.forEach(g=>{if(g.ours&&rnd()<.14){const s=g.shot_from,ix=g.impact.X,f=Math.sign(g.impact.Y)||1;
-        g.scorer_from=s;g.last_touch=pick(foes);g.shot_from={X:Math.round(s.X+(ix-s.X)*.6+norm(0,250)),Y:Math.round(s.Y+(f*5120-s.Y)*.6),Z:Math.round(clamp(norm(260,140),60,700))};}});
+        g.scorer_from=s;g.last_touch=pick(foes);g.shot_from={X:Math.round(s.X+(ix-s.X)*.6+norm(0,250)),Y:Math.round(s.Y+(f*5120-s.Y)*.6),Z:Math.round(clamp(norm(260,140),60,700))};}
+        // Newer recorders save the last 3 touches; give the sample's assisted goals some.
+        if(g.ours&&g.assist_from&&rnd()<.7){const t=[{player:g.assister,team:my,location:g.assist_from},{player:g.scorer,team:my,location:g.scorer_from||g.shot_from}];
+          if(g.last_touch)t.push({player:g.last_touch,team:1-my,location:g.shot_from});g.touches=t.slice(-3);}});
       matches.push({match_guid:'sample-'+si+'-'+k,started_at:new Date(t).toISOString(),duration_seconds:dur,playlist:warm?'Casual Doubles':'Ranked Doubles',arena:pick(arenas),
         overtime:ot,my_team:my,result:win?'Win':'Loss',team_score:us,opponent_score:them,goals,players,
         replay_created:rnd()<.2?new Date(t+dur*1000).toISOString():null,
@@ -215,6 +218,7 @@ function toMatch(r){
       z:co(s,'Z'),x:co(s,'X')!=null?f*co(s,'X'):null,y:co(s,'Y')!=null?f*co(s,'Y'):null,
       ix:co(i,'X')!=null?f*co(i,'X'):null,iz:co(i,'Z'),
       ax:co(g.assist_from,'X')!=null?f*co(g.assist_from,'X'):null,ay:co(g.assist_from,'Y')!=null?f*co(g.assist_from,'Y'):null,az:co(g.assist_from,'Z'),
+      touches:Array.isArray(g.touches)?g.touches.filter(t=>t&&t.location).map(t=>({name:t.player?String(t.player):'',team:num(t.team),x:f*co(t.location,'X'),y:f*co(t.location,'Y'),z:co(t.location,'Z')})):null,scoreTeam:team,
       defl,dx:co(dp,'X')!=null?f*co(dp,'X'):null,dy:co(dp,'Y')!=null?f*co(dp,'Y'):null,dz:co(dp,'Z'),deflOnly:!!defl&&!g.scorer_from};
   });
   const dur=num(r.duration_seconds)||300;
@@ -546,15 +550,29 @@ const RP={k:null,t:0};
 const REDIR='#ff4d6d';   // redirect marker and the ball's path after it
 function bez(a,b,n){const d=Math.hypot(b[0]-a[0],b[1]-a[1]),lift=Math.max(a[2],b[2])+Math.min(900,d*.09);
   return Array.from({length:n},(_,i)=>{const t=i/(n-1),u=1-t;return [u*a[0]+t*b[0],u*a[1]+t*b[1],u*u*a[2]+2*u*t*lift+t*t*b[2]];});}
-// 41 points from shot to net. A redirected goal with both points known bends at index 15 (pts.kink).
+// The ball's touches before a goal, oldest first: the last 3 touches when the recorder saved them,
+// otherwise assist, the scorer's shot and the redirect where those are known.
+function waypoints(g){
+  const kind=(name,team)=>{const j=PLAYERS.findIndex(p=>p.name===name);return j>=0?'p'+j:team!=null&&team===g.scoreTeam?'mate':'opp';};
+  if(g.touches&&g.touches.length)return g.touches.filter(t=>t.x!=null&&t.y!=null).map(t=>({p:[t.x,t.y,t.z!=null?t.z:93],name:t.name,kind:kind(t.name,t.team),other:t.team!=null&&g.scoreTeam!=null&&t.team!==g.scoreTeam}));
+  const w=[];
+  if(g.ax!=null&&g.ay!=null)w.push({p:[g.ax,g.ay,g.az!=null?g.az:93],name:g.assister,kind:kind(g.assister,g.scoreTeam),other:false});
+  w.push({p:[g.x,g.y,g.z!=null?g.z:93],name:g.deflOnly?g.defl:g.scorer,kind:g.deflOnly?'opp':kind(g.scorer,g.scoreTeam),other:!!g.deflOnly});
+  if(g.defl&&!g.deflOnly&&g.dx!=null&&g.dy!=null)w.push({p:[g.dx,g.dy,g.dz!=null?g.dz:93],name:g.defl,kind:'opp',other:true});
+  return w;
+}
+// Points from the first touch to the net, 16 per leg. pts.marks: each touch's point index;
+// pts.kink: the redirect (a last touch by the other team), if any.
 function arcOf(g){
-  const a=[g.x,g.y,g.z!=null?g.z:93],b=[g.ix,5120,g.iz];
-  if(g.defl&&!g.deflOnly&&g.dx!=null&&g.dy!=null){const k=[g.dx,g.dy,g.dz!=null?g.dz:93];const pts=bez(a,k,16).concat(bez(k,b,26).slice(1));pts.kink=15;return pts;}
-  const pts=bez(a,b,41);if(g.defl)pts.kink=0;return pts;
+  const w=waypoints(g),b=[g.ix,5120,g.iz];if(!w.length)w.push({p:[g.x,g.y,93],name:g.scorer,kind:'mate'});
+  let pts=[];const marks=[];
+  w.forEach((t,i)=>{marks.push({i:pts.length?pts.length-1:0,...t});const nx=i+1<w.length?w[i+1].p:b,leg=bez(t.p,nx,16);pts=pts.concat(pts.length?leg.slice(1):leg);});
+  pts.marks=marks;const last=w[w.length-1];if(last.other)pts.kink=marks[marks.length-1].i;
+  return pts;
 }
 // Flight time for the replay: real distance over the goal's speed, squeezed into 0.9 to 2.2 s.
 function flightMs(g,pts){let d=0;for(let i=1;i<pts.length;i++)d+=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1],pts[i][2]-pts[i-1][2]);
-  const v=g.spd?g.spd/0.036:2000;return Math.max(900,Math.min(2200,d/v*1000*1.6));}
+  const v=g.spd?g.spd/0.036:2000,legs=(pts.marks||[0]).length;return Math.max(900,Math.min(1500+700*legs,d/v*1000*1.6));}
 function render3D(cv,V){
   const W=cv.clientWidth,H=cv.clientHeight,dpr=window.devicePixelRatio||1;if(!W||!H)return;
   if(cv.width!==Math.round(W*dpr)||cv.height!==Math.round(H*dpr)){cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);}
@@ -578,49 +596,43 @@ function render3D(cv,V){
   if(!V.hud){const q=P([0,5120,800]);c.fillText(V.side==='us'?'Their goal':'Our goal',q[0],q[1]);}
   const ball=(x,y,r,col)=>{const gr=c.createRadialGradient(x-r*.35,y-r*.4,r*.1,x,y,r);gr.addColorStop(0,'#f4f6f8');gr.addColorStop(.6,'#c3cad2');gr.addColorStop(1,'#7d8692');
     c.fillStyle=gr;c.beginPath();c.arc(x,y,r,0,7);c.fill();c.strokeStyle=col;c.lineWidth=1.5;c.stroke();};
-  const list=V.goals.map(g=>{const pts=arcOf(g);return {g,pts,depth:P(pts[20])[2]};}).sort((p,q)=>q.depth-p.depth);
+  const list=V.goals.map(g=>{const pts=arcOf(g);return {g,pts,depth:P(pts[pts.length>>1])[2]};}).sort((p,q)=>q.depth-p.depth);
   const fk=V.focus;
   list.forEach(({g,pts})=>{if(g.k===fk)return;const col=g.who>=0?pcol[g.who]:opp;
     c.globalAlpha=fk==null?.55:.1;c.strokeStyle=col;c.lineWidth=1.3;path(pts);c.stroke();
     const s=P(pts[0]);c.fillStyle=col;c.beginPath();c.arc(s[0],s[1],2,0,7);c.fill();
     if(pts.kink!=null){const q=P(pts[pts.kink]);c.strokeStyle=REDIR;c.lineWidth=1.2;c.beginPath();c.moveTo(q[0]-3,q[1]-3);c.lineTo(q[0]+3,q[1]+3);c.moveTo(q[0]+3,q[1]-3);c.lineTo(q[0]-3,q[1]+3);c.stroke();}
-    const e=P(pts[40]);c.globalAlpha=fk==null?1:.15;ball(e[0],e[1],Math.max(2.5,F*92/e[2]*.6),col);c.globalAlpha=1;});
+    const e=P(pts[pts.length-1]);c.globalAlpha=fk==null?1:.15;ball(e[0],e[1],Math.max(2.5,F*92/e[2]*.6),col);c.globalAlpha=1;});
   const it=fk==null?null:list.find(a=>a.g.k===fk);
   if(it){
     // Replay of one goal: dashed ghost path, glowing trail, ball at the head, drop line to the floor,
     // a crosshair where it was struck and a ring pulse where it went in.
     const {g,pts}=it,col=g.who>=0?pcol[g.who]:opp,dur=flightMs(g,pts);
-    // Assist first (when the recorder caught where the assister hit it), then the shot.
-    const ap=g.ax!=null&&g.ay!=null?bez([g.ax,g.ay,g.az!=null?g.az:93],pts[0],21):null,AD=ap?900:0;
-    const aw=g.assister?PLAYERS.findIndex(q=>q.name===g.assister):-1,acol=aw>=0?pcol[aw]:col;
-    const tl=(performance.now()-V.ft)%(AD+dur+900),inA=tl<AD,el=inA?0:tl-AD,p=inA?0:Math.min(1,el/dur),n=Math.max(1,Math.round(p*40));
-    if(ap){c.setLineDash([3,4]);c.strokeStyle=acol;c.globalAlpha=.5;c.lineWidth=1;path(ap);c.stroke();c.setLineDash([]);c.globalAlpha=1;
-      const an=inA?Math.max(1,Math.round(tl/AD*20)):20;c.save();c.lineCap='round';c.shadowColor=acol;c.shadowBlur=10;
-      for(let i=1;i<=an;i++){const a=P(ap[i-1]),b=P(ap[i]);c.globalAlpha=inA?.2+.8*(i/an):.45;c.strokeStyle=acol;c.lineWidth=inA?1+2.5*(i/an):1.5;c.beginPath();c.moveTo(a[0],a[1]);c.lineTo(b[0],b[1]);c.stroke();}
-      c.restore();c.globalAlpha=1;
-      const a0=P(ap[0]);c.strokeStyle=acol;c.lineWidth=1.2;c.beginPath();c.arc(a0[0],a0[1],5,0,7);c.stroke();
-      c.font='bold 10px '+(tok('--mono')||'monospace');c.textAlign='left';c.fillStyle=acol;c.fillText('ASSIST · '+(aw>=0?PLAYERS[aw].short:g.assister).toUpperCase(),a0[0]+8,a0[1]-8);
-      if(inA){const hp=ap[Math.min(20,Math.round(tl/AD*20))],h=P(hp);c.save();c.shadowColor='#5fe1ff';c.shadowBlur=18;ball(h[0],h[1],Math.max(4,F*92/h[2]*.75),acol);c.restore();}}
+    const Lx=pts.length-1,tl=(performance.now()-V.ft)%(dur+900),inA=false,el=tl,p=Math.min(1,el/dur),n=Math.max(1,Math.round(p*Lx));
     c.setLineDash([4,5]);c.strokeStyle=V.hud?'rgba(140,220,255,.45)':muted;c.lineWidth=1;path(pts);c.stroke();c.setLineDash([]);
     const s0=P(pts[0]),sp=P([pts[0][0],pts[0][1],0]);c.strokeStyle='#5fe1ff';c.lineWidth=1.2;
     c.beginPath();c.arc(sp[0],sp[1],9,0,7);c.moveTo(sp[0]-14,sp[1]);c.lineTo(sp[0]+14,sp[1]);c.moveTo(sp[0],sp[1]-8);c.lineTo(sp[0],sp[1]+8);c.stroke();
     c.save();c.shadowColor=col;c.shadowBlur=14;c.lineCap='round';
-    const kk=pts.kink;if(inA)c.globalAlpha=0;
-    for(let i=1;i<=n;i++){const a=P(pts[i-1]),b=P(pts[i]);c.globalAlpha=.25+.75*(i/n);c.strokeStyle=kk!=null&&i>kk?REDIR:col;c.shadowColor=c.strokeStyle;c.lineWidth=1+3*(i/n);c.beginPath();c.moveTo(a[0],a[1]);c.lineTo(b[0],b[1]);c.stroke();}
+    const kk=pts.kink,kc=k=>k==='p0'?pcol[0]:k==='p1'?pcol[1]:k==='opp'?REDIR:(V.hud?'#9fb4c8':muted);
+    const segCol=i=>{let m=pts.marks[0];pts.marks.forEach(x=>{if(x.i<i)m=x;});return m.i===kk?REDIR:kc(m.kind);};
+    for(let i=1;i<=n;i++){const a=P(pts[i-1]),b=P(pts[i]);c.globalAlpha=.25+.75*(i/n);c.strokeStyle=segCol(i);c.shadowColor=c.strokeStyle;c.lineWidth=1+3*(i/n);c.beginPath();c.moveTo(a[0],a[1]);c.lineTo(b[0],b[1]);c.stroke();}
     c.restore();c.globalAlpha=1;
-    const fi=p*40,i0=Math.floor(fi),i1=Math.min(40,i0+1),tt=fi-i0,hp=[0,1,2].map(d=>pts[i0][d]*(1-tt)+pts[i1][d]*tt),h=P(hp),fl=P([hp[0],hp[1],0]);
+    const fi=p*Lx,i0=Math.floor(fi),i1=Math.min(Lx,i0+1),tt=fi-i0,hp=[0,1,2].map(d=>pts[i0][d]*(1-tt)+pts[i1][d]*tt),h=P(hp),fl=P([hp[0],hp[1],0]);
     c.setLineDash([2,3]);c.strokeStyle='rgba(95,225,255,.6)';c.beginPath();c.moveTo(h[0],h[1]);c.lineTo(fl[0],fl[1]);c.stroke();c.setLineDash([]);
     c.strokeStyle='rgba(95,225,255,.7)';c.beginPath();c.ellipse(fl[0],fl[1],7,3,0,0,7);c.stroke();
     if(!inA){c.save();c.shadowColor='#5fe1ff';c.shadowBlur=18;ball(h[0],h[1],Math.max(4,F*92/h[2]*.75),col);c.restore();}
-    if(kk!=null&&!inA&&p*40>=kk){
+    // Each touch: a ring and the player's name once the ball has reached it.
+    pts.marks.forEach((m,mi)=>{if(m.i===kk||p*Lx<m.i-0.01)return;const q=P(pts[m.i]),cc=kc(m.kind);c.strokeStyle=cc;c.lineWidth=1.3;c.beginPath();c.arc(q[0],q[1],5,0,7);c.stroke();
+      if(pts.marks.length>1||V.hud){c.font='bold 10px '+(tok('--mono')||'monospace');c.textAlign='left';c.fillStyle=cc;c.fillText(`${mi+1} · ${(PLAYERS.find(x=>x.name===m.name)?.short||m.name||'?').toUpperCase()}`,q[0]+8,q[1]-8);}});
+    if(kk!=null&&!inA&&p*Lx>=kk){
       // Redirect: a diamond and a pulse where the other team touched it, with their name.
-      const q=P(pts[kk]),age=Math.min(1,(p*40-kk)/8),rr=6+age*14;c.strokeStyle=REDIR;c.lineWidth=1.6;
+      const q=P(pts[kk]),age=Math.min(1,(p*Lx-kk)/8),rr=6+age*14;c.strokeStyle=REDIR;c.lineWidth=1.6;
       c.beginPath();c.moveTo(q[0],q[1]-7);c.lineTo(q[0]+7,q[1]);c.lineTo(q[0],q[1]+7);c.lineTo(q[0]-7,q[1]);c.closePath();c.stroke();
       c.globalAlpha=1-age;c.beginPath();c.arc(q[0],q[1],rr,0,7);c.stroke();c.globalAlpha=1;
       c.font='bold 10px '+(tok('--mono')||'monospace');c.textAlign='left';c.fillStyle=REDIR;
-      c.fillText((kk===0?'REDIRECTED BY ':'REDIRECT · ')+g.defl.toUpperCase(),q[0]+10,q[1]-8);
+      c.fillText((kk===0?'REDIRECTED BY ':'REDIRECT · ')+String(g.defl||pts.marks[pts.marks.length-1].name).toUpperCase(),q[0]+10,q[1]-8);
     }
-    if(!inA&&p>=1){const e=P(pts[40]),q=(el-dur)/900;c.strokeStyle=col;c.globalAlpha=1-q;c.lineWidth=2;c.beginPath();c.arc(e[0],e[1],6+q*28,0,7);c.stroke();c.globalAlpha=1;}
+    if(!inA&&p>=1){const e=P(pts[Lx]),q=(el-dur)/900;c.strokeStyle=col;c.globalAlpha=1-q;c.lineWidth=2;c.beginPath();c.arc(e[0],e[1],6+q*28,0,7);c.stroke();c.globalAlpha=1;}
     if(V.hud){
       const kmh=g.spd,d=Math.hypot(g.ix-g.x,5120-g.y)/100,lbl=g.who>=0?PLAYERS[g.who].short.toUpperCase():(V.side==='us'?'US':'OPPONENT');
       const rows=[[`GOAL`,lbl],...(g.assister?[['ASSIST',(PLAYERS.find(q=>q.name===g.assister)?.short||g.assister).toUpperCase()]]:[]),...(g.defl?[['REDIRECT',g.defl.toUpperCase()]]:[]),['SPEED',kmh!=null?fSpd(kmh).toUpperCase():'—'],['RANGE',fLen(d).toUpperCase()],['IMPACT H',IMP()?(g.iz/100*3.28084).toFixed(1)+' FT':(g.iz/100).toFixed(2)+' M'],['T',(Math.min(el,dur)/1000).toFixed(2)+' S']];
@@ -645,7 +657,7 @@ function nudge3D(f){G3.auto=false;f();G3.pitch=Math.max(.05,Math.min(1.45,G3.pit
   G3.T[0]=Math.max(-4096,Math.min(4096,G3.T[0]));G3.T[1]=Math.max(-5120,Math.min(6000,G3.T[1]));draw3D();}
 function drawReplay(){
   const cv=$('replayCv'),g=G3.goals.find(x=>x.k===RP.k);if(!g)return;
-  const xs=[g.x,g.ix].concat(g.ax!=null?[g.ax]:[]),ys=[g.y,5120].concat(g.ay!=null?[g.ay]:[]);
+  const wp=waypoints(g),xs=[g.ix].concat(wp.map(t=>t.p[0])),ys=[5120].concat(wp.map(t=>t.p[1]));
   const mid=[(Math.min(...xs)+Math.max(...xs))/2,(Math.min(...ys)+Math.max(...ys))/2,300],dx=g.ix-g.x,dy=5120-g.y,span=Math.hypot(Math.max(...xs)-Math.min(...xs),Math.max(...ys)-Math.min(...ys))+1800;
   const yaw=Math.atan2(dx,dy)+0.75+Math.sin((performance.now()-RP.t)/2500)*.12;
   render3D(cv,{hud:true,goals:[g],side:G3.side,T:mid,D:span*1.25,F:cv.clientWidth*1.05,yaw,pitch:.38,focus:g.k,ft:RP.t});
@@ -1048,7 +1060,7 @@ const CHANGELOG=[
     'Goal map pins are now little Rocket League balls',
     'Loading screen while your stats load, instead of briefly showing sample data',
     'Goal mouth on the goal map drawn as a technical diagram with real dimensions',
-    'Assisted goals replay the pass first, then the shot',
+    'Assisted goals replay the pass first, then the shot. New games save the last 3 touches before every goal and replay them all',
     'Goals the other team redirected are marked, with a red redirect point in the 3D replay',
     'Hover a ball on the goal map for a 3D replay of that goal',
     '3D goal map: arrow keys move the camera, and a control knob turns, tilts and zooms it',
