@@ -1821,6 +1821,7 @@ $('matchLog').addEventListener('click',e=>{const a=e.target.closest('a.mlink');i
 // Add a release at the top whenever something visible changes (dashboard or widget).
 const CHANGELOG=[
   {v:'1.7',date:'2026-10-14',items:[
+    'Player pictures are three times bigger on the name cards at the top, and a little bigger in tables',
     'Fixed: the picture menu under a player name now closes when you click away, press Escape, click the name again or finish an upload',
     'Duo / Solo / All switch at the top: Duo (the default) counts only games with both of us, Solo shows games with just one of us, All shows everything',
     'All-time records: most days played in a row, longest break between game days, and the current run or days since we last played',

@@ -361,11 +361,13 @@ body.g3-night .mini3d span{color:rgba(224,68,62,.75)}
 :root.neon .seg button[aria-pressed="true"]{background:#39ff14;color:#030304;box-shadow:0 0 10px rgba(57,255,20,.45)}
 .avbtn{border:0;cursor:pointer;color:var(--ink)}
 .avbtn:hover{filter:brightness(1.15)}
-.has-av1 .tag.p1 i,.has-av2 .tag.p2 i,.has-av3 .tag.p3 i,.has-av4 .tag.p4 i{width:18px;height:18px;border-radius:50%;background-size:cover;background-position:center}
+.has-av1 .tag.p1 i,.has-av2 .tag.p2 i,.has-av3 .tag.p3 i,.has-av4 .tag.p4 i{width:22px;height:22px;border-radius:50%;background-size:cover;background-position:center;flex:none}
 .has-av1 .tag.p1 i{background-image:var(--av1);box-shadow:0 0 0 1.5px var(--p1)} .has-av2 .tag.p2 i{background-image:var(--av2);box-shadow:0 0 0 1.5px var(--p2)}
 .has-av3 .tag.p3 i{background-image:var(--av3);box-shadow:0 0 0 1.5px var(--p3)} .has-av4 .tag.p4 i{background-image:var(--av4);box-shadow:0 0 0 1.5px var(--p4)}
 #playerTags .tag i{width:10px;height:10px}
-.has-av1 #playerTags .tag.p1 i,.has-av2 #playerTags .tag.p2 i,.has-av3 #playerTags .tag.p3 i,.has-av4 #playerTags .tag.p4 i{width:28px;height:28px;margin-left:-6px}
+.has-av1 #playerTags .tag.p1 i,.has-av2 #playerTags .tag.p2 i,.has-av3 #playerTags .tag.p3 i,.has-av4 #playerTags .tag.p4 i{width:84px;height:84px;margin-left:-4px;box-shadow:0 0 0 2.5px var(--c,currentColor),0 4px 14px #0006}
+.has-av1 #playerTags .tag.p1,.has-av2 #playerTags .tag.p2,.has-av3 #playerTags .tag.p3,.has-av4 #playerTags .tag.p4{padding:6px 14px 6px 8px;gap:10px;font-size:15px;border-radius:999px 10px 10px 999px}
+.has-av1 #playerTags .tag.p1 i{--c:var(--p1)}.has-av2 #playerTags .tag.p2 i{--c:var(--p2)}.has-av3 #playerTags .tag.p3 i{--c:var(--p3)}.has-av4 #playerTags .tag.p4 i{--c:var(--p4)}
 .avmenu{position:absolute;z-index:60;display:flex;flex-direction:column;gap:4px;min-width:190px;background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px;box-shadow:0 10px 28px rgba(0,0,0,.35)}
 .avmenu[hidden]{display:none}
 .avmenu b{font-size:12px;color:var(--muted);font-weight:600;padding:2px 6px}
