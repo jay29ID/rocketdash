@@ -160,6 +160,13 @@ function isKickoffGoal(g){
 }
 // Biggest gap we were behind (or ahead) by at any point, from the goals in the order they were scored.
 function maxDeficit(goals,sign=1){let d=0,worst=0;goals.forEach(g=>{d+=g.ours?-sign:sign;if(d>worst)worst=d;});return worst;}
+// The game never fills duration_seconds in our records, so fall back to the time between the
+// recorder's start and end stamps. Average speed is sampled over that same stretch.
+function matchSecs(r){
+  const d=num(r.duration_seconds);if(d)return d;
+  const s=(new Date(r.ended_at)-new Date(r.started_at))/1000;
+  return s>=60&&s<=2400?s:null;
+}
 function toMatch(r){
   const rows=r.players||[];
   const lines=PLAYERS.map(p=>{
@@ -168,8 +175,8 @@ function toMatch(r){
       demos:num(row.demos)||0,touches:num(row.touches)||0,bumps:num(row.car_touches),boost:num(row.avg_boost),ss:num(row.pct_supersonic),
       air:num(row.pct_air),wall:num(row.pct_wall),ground:num(row.pct_ground),hardest:toKmh(num(row.hardest_hit)),
       pickups:num(row.boost_pickups),car:carName(row.loadout),speed:carKmh(row.avg_speed),topSpeed:carKmh(row.max_speed),
-      // No odometer in the Stats API: distance is average speed x game length (km).
-      dist:carKmh(row.avg_speed)!=null&&num(r.duration_seconds)?carKmh(row.avg_speed)*num(r.duration_seconds)/3600:null,
+      // No odometer in the Stats API: distance is average speed x time in the match (km).
+      dist:carKmh(row.avg_speed)!=null&&matchSecs(r)?carKmh(row.avg_speed)*matchSecs(r)/3600:null,
       noBoost:row.zero_boost_fixed&&num(row.pct_zero_boost)!=null?num(row.pct_zero_boost)/100*(num(r.duration_seconds)||300):null,
       goalSpeeds:(r.goals||[]).filter(g=>g&&!(+g.goal_time<=0&&(r.goals||[]).some(x=>x&&+x.goal_time>0))&&g.scorer===p.name&&num(g.speed)!=null).map(g=>+g.speed)};
   });
