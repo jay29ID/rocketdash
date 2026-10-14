@@ -761,6 +761,55 @@ function Step-Crew {
 $script:crewTimer = New-Object System.Windows.Forms.Timer
 $script:crewTimer.Interval = 500
 $script:crewTimer.add_Tick({ try { Step-Crew } catch { } })
+
+# ---- replay uploads ---------------------------------------------------------------------------
+# Replays saved in the game are sent to the dashboard site, which reads the ball's full path from
+# them. The game only writes a replay when someone saves it. Replays already there the first time
+# this runs are skipped; replays-sent.txt in the data folder lists every replay dealt with.
+$script:ReplayDirs = @('Demos', 'DemosEpic') | ForEach-Object { Join-Path (Split-Path $GameLogDir) $_ }
+$script:replaySent = Join-Path $OutDir 'replays-sent.txt'
+$script:replayJob = $null; $script:replayNext = [DateTime]::MinValue
+function Step-Replays {
+  $j = $script:replayJob
+  if ($j) {
+    if (-not $j.Handle.IsCompleted) { return }
+    $script:replayJob = $null
+    $r = $null
+    try { $r = @($j.PS.EndInvoke($j.Handle)) | Select-Object -Last 1 } catch { }
+    $j.PS.Dispose()
+    # Sent, or refused by the site as not a replay: done with it either way. Anything else tries again in a minute.
+    if ($r -eq 'ok' -or $r -eq 'refused') { [IO.File]::AppendAllText($script:replaySent, $j.Name + "`r`n", $Utf8NoBom); $script:replayNext = [DateTime]::MinValue }
+    else { $script:replayNext = [DateTime]::UtcNow.AddMinutes(1) }
+    return
+  }
+  if ($script:InMatch -or [DateTime]::UtcNow -lt $script:replayNext -or -not (Test-Path (Join-Path $OutDir 'upload.json'))) { return }
+  $script:replayNext = [DateTime]::UtcNow.AddSeconds(15)
+  $files = @($script:ReplayDirs | Where-Object { Test-Path $_ } | ForEach-Object { Get-ChildItem $_ -Filter '*.replay' -File })
+  if (-not (Test-Path $script:replaySent)) { [IO.File]::WriteAllLines($script:replaySent, [string[]]@($files | ForEach-Object { $_.Name }), $Utf8NoBom); return }
+  $sent = @(Get-Content $script:replaySent)
+  # Oldest first, once the game has finished writing it.
+  $f = $files | Where-Object { $sent -notcontains $_.Name -and $_.LastWriteTime -lt (Get-Date).AddSeconds(-10) } | Sort-Object LastWriteTime | Select-Object -First 1
+  if (-not $f) { return }
+  $ps = [powershell]::Create()
+  [void]$ps.AddScript({
+    param($CfgPath, $File)
+    $ErrorActionPreference = 'Stop'
+    try { [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12 } catch { }
+    $cfg = Get-Content $CfgPath -Raw | ConvertFrom-Json
+    $base = ([Uri]$cfg.url).GetLeftPart([UriPartial]::Authority)
+    try {
+      [void](Invoke-RestMethod -Uri "$base/api/replay" -Method Post -Headers @{ 'X-Upload-Key' = [string]$cfg.key } -InFile $File -ContentType 'application/octet-stream' -TimeoutSec 120 -UseBasicParsing)
+      'ok'
+    } catch {
+      $code = 0; try { $code = [int]$_.Exception.Response.StatusCode } catch { }
+      if ($code -eq 400) { 'refused' } else { 'retry' }
+    }
+  }).AddArgument((Join-Path $OutDir 'upload.json')).AddArgument($f.FullName)
+  $script:replayJob = @{ PS = $ps; Handle = $ps.BeginInvoke(); Name = $f.Name }
+}
+$script:replayTimer = New-Object System.Windows.Forms.Timer
+$script:replayTimer.Interval = 2000
+$script:replayTimer.add_Tick({ try { Step-Replays } catch { } })
 # Called by the recorder as each match is saved.
 $script:MatchExtras = {
   $x = [ordered]@{ spectators = @($script:Spectators | Where-Object { $script:Watching.Contains($_) }) }
@@ -1351,12 +1400,12 @@ $script:form.add_Shown({
   $script:form.Refresh()
   Stop-Splash
   $script:form.Opacity = 1
-  $script:timer.Start(); $script:slow.Start(); $script:updTimer.Start(); $script:updPoll.Start(); $script:gifPoll.Start(); $script:crewTimer.Start()
+  $script:timer.Start(); $script:slow.Start(); $script:updTimer.Start(); $script:updPoll.Start(); $script:gifPoll.Start(); $script:crewTimer.Start(); $script:replayTimer.Start()
   if ($script:firstRun) { Show-Players }
 })
 
 $script:form.add_FormClosing({
-  $script:timer.Stop(); $script:slow.Stop(); $script:updTimer.Stop(); $script:updPoll.Stop(); $script:gifPoll.Stop(); Close-GoalGif
+  $script:timer.Stop(); $script:slow.Stop(); $script:updTimer.Stop(); $script:updPoll.Stop(); $script:gifPoll.Stop(); $script:replayTimer.Stop(); Close-GoalGif
   try {
     if (-not (Test-Path $OutDir)) { [void](New-Item -ItemType Directory -Path $OutDir) }
     $json = ConvertTo-Json -InputObject @{ x = $script:form.Left; y = $script:form.Top; pinned = $script:form.TopMost

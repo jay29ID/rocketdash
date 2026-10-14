@@ -1826,6 +1826,7 @@ $('matchLog').addEventListener('click',e=>{const a=e.target.closest('a.mlink');i
 // Add a release at the top whenever something visible changes (dashboard or widget).
 const CHANGELOG=[
   {v:'1.7',date:'2026-10-14',items:[
+    'Widget sends replays you save in the game to the dashboard, which reads the ball\'s full path from them for new stats to come (arrives with Check updates).',
     'Widget gets the dashboard themes: Neon, Night and Midnight join Cyber, Rocket League and Classic in the widget theme menu (arrives with Check updates).',
     'Open dashboards reload themselves when a new version goes live, so nobody is left looking at old colours or features.',
     'Goal map Night: blue-tinted field and blue heat scale; picking a look on the goal map now sets its 3D view too, and 3D redirect markers follow Night and Midnight instead of staying red.',

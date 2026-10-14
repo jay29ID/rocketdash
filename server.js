@@ -4,13 +4,14 @@
 // Environment:
 //   VIEW_KEY    secret for the share link (/s/<VIEW_KEY>)
 //   UPLOAD_KEY  secret the recorder sends in the X-Upload-Key header
-//   DATA_DIR    where store.json lives (a Railway volume, e.g. /data)
+//   DATA_DIR    where store.json, pictures and replays live (a Railway volume, e.g. /data)
 //   PLAYERS     tracked players, comma separated (default "jay29ID,Kobra Kelvin")
 'use strict';
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const execFileP = require('util').promisify(require('child_process').execFile);
 
 // A local copy on Windows (no keys set): start-local.ps1 asks for players, makes the keys, points
 // the recorder here and starts this file again with them set.
@@ -34,7 +35,7 @@ if (!VIEW_KEY || !UPLOAD_KEY) console.warn('VIEW_KEY and UPLOAD_KEY should both 
 
 // ---------- storage ----------
 fs.mkdirSync(DATA_DIR, { recursive: true });
-let store = { matches: {}, mmr: {}, avatars: {} };
+let store = { matches: {}, mmr: {}, avatars: {}, replays: {} };
 try { store = Object.assign(store, JSON.parse(fs.readFileSync(STORE, 'utf8'))); } catch (e) { if (e.code !== 'ENOENT') throw e; }
 
 // Player pictures: small square images the page resizes before upload, one per player name.
@@ -68,6 +69,86 @@ function removeAvatar(name) {
   const a = store.avatars[name]; if (!a) return;
   try { fs.unlinkSync(path.join(AVATARS, a.key + '.' + a.ext)); } catch (e) {}
   delete store.avatars[name];
+}
+
+// Replays the widgets upload. Each one is kept as uploaded and parsed with rrrocket for its header,
+// goals and the ball's path. Bumping RRROCKET.version re-parses every replay with the new parser.
+const REPLAYS = path.join(DATA_DIR, 'replays');
+fs.mkdirSync(REPLAYS, { recursive: true });
+const RRROCKET = {
+  version: '0.11.6',
+  linux: { target: 'x86_64-unknown-linux-musl', ext: 'tar.gz', sha256: '3694e222e9fd8ff528dd54d16cf4d4fa1e8dd3319b74c8da5bfadbfc9da6c222' },
+  win32: { target: 'x86_64-pc-windows-msvc', ext: 'zip', sha256: '6fa7d153fba8d58caf79b4e0eb7c8a6c7a59ff687c3c29a4e3fa55e202b1af07' }
+};
+// Downloads the pinned rrrocket build into DATA_DIR/bin once and checks it against its hash.
+async function rrrocket() {
+  const rel = RRROCKET[process.platform];
+  if (!rel) throw new Error('no rrrocket build for ' + process.platform);
+  const exe = process.platform === 'win32' ? '.exe' : '';
+  const bin = path.join(DATA_DIR, 'bin'), file = path.join(bin, `rrrocket-${RRROCKET.version}${exe}`);
+  if (fs.existsSync(file)) return file;
+  const name = `rrrocket-${RRROCKET.version}-${rel.target}`;
+  const r = await fetch(`https://github.com/nickbabcock/rrrocket/releases/download/v${RRROCKET.version}/${name}.${rel.ext}`);
+  if (!r.ok) throw new Error('rrrocket download failed: HTTP ' + r.status);
+  const buf = Buffer.from(await r.arrayBuffer());
+  if (crypto.createHash('sha256').update(buf).digest('hex') !== rel.sha256) throw new Error('rrrocket download does not match its hash');
+  fs.mkdirSync(bin, { recursive: true });
+  const archive = path.join(bin, `${name}.${rel.ext}`);
+  fs.writeFileSync(archive, buf);
+  // Windows' own tar.exe also unpacks zips; a Git Bash tar earlier on the PATH would not.
+  const tar = process.platform === 'win32' ? path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe') : 'tar';
+  await execFileP(tar, ['-xf', archive, '-C', bin]);
+  fs.renameSync(path.join(bin, name, 'rrrocket' + exe), file);
+  fs.chmodSync(file, 0o755);
+  fs.rmSync(path.join(bin, name), { recursive: true, force: true }); fs.rmSync(archive, { force: true });
+  return file;
+}
+// The ball's position at most ten times a second, as [seconds into the replay, x, y, z].
+function ballTrack(j) {
+  const frames = (j.network_frames && j.network_frames.frames) || [];
+  const isBall = new Set(j.objects.map((o, i) => /^Archetypes\.Ball\./.test(o) ? i : -1).filter(i => i >= 0));
+  const balls = new Set(), points = [];
+  let last = -Infinity;
+  for (const f of frames) {
+    // Actor ids are reused, and the ball is destroyed after each goal and made again for the kickoff.
+    for (const id of f.deleted_actors) balls.delete(id);
+    for (const a of f.new_actors) if (isBall.has(a.object_id)) balls.add(a.actor_id); else balls.delete(a.actor_id);
+    for (const u of f.updated_actors) {
+      const rb = u.attribute.RigidBody;
+      if (!rb || !rb.location || !balls.has(u.actor_id) || f.time < last + 0.1) continue;
+      last = f.time;
+      points.push([+f.time.toFixed(2), Math.round(rb.location.x), Math.round(rb.location.y), Math.round(rb.location.z)]);
+    }
+  }
+  return points;
+}
+async function parseReplay(key) {
+  const { stdout } = await execFileP(await rrrocket(), ['-n', path.join(REPLAYS, key + '.replay')], { maxBuffer: 512 * 1024 * 1024 });
+  const j = JSON.parse(stdout), p = j.properties || {}, frames = j.network_frames.frames;
+  const goals = (p.Goals || []).map(g => ({ player: g.PlayerName, team: g.PlayerTeam, frame: g.frame, t: frames[g.frame] ? +frames[g.frame].time.toFixed(2) : null }));
+  const points = ballTrack(j);
+  fs.writeFileSync(path.join(REPLAYS, key + '.json'), JSON.stringify({ properties: p, goals, ball: { cols: ['t', 'x', 'y', 'z'], points } }));
+  return {
+    id: p.Id || null, match_guid: p.MatchGUID || null, date: p.Date || null, map: p.MapName || null, match_type: p.MatchType || null,
+    team_size: p.TeamSize || null, score: [p.Team0Score || 0, p.Team1Score || 0], seconds: p.TotalSecondsPlayed || null, ball_points: points.length
+  };
+}
+// Parses every replay the current parser hasn't, one at a time. A replay that fails is marked so it
+// isn't retried until the parser changes; if rrrocket itself can't be fetched, the next call tries again.
+let parsing = false;
+async function parseReplays() {
+  if (parsing) return;
+  parsing = true;
+  try {
+    let key;
+    while ((key = Object.keys(store.replays).find(k => store.replays[k].parsed_with !== RRROCKET.version))) {
+      const r = store.replays[key];
+      try { await rrrocket(); } catch (e) { console.warn('replays: ' + e.message); return; }
+      try { Object.assign(r, await parseReplay(key), { error: null }); } catch (e) { r.error = String(e.message || e).slice(0, 300); }
+      r.parsed_with = RRROCKET.version;
+      save();
+    }
+  } catch (e) { console.warn('replays: ' + e.message); } finally { parsing = false; }
 }
 
 function save() {
@@ -184,14 +265,15 @@ function send(res, code, body, type = 'application/json; charset=utf-8', extra =
   res.writeHead(code, { 'Content-Type': type, 'Content-Length': buf.length, 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex', ...extra });
   res.end(buf);
 }
-function readJson(req) {
+function readBody(req) {
   return new Promise((resolve, reject) => {
     let size = 0; const chunks = [];
     req.on('data', c => { size += c.length; if (size > MAX_BODY) { reject(new Error('too large')); req.destroy(); } else chunks.push(c); });
-    req.on('end', () => { try { resolve(JSON.parse(Buffer.concat(chunks).toString('utf8').replace(/^﻿/, ''))); } catch (e) { reject(e); } });
+    req.on('end', () => resolve(Buffer.concat(chunks)));
     req.on('error', reject);
   });
 }
+const readJson = req => readBody(req).then(b => JSON.parse(b.toString('utf8').replace(/^﻿/, '')));
 function same(a, b) {
   const x = Buffer.from(String(a)), y = Buffer.from(String(b));
   return x.length === y.length && x.length > 0 && crypto.timingSafeEqual(x, y);
@@ -234,6 +316,22 @@ const server = http.createServer(async (req, res) => {
       if (!ok) return send(res, 400, { error: 'expected {kind:"match"|"mmr", data}' });
       save();
       return send(res, 200, { ok: true });
+    }
+
+    // A replay file saved in the game, sent as is by the widget. Both PCs can send the same file.
+    if (p === '/api/replay' && req.method === 'POST') {
+      if (!UPLOAD_KEY || !same(req.headers['x-upload-key'] || '', UPLOAD_KEY)) return send(res, 401, { error: 'bad upload key' });
+      const buf = await readBody(req);
+      if (!buf.subarray(0, 64).includes('TAGame.Replay_')) return send(res, 400, { error: 'not a Rocket League replay' });
+      const key = crypto.createHash('sha256').update(buf).digest('hex').slice(0, 16);
+      const fresh = !store.replays[key];
+      if (fresh) {
+        fs.writeFileSync(path.join(REPLAYS, key + '.replay'), buf);
+        store.replays[key] = { uploaded_at: new Date().toISOString(), size: buf.length };
+        save();
+        parseReplays();
+      }
+      return send(res, 200, { ok: true, replay: key, duplicate: !fresh });
     }
 
     // Recorder self-update: the widget compares these hashes with its own files on start.
@@ -308,6 +406,16 @@ const server = http.createServer(async (req, res) => {
           : send(res, 200, buf, AV_TYPES[a.ext], { 'Cache-Control': 'private, max-age=31536000, immutable' }));
       }
     }
+    // Uploaded replays, linked to matches by match_guid, and one replay's parsed header, goals and ball path.
+    if (p === '/api/replays' && req.method === 'GET') {
+      return send(res, 200, { replays: Object.entries(store.replays).map(([key, r]) => ({ key, ...r })) });
+    }
+    {
+      const m = /^\/api\/replay\/([0-9a-f]{16})$/.exec(p);
+      if (m && req.method === 'GET') {
+        return fs.readFile(path.join(REPLAYS, m[1] + '.json'), (err, buf) => err ? send(res, 404, { error: 'not parsed' }) : send(res, 200, buf));
+      }
+    }
     // Typed MMR from the page
     if (p === '/api/mmr' && req.method === 'POST') {
       const b = await readJson(req);
@@ -336,6 +444,7 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`rocketdash listening on ${PORT}, data in ${DATA_DIR}`);
+  parseReplays();
   if (process.env.GIPHY_KEY) {
     gifList(GIF_QUERY, 3, 0).then(l => console.log(l.length ? `goal GIFs ready: ${l.length} for "${GIF_QUERY}"` : 'goal GIFs: GIPHY returned nothing (check GIPHY_KEY)'));
     gifList(AGAINST_GIF_QUERY, 1, 6, WHOOPS).then(l => console.log(`goals-against GIFs: ${l.map(g => g.title).join(' | ') || 'none'}`));

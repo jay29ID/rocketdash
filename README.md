@@ -10,7 +10,7 @@ No dependencies: `npm start` runs `server.js` on Node 18+.
 |---|---|
 | `VIEW_KEY` | Secret for the share link. Open `https://<site>/s/<VIEW_KEY>` once and the browser stays signed in. |
 | `UPLOAD_KEY` | Secret the recorder sends in the `X-Upload-Key` header. |
-| `DATA_DIR` | Folder for `store.json`. On Railway this is the volume, `/data`. |
+| `DATA_DIR` | Folder for `store.json`, player pictures and uploaded replays. On Railway this is the volume, `/data`. |
 | `PLAYERS` | Players the dashboard shows, comma separated, up to four. Default `jay29ID,Kobra Kelvin`. |
 
 ## Running your own copy
@@ -32,10 +32,16 @@ Matches are kept in `data\store.json`. The sign-in cookie is `Secure`, so other 
 ## Endpoints
 
 - `POST /api/ingest` with `X-Upload-Key`: body `{ "kind": "match" | "mmr", "data": {...} }`, as sent by the recorder.
+- `POST /api/replay` with `X-Upload-Key`: body is a `.replay` file, as sent by the widget.
 - `GET /api/data`, `POST /api/mmr`, `POST /api/import`: used by the page; need the share-link cookie.
+- `GET /api/replays` and `GET /api/replay/<key>`: uploaded replays, and one replay's header, goals and ball path; need the share-link cookie.
 - `GET /healthz`
 
 Both PCs upload shared matches, so matches are merged by `match_guid`. The copy with a real result, boost stats and goal positions wins, and missing fields are filled from the other copy. MMR rows are kept per player, playlist and time.
+
+## Replays
+
+The game writes a `.replay` file only when someone saves the replay. The widget watches `Documents\My Games\Rocket League\TAGame\Demos` (and `DemosEpic`) and uploads each new file, skipping replays that were already there the first time it ran. The site keeps the file in `DATA_DIR/replays`, then parses it with [rrrocket](https://github.com/nickbabcock/rrrocket), which it downloads once into `DATA_DIR/bin` and checks against a pinned hash. The parse saves the replay header, the goals and the ball's position up to ten times a second. Each replay carries the `match_guid` of its match. A game update can break the parser: bump `RRROCKET` in `server.js` to a fixed rrrocket release and every replay is parsed again.
 
 ## Recorder updates
 
