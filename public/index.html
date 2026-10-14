@@ -315,6 +315,17 @@ body.editing .board>.mod.drop-after{box-shadow:0 4px 0 0 var(--p1)}
 .editbar{display:none}
 body.editing .editbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;background:var(--surface);border:1px solid var(--p1);border-radius:8px;padding:10px 12px;position:sticky;top:env(safe-area-inset-top,0px);z-index:25}
 .editbar .hint{color:var(--muted);font-size:12px;flex:1 1 220px}
+/* Global neon look: black, fluorescent green and purple. Set on <html> by the Look switch. */
+:root.neon{color-scheme:dark;
+  --bg:#030304; --veil:rgba(3,3,6,.86); --surface:#09070e; --surface-2:#110c1a;
+  --ink:#eaffe9; --ink-2:#a7f5b4; --muted:#6fbf80; --line:#2d1747; --grid:#1a0f2a;
+  --p1:#39ff14; --p2:#c04dff; --p3:#00f0ff; --p4:#ffe600;
+  --p1-soft:#39ff1422; --p2-soft:#c04dff26; --p3-soft:#00f0ff22; --p4-soft:#ffe60022;
+  --win:#39ff14; --loss:#ff2bd6; --win-soft:#39ff141f; --loss-soft:#ff2bd622;
+  --focus:#39ff14; --heat:#c04dff; --opp:#ff2bd6; --pitch:#050507; --pitch-line:#3d1f63}
+:root.neon .panel{box-shadow:0 0 0 1px #1d0f30,0 0 18px rgba(192,77,255,.08)}
+:root.neon h2{color:#39ff14;text-shadow:0 0 8px rgba(57,255,20,.35)}
+:root.neon .seg button[aria-pressed="true"]{background:#39ff14;color:#030304;box-shadow:0 0 10px rgba(57,255,20,.45)}
 </style>
 </head>
 <body class="is-loading">
@@ -345,6 +356,7 @@ body.editing .editbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;bac
       <button type="button" data-u="metric" aria-pressed="true">km/h</button>
       <button type="button" data-u="imperial">mph</button>
     </div>
+    <div class="seg" role="group" aria-label="Look" id="lookTheme"><button type="button" data-t="classic" aria-pressed="true">Classic</button><button type="button" data-t="neon">Neon</button></div>
     <button type="button" class="chipbtn" id="layoutBtn" aria-pressed="false">Customize</button>
     </div>
   </header>

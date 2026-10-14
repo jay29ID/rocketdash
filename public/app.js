@@ -161,9 +161,9 @@ let PLAYERS=[], RAW={matches:[],mmr:[]}, SAMPLE=false;
 let ALL=[], DONE=[], sessions=[], NOW=Date.now();
 const SPECTATORS=['Morgan','Chance','Nick'];
 let period='30', mode='avg', metric='winpct', playlist=null, units='metric', mapSide='us', mapWho='all';
-let hmTheme='classic',g3Theme='classic';
-try{const s=JSON.parse(localStorage.getItem('rl-duo-ui')||'{}');if(s.hm)hmTheme=s.hm;if(s.g3)g3Theme=s.g3;if(s.period)period=s.period;if(s.mode)mode=s.mode;if(s.metric)metric=s.metric;if(s.playlist)playlist=s.playlist;if(s.units)units=s.units;}catch(e){}
-const saveUi=()=>{try{localStorage.setItem('rl-duo-ui',JSON.stringify({period,mode,metric,playlist,units,hm:hmTheme,g3:g3Theme}))}catch(e){}};
+let hmTheme='classic',g3Theme='classic',look='classic';
+try{const s=JSON.parse(localStorage.getItem('rl-duo-ui')||'{}');if(s.hm)hmTheme=s.hm;if(s.g3)g3Theme=s.g3;if(s.look)look=s.look;if(s.period)period=s.period;if(s.mode)mode=s.mode;if(s.metric)metric=s.metric;if(s.playlist)playlist=s.playlist;if(s.units)units=s.units;}catch(e){}
+const saveUi=()=>{try{localStorage.setItem('rl-duo-ui',JSON.stringify({period,mode,metric,playlist,units,hm:hmTheme,g3:g3Theme,look}))}catch(e){}};
 
 // A forfeit never sends the game's "match ended" event, so the recorder saves it as Incomplete.
 // When one side was ahead, that side won (the team behind forfeited, or quit, which is a loss too).
@@ -1090,10 +1090,14 @@ $('metric').innerHTML=METRICS.map(m=>`<button type="button" data-k="${m.k}">${m.
 $('metric').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;metric=b.dataset.k;saveUi();syncButtons();renderTrend();});
 $('playlist').addEventListener('change',e=>{playlist=e.target.value;saveUi();renderAll();});
 // Look of the heatmaps and of the 3D maps, each picked on its own and remembered.
-function applyThemes(){document.body.classList.toggle('hm-neon',hmTheme==='neon');document.body.classList.toggle('g3-neon',g3Theme==='neon');
+function applyThemes(){document.documentElement.classList.toggle('neon',look==='neon');
+  document.querySelectorAll('#lookTheme button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.t===look));
+  document.body.classList.toggle('hm-neon',hmTheme==='neon');document.body.classList.toggle('g3-neon',g3Theme==='neon');
   document.querySelectorAll('#hmTheme button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.t===hmTheme));
   document.querySelectorAll('#g3Theme button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.t===g3Theme));}
 applyThemes();
+// The global Look switch themes the whole page and sets both map looks to match; each map can still be changed after.
+$('lookTheme').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;look=hmTheme=g3Theme=b.dataset.t;saveUi();applyThemes();renderAll();draw3D();drawMini();});
 $('hmTheme').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;hmTheme=b.dataset.t;saveUi();applyThemes();renderAll();});
 $('g3Theme').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;g3Theme=b.dataset.t;saveUi();applyThemes();draw3D();drawMini();});
 $('mapSide').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;mapSide=b.dataset.s;document.querySelectorAll('#mapSide button').forEach(x=>x.setAttribute('aria-pressed',x===b));renderMaps(inPeriod());});
@@ -1295,7 +1299,8 @@ $('matchLog').addEventListener('click',e=>{const a=e.target.closest('a.mlink');i
 // ---------- version and update log ----------
 // Add a release at the top whenever something visible changes (dashboard or widget).
 const CHANGELOG=[
-  {v:'1.6',date:'2026-10-14',items:[
+  {v:'1.7',date:'2026-10-14',items:[
+    'Neon or Classic look for the whole dashboard, switched at the top (each map can still have its own)',
     'Customize your dashboard: drag panels into any order, make them half or full width, or hide them (saved in your browser)',
     'Neon look (black, fluorescent green and purple) for the heatmaps and the 3D maps, each switched on its own',
     'The mini 3D map now has the cyberpunk replay look and plays the hovered goal itself, instead of a pop-up',
@@ -1306,7 +1311,8 @@ const CHANGELOG=[
     'Defense panel: where our saves happen, opponent shots per game and their shooting %',
     'Counter goals in Playstyle, and win rate after going down or up by one to three goals',
     'Match length now comes from the match clock, so time-based stats use the real length of each game',
-    'Run your own copy of the dashboard on a Windows PC with dashboard.bat',
+    'Run your own copy of the dashboard on a Windows PC with dashboard.bat']},
+  {v:'1.6',date:'2026-10-14',items:[
     'Drive the 3D goal map with a game controller: sticks move and turn, triggers zoom, A plays the next goal',
     'Goal map balls are magnetic: the nearest one snaps on as your mouse gets close',
     'Our saves on the goal map: where we saved each shot, where it came from, where it was heading, with a 3D replay. Recorded from the next widget update on',
