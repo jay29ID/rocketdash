@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
 :root{
-  --bg:#eef1f5; --veil:rgba(238,241,245,.80); --surface:#ffffff; --surface-2:#f6f8fb;
+  --bg:#eef1f5; --arena:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1600 1000' preserveAspectRatio='xMidYMid slice'%3E%3Cg fill='none' stroke='rgba%2842%2C90%2C160%2C.10%29' stroke-width='3'%3E%3Cpath d='M100 240 L220 120 H1380 L1500 240 V380 H1560 V620 H1500 V760 L1380 880 H220 L100 760 V620 H40 V380 H100 Z'/%3E%3Cpath d='M800 120 V880'/%3E%3Ccircle cx='800' cy='500' r='120'/%3E%3Ccircle cx='800' cy='500' r='8'/%3E%3Cpath d='M100 330 H260 V670 H100 M1500 330 H1340 V670 H1500'/%3E%3C/g%3E%3Cg fill='rgba%28235%2C150%2C40%2C.16%29'%3E%3Ccircle cx='190' cy='190' r='16'/%3E%3Ccircle cx='190' cy='810' r='16'/%3E%3Ccircle cx='1410' cy='190' r='16'/%3E%3Ccircle cx='1410' cy='810' r='16'/%3E%3Ccircle cx='800' cy='150' r='16'/%3E%3Ccircle cx='800' cy='850' r='16'/%3E%3Ccircle cx='330' cy='300' r='5'/%3E%3Ccircle cx='330' cy='500' r='5'/%3E%3Ccircle cx='330' cy='700' r='5'/%3E%3Ccircle cx='520' cy='300' r='5'/%3E%3Ccircle cx='520' cy='500' r='5'/%3E%3Ccircle cx='520' cy='700' r='5'/%3E%3Ccircle cx='680' cy='300' r='5'/%3E%3Ccircle cx='680' cy='500' r='5'/%3E%3Ccircle cx='680' cy='700' r='5'/%3E%3Ccircle cx='920' cy='300' r='5'/%3E%3Ccircle cx='920' cy='500' r='5'/%3E%3Ccircle cx='920' cy='700' r='5'/%3E%3Ccircle cx='1080' cy='300' r='5'/%3E%3Ccircle cx='1080' cy='500' r='5'/%3E%3Ccircle cx='1080' cy='700' r='5'/%3E%3Ccircle cx='1270' cy='300' r='5'/%3E%3Ccircle cx='1270' cy='500' r='5'/%3E%3Ccircle cx='1270' cy='700' r='5'/%3E%3C/g%3E%3C/svg%3E"); --glow-a:.10; --surface:#ffffff; --surface-2:#f6f8fb;
   --ink:#0e1420; --ink-2:#465164; --muted:#768194;
   --line:#dbe0e8; --grid:#e9edf2;
   --p1:#2a78d6; --p2:#eb6834; --p1-soft:#2a78d61f; --p2-soft:#eb68341f;
@@ -23,7 +23,7 @@
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
     color-scheme:dark;
-    --bg:#0b1017; --veil:rgba(11,16,23,.62); --surface:#131a24; --surface-2:#18212d;
+    --bg:#0b1017; --arena:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1600 1000' preserveAspectRatio='xMidYMid slice'%3E%3Cg fill='none' stroke='rgba%28150%2C180%2C220%2C.07%29' stroke-width='3'%3E%3Cpath d='M100 240 L220 120 H1380 L1500 240 V380 H1560 V620 H1500 V760 L1380 880 H220 L100 760 V620 H40 V380 H100 Z'/%3E%3Cpath d='M800 120 V880'/%3E%3Ccircle cx='800' cy='500' r='120'/%3E%3Ccircle cx='800' cy='500' r='8'/%3E%3Cpath d='M100 330 H260 V670 H100 M1500 330 H1340 V670 H1500'/%3E%3C/g%3E%3Cg fill='rgba%28255%2C170%2C60%2C.12%29'%3E%3Ccircle cx='190' cy='190' r='16'/%3E%3Ccircle cx='190' cy='810' r='16'/%3E%3Ccircle cx='1410' cy='190' r='16'/%3E%3Ccircle cx='1410' cy='810' r='16'/%3E%3Ccircle cx='800' cy='150' r='16'/%3E%3Ccircle cx='800' cy='850' r='16'/%3E%3Ccircle cx='330' cy='300' r='5'/%3E%3Ccircle cx='330' cy='500' r='5'/%3E%3Ccircle cx='330' cy='700' r='5'/%3E%3Ccircle cx='520' cy='300' r='5'/%3E%3Ccircle cx='520' cy='500' r='5'/%3E%3Ccircle cx='520' cy='700' r='5'/%3E%3Ccircle cx='680' cy='300' r='5'/%3E%3Ccircle cx='680' cy='500' r='5'/%3E%3Ccircle cx='680' cy='700' r='5'/%3E%3Ccircle cx='920' cy='300' r='5'/%3E%3Ccircle cx='920' cy='500' r='5'/%3E%3Ccircle cx='920' cy='700' r='5'/%3E%3Ccircle cx='1080' cy='300' r='5'/%3E%3Ccircle cx='1080' cy='500' r='5'/%3E%3Ccircle cx='1080' cy='700' r='5'/%3E%3Ccircle cx='1270' cy='300' r='5'/%3E%3Ccircle cx='1270' cy='500' r='5'/%3E%3Ccircle cx='1270' cy='700' r='5'/%3E%3C/g%3E%3C/svg%3E"); --glow-a:.16; --surface:#131a24; --surface-2:#18212d;
     --ink:#eef2f7; --ink-2:#aab4c3; --muted:#7c8899;
     --line:#233042; --grid:#1b2533;
     --p1:#3987e5; --p2:#d95926; --p1-soft:#3987e526; --p2-soft:#d9592626;
@@ -33,7 +33,7 @@
 }
 :root[data-theme="dark"]{
   color-scheme:dark;
-  --bg:#0b1017; --veil:rgba(11,16,23,.62); --surface:#131a24; --surface-2:#18212d;
+  --bg:#0b1017; --arena:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1600 1000' preserveAspectRatio='xMidYMid slice'%3E%3Cg fill='none' stroke='rgba%28150%2C180%2C220%2C.07%29' stroke-width='3'%3E%3Cpath d='M100 240 L220 120 H1380 L1500 240 V380 H1560 V620 H1500 V760 L1380 880 H220 L100 760 V620 H40 V380 H100 Z'/%3E%3Cpath d='M800 120 V880'/%3E%3Ccircle cx='800' cy='500' r='120'/%3E%3Ccircle cx='800' cy='500' r='8'/%3E%3Cpath d='M100 330 H260 V670 H100 M1500 330 H1340 V670 H1500'/%3E%3C/g%3E%3Cg fill='rgba%28255%2C170%2C60%2C.12%29'%3E%3Ccircle cx='190' cy='190' r='16'/%3E%3Ccircle cx='190' cy='810' r='16'/%3E%3Ccircle cx='1410' cy='190' r='16'/%3E%3Ccircle cx='1410' cy='810' r='16'/%3E%3Ccircle cx='800' cy='150' r='16'/%3E%3Ccircle cx='800' cy='850' r='16'/%3E%3Ccircle cx='330' cy='300' r='5'/%3E%3Ccircle cx='330' cy='500' r='5'/%3E%3Ccircle cx='330' cy='700' r='5'/%3E%3Ccircle cx='520' cy='300' r='5'/%3E%3Ccircle cx='520' cy='500' r='5'/%3E%3Ccircle cx='520' cy='700' r='5'/%3E%3Ccircle cx='680' cy='300' r='5'/%3E%3Ccircle cx='680' cy='500' r='5'/%3E%3Ccircle cx='680' cy='700' r='5'/%3E%3Ccircle cx='920' cy='300' r='5'/%3E%3Ccircle cx='920' cy='500' r='5'/%3E%3Ccircle cx='920' cy='700' r='5'/%3E%3Ccircle cx='1080' cy='300' r='5'/%3E%3Ccircle cx='1080' cy='500' r='5'/%3E%3Ccircle cx='1080' cy='700' r='5'/%3E%3Ccircle cx='1270' cy='300' r='5'/%3E%3Ccircle cx='1270' cy='500' r='5'/%3E%3Ccircle cx='1270' cy='700' r='5'/%3E%3C/g%3E%3C/svg%3E"); --glow-a:.16; --surface:#131a24; --surface-2:#18212d;
   --ink:#eef2f7; --ink-2:#aab4c3; --muted:#7c8899;
   --line:#233042; --grid:#1b2533;
   --p1:#3987e5; --p2:#d95926; --p1-soft:#3987e526; --p2-soft:#d9592626;
@@ -41,9 +41,11 @@
   --focus:#5fa0ee; --heat:#f0a62a; --opp:#9aa5b5; --pitch:#15201a; --pitch-line:#2e3d33;
 }
 *{box-sizing:border-box}
-/* Backdrop: Jason's arena wallpaper, veiled in the theme's ground colour so the panels stay readable. */
+/* Arena backdrop: an original top-down pitch with boost pads, blue and orange end glows. */
 body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
-  background:linear-gradient(var(--veil),var(--veil)),var(--wall,none) center/cover no-repeat}
+  background:radial-gradient(60% 70% at 0% 50%,color-mix(in srgb,var(--p1) calc(var(--glow-a)*100%),transparent),transparent 70%),
+    radial-gradient(60% 70% at 100% 50%,color-mix(in srgb,var(--p2) calc(var(--glow-a)*100%),transparent),transparent 70%),
+    var(--arena) center/cover no-repeat}
 body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:14px;line-height:1.45;padding-inline:16px;padding-block:20px 48px}
 .wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
 h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance;letter-spacing:.01em}

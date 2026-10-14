@@ -132,11 +132,6 @@ const fSpd=(kmh,d=0)=>kmh==null?'–':IMP()?(kmh*0.621371).toFixed(d)+' mph':kmh
 const fDist=(km,d=1)=>km==null?'–':IMP()?(km*0.621371).toFixed(d)+' mi':km.toFixed(d)+' km';
 const fLen=m=>m==null?'–':IMP()?(m*1.09361).toFixed(0)+' yd':m.toFixed(0)+' m';
 
-// ---------- wallpaper ----------
-// Wallpapers Jason picked, in public/bg/. One is chosen at random on each visit.
-const WALLPAPERS=['stadium.webp'];
-document.documentElement.style.setProperty('--wall',`url(/bg/${WALLPAPERS[Math.floor(Math.random()*WALLPAPERS.length)]})`);
-
 // ---------- model ----------
 let PLAYERS=[], RAW={matches:[],mmr:[]}, SAMPLE=false;
 let ALL=[], DONE=[], sessions=[], NOW=Date.now();
@@ -774,7 +769,7 @@ async function load(){
 // Add a release at the top whenever something visible changes (dashboard or widget).
 const CHANGELOG=[
   {v:'1.6',date:'2026-10-14',items:[
-    'Arena wallpaper behind the dashboard',
+    'Arena background: a faint pitch with boost pads and blue and orange end glows',
     'Goal map pins are now little Rocket League balls',
     'Comebacks: wins after being 1, 2, 3 or 4+ goals down',
     'Blown leads: losses after being 1, 2, 3 or 4+ goals up',
