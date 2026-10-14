@@ -16,6 +16,8 @@ Double-click `RL Stats Widget.bat`. A small window appears in the bottom-right c
 - After a match it shows the result, and below that today's record, your win or loss streak and your MMR.
 - To move it, drag it by the top bar or the score. **Pin** keeps it on top of other windows. **_** hides it to the system tray, where it keeps recording. **x** quits.
 
+The first time it starts, the widget asks for your Rocket League name, then the names of anyone you queue with. It records them as your team. To change them later, right-click the tray icon (or click the theme button) and choose **Players...**.
+
 Windows may say "Windows protected your PC" the first time you open a .bat file. Click More info, then Run anyway.
 
 Run either the widget or `Start RL Recorder.bat` (the plain console version), not both, or every match gets saved twice.
@@ -33,5 +35,5 @@ You don't have to do anything. Every time you queue, the game writes your MMR to
 - `mmr.csv`: every MMR value, with the time and playlist.
 - `events\<match id>.jsonl`: the full event log for each match.
 
-Matches you leave early are saved as "Incomplete". Freeplay, training and replays are ignored.
+A match that ends early with one team ahead, by a surrender or someone leaving, counts as a win for whoever was ahead. A level match that ends early is saved as "Incomplete". Freeplay, training and replays are ignored.
 Boost, speed and movement are only sent for your own team, so opponents have blanks for those.
