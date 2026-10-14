@@ -158,6 +158,8 @@ function toMatch(r){
       demos:num(row.demos)||0,touches:num(row.touches)||0,bumps:num(row.car_touches),boost:num(row.avg_boost),ss:num(row.pct_supersonic),
       air:num(row.pct_air),wall:num(row.pct_wall),ground:num(row.pct_ground),hardest:toKmh(num(row.hardest_hit)),
       pickups:num(row.boost_pickups),car:carName(row.loadout),speed:carKmh(row.avg_speed),topSpeed:carKmh(row.max_speed),
+      // No odometer in the Stats API: distance is average speed x game length (km).
+      dist:carKmh(row.avg_speed)!=null&&num(r.duration_seconds)?carKmh(row.avg_speed)*num(r.duration_seconds)/3600:null,
       noBoost:row.zero_boost_fixed&&num(row.pct_zero_boost)!=null?num(row.pct_zero_boost)/100*(num(r.duration_seconds)||300):null,
       goalSpeeds:(r.goals||[]).filter(g=>g&&!(+g.goal_time<=0&&(r.goals||[]).some(x=>x&&+x.goal_time>0))&&g.scorer===p.name&&num(g.speed)!=null).map(g=>+g.speed)};
   });
@@ -239,6 +241,7 @@ function agg(list){
     const hh=L.map(l=>l.hardest).filter(v=>v!=null);t.hardest=hh.length?Math.max(...hh):null;
     const ht=list.filter(m=>m.lines[j]&&m.lines[j].goals>=3);t.hat=ht.length;t.hatWins=ht.filter(m=>m.win).length;
     t.kickoff=list.reduce((s,m)=>s+m.ourGoals.filter(g=>g.ko&&g.who===j).length,0);
+    const dd=L.map(l=>l.dist).filter(v=>v!=null);t.dist=dd.length?dd.reduce((a,b)=>a+b,0):null;t.distGames=dd.length;
     const ts=L.map(l=>l.topSpeed).filter(v=>v!=null);t.topSpeed=ts.length?Math.max(...ts):null;
     list.forEach(m=>{const a=m.lines[j],b=m.lines[1-j];if(a&&b){t.both++;if(a.score>b.score)t.mvp++;}});
     return t;
@@ -462,7 +465,7 @@ function renderPlay(list){
     PLAYERS.map((p,j)=>{const a=A[j];if(a.ground==null)return `<div class="split-row"><span class="tag p${j+1}" style="padding:1px 8px"><i></i>${esc(p.short)}</span><span class="note">No movement data yet</span></div>`;
       return `<div class="split-row"><span class="tag p${j+1}" style="padding:1px 8px"><i></i>${esc(p.short)}</span><div class="stack" title="Ground ${f(a.ground)}%, wall ${f(a.wall)}%, air ${f(a.air)}%">
       <div style="width:${a.ground}%;background:var(--ink-2)">${f(a.ground)}%</div><div style="width:${a.wall}%;background:var(--muted)">${f(a.wall)}%</div><div style="width:${a.air}%;background:${p.color}">${f(a.air)}%</div></div></div>`;}).join('');
-  const rows=[['Hat tricks',a=>a.games?String(a.hat):'–'],['Win % with a hat trick',a=>a.hat?`<span title="${a.hatWins} won of ${a.hat}">${Math.round(100*a.hatWins/a.hat)}%</span>`:'–'],['Kickoff goals',a=>a.games?String(a.kickoff):'–'],['Avg speed',a=>f(a.speed,0,' km/h')],['Top speed',a=>f(a.topSpeed,0,' km/h')],['Avg boost held',a=>f(a.boost)],['Time supersonic',a=>f(a.ss,1,'%')],['Avg goal speed',a=>f(a.gsAvg,0,' km/h')],['Hardest goal',a=>f(a.gsMax,0,' km/h')],['Hardest hit',a=>f(a.hardest,0,' km/h')],['Bumps / game',a=>f(a.bumps,1)],['Boost pads / game',a=>f(a.pickups,1)],['Main car',a=>a.car?esc(a.car):'–'],['I Got No Boost',a=>a.noBoost==null?'–':`<span title="${fmtDur(a.noBoost/a.noBoostGames)} a game">${fmtDur(a.noBoost)}</span>`]];
+  const rows=[['Hat tricks',a=>a.games?String(a.hat):'–'],['Win % with a hat trick',a=>a.hat?`<span title="${a.hatWins} won of ${a.hat}">${Math.round(100*a.hatWins/a.hat)}%</span>`:'–'],['Kickoff goals',a=>a.games?String(a.kickoff):'–'],['Avg speed',a=>f(a.speed,0,' km/h')],['Top speed',a=>f(a.topSpeed,0,' km/h')],['Distance driven',a=>f(a.dist,a.dist>=100?0:1,' km')],['Distance / game',a=>a.dist==null?'–':(a.dist/a.distGames).toFixed(2)+' km'],['Avg boost held',a=>f(a.boost)],['Time supersonic',a=>f(a.ss,1,'%')],['Avg goal speed',a=>f(a.gsAvg,0,' km/h')],['Hardest goal',a=>f(a.gsMax,0,' km/h')],['Hardest hit',a=>f(a.hardest,0,' km/h')],['Bumps / game',a=>f(a.bumps,1)],['Boost pads / game',a=>f(a.pickups,1)],['Main car',a=>a.car?esc(a.car):'–'],['I Got No Boost',a=>a.noBoost==null?'–':`<span title="${fmtDur(a.noBoost/a.noBoostGames)} a game">${fmtDur(a.noBoost)}</span>`]];
   const koFor=list.reduce((s,m)=>s+m.ourGoals.filter(g=>g.ko).length,0),koAgainst=list.reduce((s,m)=>s+m.theirGoals.filter(g=>g.ko).length,0);
   const pct=ms=>ms.length?`<span title="${ms.filter(m=>m.win).length} won of ${ms.length}">${Math.round(100*ms.filter(m=>m.win).length/ms.length)}%</span> <small class="muted">${ms.length} games</small>`:'–';
   const teamRows=[['Win % when we score first',pct(list.filter(m=>m.first==='us'))],['Win % when they score first',pct(list.filter(m=>m.first==='them'))],
@@ -731,6 +734,7 @@ async function load(){
 // Add a release at the top whenever something visible changes (dashboard or widget).
 const CHANGELOG=[
   {v:'1.6',date:'2026-10-14',items:[
+    'Distance driven, in total and per game',
     'Technical drawing of each of your main cars under Playstyle, with its hitbox size',
     'Version number and this update log',
     'Main car shows Fennec instead of the game\'s internal name "Grain"',
