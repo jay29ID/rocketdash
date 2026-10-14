@@ -25,6 +25,8 @@ It sets up everything recording needs:
 - Switches on the game's Stats API if it is off, asking for admin rights only if the folder needs them. Restart the game if it was open.
 - Starts the site on port 3000 and the RL Stats widget with the same players, then opens the dashboard, signed in.
 
+To start it with the game, set Rocket League's Steam launch options to `cmd /c start "rocketdash" "<repo>\dashboard.bat" -FromGame & %command%`. With `-FromGame` it keeps the saved answers without asking, and leaves `upload.json` alone if it points at another site. Close its window to stop the site. If the site is already running, it opens the dashboard and starts nothing new.
+
 Matches are kept in `data\store.json`. The sign-in cookie is `Secure`, so other devices need the site behind HTTPS. Every player's stats are saved for every match, so adding a regular teammate later also fills in their past games.
 
 ## Endpoints

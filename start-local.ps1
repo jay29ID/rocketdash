@@ -6,7 +6,10 @@
   The first start makes a random view key and upload key. All of it is kept in data\local.json.
   Then it points the recorder at this copy through Documents\RLStats\upload.json, switches on the
   game's Stats API, starts the site and the RL Stats widget, and opens the dashboard, signed in.
+
+  -FromGame (for Rocket League's Steam launch options) keeps the saved answers without asking.
 #>
+param([switch]$FromGame)
 $ErrorActionPreference = 'Stop'
 $port = 3000
 $utf8 = New-Object System.Text.UTF8Encoding($false)
@@ -19,6 +22,7 @@ function New-Key {
   -join ($b | ForEach-Object { $_.ToString('x2') })
 }
 function Read-Saved([string]$Prompt, [string]$Saved) {
+  if ($FromGame -and $Saved) { return $Saved }
   if ($Saved) { $Prompt += " [$Saved]" }
   $answer = (Read-Host $Prompt).Trim().Trim('"')
   if ($answer) { return $answer } else { return $Saved }
@@ -28,6 +32,14 @@ function Read-Saved([string]$Prompt, [string]$Saved) {
 if (Test-Path $cfgPath) { $cfg = Get-Content $cfgPath -Raw | ConvertFrom-Json }
 else { $cfg = [pscustomobject]@{ viewKey = New-Key; uploadKey = New-Key } }
 foreach ($k in 'players', 'gameDir') { if ($cfg.PSObject.Properties.Name -notcontains $k) { $cfg | Add-Member $k '' } }
+$link = "http://localhost:$port/s/$($cfg.viewKey)"
+
+try {
+  [void](Invoke-WebRequest "http://localhost:$port/healthz" -UseBasicParsing -TimeoutSec 1)
+  Write-Host "The dashboard is already running: $link" -ForegroundColor Green
+  Start-Process $link
+  return
+} catch { }
 
 do {
   $cfg.players = @((Read-Saved 'Rocket League names to show, comma separated (yours first)' $cfg.players) -split ',' |
@@ -48,7 +60,8 @@ $current = $null
 if (Test-Path $uploadPath) { $current = Get-Content $uploadPath -Raw | ConvertFrom-Json }
 if (-not $current -or $current.url -ne $upload.url -or $current.key -ne $upload.key) {
   $write = $true
-  if ($current -and $current.url -ne $upload.url) {
+  if ($current -and $current.url -ne $upload.url -and $FromGame) { $write = $false }
+  elseif ($current -and $current.url -ne $upload.url) {
     $write = (Read-Host "Matches are uploaded to $($current.url). Send them to this copy instead? (y/n)") -match '^y'
   }
   if ($write) {
@@ -95,7 +108,6 @@ if ([Threading.Mutex]::TryOpenExisting('Local\RLStatsWidget', [ref]$m)) {
   Start-Process powershell -WindowStyle Hidden -ArgumentList "-NoProfile -ExecutionPolicy Bypass -STA -WindowStyle Hidden -Command `"& '$widget' -TrackedPlayers $names`""
 }
 
-$link = "http://localhost:$port/s/$($cfg.viewKey)"
 Start-Process $link
 Write-Host "Dashboard: $link" -ForegroundColor Green
 Write-Host 'Press Ctrl+C to stop the site. The widget keeps recording, and uploads wait until the site is back.'
