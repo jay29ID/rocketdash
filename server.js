@@ -280,7 +280,7 @@ server.listen(PORT, () => {
     const t = []; for (const m of ms) for (const g of m.goals || []) if (g && +g.goal_time > 0) t.push(+g.goal_time);
     t.sort((a, b) => a - b);
     console.log('gt check: n=' + t.length + ' min10=' + JSON.stringify(t.slice(0, 15)) + ' max=' + t[t.length - 1] + ' keys=' + Object.keys((ms[ms.length - 1].goals || [])[0] || {}).join(','));
-    for (const m of ms.slice(-3)) console.log('gt check m: ' + JSON.stringify({ dur: m.duration_seconds, ot: m.overtime, g: (m.goals || []).filter(g => +g.goal_time > 0).map(g => [g.ours ? 'us' : 'them', g.goal_time]) }));
+    const h = {}; for (const v of t) if (v <= 30) h[Math.floor(v)] = (h[Math.floor(v)] || 0) + 1; console.log('gt check hist: ' + JSON.stringify(h));
   } catch (e) { console.log('gt check failed ' + e.message); }
   console.log(`rocketdash listening on ${PORT}, data in ${DATA_DIR}`);
   if (process.env.GIPHY_KEY) {
