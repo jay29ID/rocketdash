@@ -1226,10 +1226,11 @@ async function postAvatar(body){const r=await fetch('/api/avatar',{method:'POST'
   const pick=document.createElement('input');pick.type='file';pick.accept='image/png,image/jpeg,image/webp,image/gif';pick.hidden=true;document.body.appendChild(pick);
   let who=null;const close=()=>{menu.hidden=true;};
   document.addEventListener('click',e=>{const b=e.target.closest('#playerTags .avbtn');
-    if(b){e.stopPropagation();who=PLAYERS[+b.dataset.j];const r=b.getBoundingClientRect();
+    if(b){e.stopPropagation();if(!menu.hidden&&who===PLAYERS[+b.dataset.j]){close();return;}who=PLAYERS[+b.dataset.j];const r=b.getBoundingClientRect();
       menu.innerHTML=`<b>${esc(who.name)}</b><button type="button" data-a="up">${AV[who.name]?'Change picture':'Upload picture'}</button>`+(AV[who.name]?'<button type="button" data-a="rm">Remove picture</button>':'')+'<span class="avmsg"></span>';
       menu.style.left=Math.max(8,Math.min(innerWidth-220,r.left))+'px';menu.style.top=(r.bottom+6+scrollY)+'px';menu.hidden=false;return;}
     if(!menu.contains(e.target))close();});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape')close();});
   menu.addEventListener('click',async e=>{const a=e.target.closest('button[data-a]');if(!a||!who)return;
     if(a.dataset.a==='up')pick.click();
     if(a.dataset.a==='rm'){try{await postAvatar({player:who.name,remove:true});close();}catch(x){menu.querySelector('.avmsg').textContent=x.message;}}});
@@ -1820,6 +1821,7 @@ $('matchLog').addEventListener('click',e=>{const a=e.target.closest('a.mlink');i
 // Add a release at the top whenever something visible changes (dashboard or widget).
 const CHANGELOG=[
   {v:'1.7',date:'2026-10-14',items:[
+    'Fixed: the picture menu under a player name now closes when you click away, press Escape, click the name again or finish an upload',
     'Duo / Solo / All switch at the top: Duo (the default) counts only games with both of us, Solo shows games with just one of us, All shows everything',
     'All-time records: most days played in a row, longest break between game days, and the current run or days since we last played',
     'Night theme: mellow greyscale with red accents. The look switch is now a theme icon that opens a round picker (Classic, Neon, Night, and one slot saved for later); the heatmap and 3D map can also be set to Night on their own',
