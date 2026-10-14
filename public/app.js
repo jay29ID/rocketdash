@@ -613,7 +613,7 @@ function render3D(cv,V){
     const s0=P(pts[0]),sp=P([pts[0][0],pts[0][1],0]);c.strokeStyle='#5fe1ff';c.lineWidth=1.2;
     c.beginPath();c.arc(sp[0],sp[1],9,0,7);c.moveTo(sp[0]-14,sp[1]);c.lineTo(sp[0]+14,sp[1]);c.moveTo(sp[0],sp[1]-8);c.lineTo(sp[0],sp[1]+8);c.stroke();
     c.save();c.shadowColor=col;c.shadowBlur=14;c.lineCap='round';
-    const kk=pts.kink,kc=k=>k==='p0'?pcol[0]:k==='p1'?pcol[1]:k==='opp'?REDIR:(V.hud?'#9fb4c8':muted);
+    const kk=pts.kink,kc=k=>k[0]==='p'?pcol[+k.slice(1)]:k==='opp'?REDIR:(V.hud?'#9fb4c8':muted);
     const segCol=i=>{let m=pts.marks[0];pts.marks.forEach(x=>{if(x.i<i)m=x;});return m.i===kk?REDIR:kc(m.kind);};
     for(let i=1;i<=n;i++){const a=P(pts[i-1]),b=P(pts[i]);c.globalAlpha=.25+.75*(i/n);c.strokeStyle=segCol(i);c.shadowColor=c.strokeStyle;c.lineWidth=1+3*(i/n);c.beginPath();c.moveTo(a[0],a[1]);c.lineTo(b[0],b[1]);c.stroke();}
     c.restore();c.globalAlpha=1;
