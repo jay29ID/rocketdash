@@ -463,9 +463,13 @@ function renderMaps(list){
   // Dots stay neutral here so they don't fight the blue-to-red heat; the net view carries who scored.
   shots.forEach(g=>{f+=rlBall(sx(clamp(g.x,-4096,4096)),sy(clamp(g.y,-5120,5120)),4.5,'#0b1017',1,'rlbF',tip(g));});
   $('fieldMap').innerHTML=`<svg viewBox="0 -18 ${W} ${H+36}" role="img" aria-label="Top-down field with ${shots.length} shot locations">${rlBallDefs('rlbF')}${f}</svg>`;
-  const NW=440,m=24,NH=Math.round((NW-2*m)*642/1786)+m+22;
-  const nx=x=>m+(clamp(x,-893,893)+893)/1786*(NW-2*m),nz=z=>m+(642-clamp(z,0,642))/642*(NH-m-22);
-  let n=`<rect x="${nx(-893)}" y="${nz(642)}" width="${nx(893)-nx(-893)}" height="${nz(0)-nz(642)}" fill="var(--surface-2)"/>`;
+  // Front elevation of the goal, drawn like a technical drawing. Mouth 1786 x 642 uu, 880 deep (1 uu = 1 cm).
+  const NW=460,ml=30,mr=58,mt=46,mb=66,iw=NW-ml-mr,ih=Math.round(iw*642/1786),NH=mt+ih+mb;
+  const nx=x=>ml+(clamp(x,-893,893)+893)/1786*iw,nz=z=>mt+(642-clamp(z,0,642))/642*ih;
+  const fM=uu=>IMP()?(uu/100*3.28084).toFixed(1)+' ft':(uu/100).toFixed(2)+' m';
+  const dim='stroke="var(--muted)" stroke-width="1" fill="none"',fr=su=>su*iw/1786;   // fr: uu to px
+  let n=`<defs><pattern id="netMesh" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0V8M0 0H8" stroke="var(--line)" stroke-width=".7"/></pattern></defs>`;
+  n+=`<rect x="${nx(-893)}" y="${nz(642)}" width="${iw}" height="${ih}" fill="var(--surface-2)"/><rect x="${nx(-893)}" y="${nz(642)}" width="${iw}" height="${ih}" fill="url(#netMesh)"/>`;
   for(let i=1;i<3;i++)n+=`<line x1="${nx(-893+i*1786/3)}" x2="${nx(-893+i*1786/3)}" y1="${nz(642)}" y2="${nz(0)}" stroke="var(--line)" stroke-dasharray="3 4"/><line x1="${nx(-893)}" x2="${nx(893)}" y1="${nz(i*214)}" y2="${nz(i*214)}" stroke="var(--line)" stroke-dasharray="3 4"/>`;
   const zones={};hits.forEach(g=>{const zc=clamp(Math.floor((g.ix+893)/(1786/3)),0,2),zr=clamp(Math.floor(g.iz/214),0,2);zones[zc+','+zr]=(zones[zc+','+zr]||0)+1;});
   const zmax=Math.max(1,...Object.values(zones)),labels=[];
@@ -473,9 +477,20 @@ function renderMaps(list){
     const x0=nx(-893+c*1786/3),y0=nz((r+1)*214),zw=nx(-893+1786/3)-nx(-893),zh=nz(0)-nz(214);
     n+=`<rect x="${x0+1}" y="${y0+1}" width="${zw-2}" height="${zh-2}" fill="${heatColor(v/zmax)}" opacity="${hits.length?.6:0}"><title>${v} goals (${pct}%)</title></rect>`;
     if(hits.length)labels.push(`<text class="zone" x="${x0+zw/2}" y="${y0+zh/2+5}" text-anchor="middle" paint-order="stroke" stroke="rgba(11,16,23,.55)" stroke-width="3" fill="#fff" style="fill:#fff">${pct}%</text>`);}
-  n+=`<path d="M${nx(-893)},${nz(0)} L${nx(-893)},${nz(642)} L${nx(893)},${nz(642)} L${nx(893)},${nz(0)}" stroke="var(--ink-2)" stroke-width="4" fill="none" stroke-linejoin="round"/>`;
-  n+=`<line x1="4" x2="${NW-4}" y1="${nz(0)}" y2="${nz(0)}" stroke="var(--line)" stroke-width="2"/>`;
-  n+=`<text x="${nx(-893)}" y="${NH-4}">Left post</text><text x="${nx(893)}" y="${NH-4}" text-anchor="end">Right post</text><text x="${NW/2}" y="${nz(642)-8}" text-anchor="middle">Crossbar</text>`;
+  // Frame: posts and crossbar as hollow members outside the mouth, centreline, ground.
+  const t=fr(34),L=nx(-893),R=nx(893),T=nz(642),G=nz(0);
+  n+=`<path d="M${L-t},${G} V${T-t} H${R+t} V${G} H${R} V${T} H${L} V${G} Z" fill="var(--surface)" stroke="var(--ink-2)" stroke-width="1.5" stroke-linejoin="miter"/>`;
+  n+=`<line x1="${NW/2}" x2="${NW/2}" y1="${T-t-12}" y2="${G+8}" stroke="var(--muted)" stroke-width=".8" stroke-dasharray="10 3 2 3"/><text x="${NW/2+4}" y="${T-t-14}" class="dimt">℄</text>`;
+  n+=`<line x1="6" x2="${NW-6}" y1="${G}" y2="${G}" stroke="var(--ink-2)" stroke-width="1.5"/>`;
+  for(let x=10;x<NW-6;x+=8)n+=`<line x1="${x}" x2="${x-5}" y1="${G+1}" y2="${G+6}" stroke="var(--line)" stroke-width=".8"/>`;
+  // Width dimension under the goal, height dimension to the right, depth as a note.
+  const wy=G+34,hx=R+t+26,tick=(x,y)=>`M${x-4},${y+4} L${x+4},${y-4}`;
+  n+=`<path d="M${L},${G+10} V${wy+5} M${R},${G+10} V${wy+5} M${L},${wy} H${R} ${tick(L,wy)} ${tick(R,wy)}" ${dim}/>`;
+  n+=`<text x="${NW/2}" y="${wy-5}" text-anchor="middle" class="dimt">${fM(1786)}  ·  1786 uu</text>`;
+  n+=`<path d="M${R+t+6},${T} H${hx+5} M${R+t+6},${G} H${hx+5} M${hx},${T} V${G} ${tick(hx,T)} ${tick(hx,G)}" ${dim}/>`;
+  n+=`<text transform="translate(${hx+13} ${(T+G)/2}) rotate(-90)" text-anchor="middle" class="dimt">${fM(642)} · 642 uu</text>`;
+  n+=`<text x="${L-t}" y="${T-t-14}" class="dimt">CROSSBAR</text><text x="${R+t}" y="${T-t-14}" text-anchor="end" class="dimt">DEPTH ${fM(880)} · 880 uu</text>`;
+  n+=`<text x="${L}" y="${NH-8}" class="dimt">L. POST</text><text x="${NW/2}" y="${NH-8}" text-anchor="middle" class="dimt">FRONT ELEVATION · GOAL MOUTH</text><text x="${R}" y="${NH-8}" text-anchor="end" class="dimt">R. POST</text>`;
   hits.forEach(g=>{n+=rlBall(nx(g.ix),nz(g.iz),6,col(g),2.2,'rlbN',tip(g));});
   n+=labels.join('');
   $('netMap').innerHTML=`<svg viewBox="0 0 ${NW} ${NH}" role="img" aria-label="Goal mouth with ${hits.length} impact points">${rlBallDefs('rlbN')}${n}</svg>`;
@@ -784,6 +799,7 @@ const CHANGELOG=[
     'Arena background: a drawn pitch with boost pads over a random wallpaper on each visit',
     'Goal map pins are now little Rocket League balls',
     'Loading screen while your stats load, instead of briefly showing sample data',
+    'Goal mouth on the goal map drawn as a technical diagram with real dimensions',
     'Comebacks: wins after being 1, 2, 3 or 4+ goals down',
     'Blown leads: losses after being 1, 2, 3 or 4+ goals up',
     'km/h or mph toggle at the top switches every unit: speeds to mph, distances to miles, lengths to yards',
