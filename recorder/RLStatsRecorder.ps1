@@ -26,6 +26,14 @@ param(
 $ErrorActionPreference = 'Stop'
 $Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 
+# Names saved from the widget's Players menu replace the defaults above.
+if (-not $PSBoundParameters.ContainsKey('TrackedPlayers')) {
+  try {
+    $saved = @((Get-Content (Join-Path $OutDir 'widget.json') -Raw | ConvertFrom-Json).players | Where-Object { $_ })
+    if ($saved.Count) { $TrackedPlayers = [string[]]$saved }
+  } catch { }
+}
+
 # Known playlist ids (Game.PlaylistId). Unknown ids are saved as the number.
 $Playlists = @{
   1 = 'Casual Duel'; 2 = 'Casual Doubles'; 3 = 'Casual Standard'; 4 = 'Casual Chaos'
@@ -130,7 +138,7 @@ function Get-Match([string]$Guid) {
       Feed = @{}         # per-player counts of statfeed events (EpicSave, AerialGoal, ...)
       FeedAgainst = @{}  # per-player counts of statfeed events where they were the second target (e.g. got demoed)
       Hits = @{}         # per-player ball hits and hardest hit
-      Crossbars = @{}; BallTeam = @{}; LastSecond = $null
+      Crossbars = @{}; BallTeam = @{}; LastSecond = $null; ClockStart = $null   # clock at the first update, for time played
       LastHitBy = @{}; LastHit = $null   # where the ball was on each player's latest touch (shot origin for goals)
       Recent = (New-Object System.Collections.ArrayList)   # the last 3 touches, oldest first, saved with each goal
       Saves = New-Object System.Collections.ArrayList     # each save: where it was saved and where the shot came from
@@ -139,6 +147,7 @@ function Get-Match([string]$Guid) {
       Pickups = @{}      # per-player boost pad pickups (BoostPickup events)
       Left = New-Object System.Collections.ArrayList   # players who quit before the end (PlayerLeft)
       Replay = $null     # set when the game sends ReplayCreated
+      Kickoffs = 0; SaveAt = @{}   # kickoffs so far, and when each team's latest save happened
     }
   }
   return $script:OpenMatches[$Guid]
@@ -151,6 +160,10 @@ function Add-Count([hashtable]$Table, [string]$Key, [string]$Sub) {
 }
 
 function Get-Pct($Part, $Whole) { if ($Whole -gt 0) { [math]::Round(100.0 * $Part / $Whole, 1) } else { $null } }
+
+# Seconds since an earlier event, by when the events arrived. Play never stops between a save and
+# the next goal (replays come after goals), so this is time in play.
+function Get-Since($From) { if ($null -ne $From) { [math]::Round(((Get-Date) - $From).TotalSeconds, 1) } }
 
 # Adds one UpdateState snapshot to the running totals. Boost and movement are only
 # sent for your own team, so opponents end up with empty values for those.
@@ -198,6 +211,7 @@ function Add-Sample($M, $Data) {
   }
   # Slim once-a-second timeline for charts (score, boost and speed over time).
   $sec = Get-Prop $game 'TimeSeconds'
+  if ($null -eq $M.ClockStart -and $null -ne $sec -and -not $ot) { $M.ClockStart = [int]$sec }
   if ($null -ne $sec -and $sec -ne $M.LastSecond) {
     $M.LastSecond = $sec
     $slim = foreach ($p in @(Get-Prop $Data 'Players' @())) {
@@ -233,6 +247,11 @@ function Save-Match($M, [string]$Result, $WinnerTeamNum) {
   $M.Saved = $true
   [void]$script:DoneMatches.Add($M.Guid)
   $game = Get-Prop $M.State 'Game'
+  # Time played by the match clock, which counts down in regulation and up in overtime.
+  $clock = Get-Prop $game 'TimeSeconds'; $played = $null
+  if ($null -ne $M.ClockStart -and $null -ne $clock) {
+    if ([bool](Get-Prop $game 'bOvertime' $false)) { $played = $M.ClockStart + [int]$clock } else { $played = $M.ClockStart - [int]$clock }
+  }
   $players = @(Get-Prop $M.State 'Players' @())
   $teams = @(Get-Prop $game 'Teams' @())
   $playlistId = Get-Prop $game 'PlaylistId'
@@ -302,7 +321,7 @@ function Save-Match($M, [string]$Result, $WinnerTeamNum) {
     match_guid = $M.Guid
     started_at = $M.StartedAt.ToString('o')
     ended_at = (Get-Date).ToUniversalTime().ToString('o')
-    duration_seconds = Get-Prop $game 'Elapsed'
+    duration_seconds = $played
     playlist_id = $playlistId; playlist = $playlist
     arena = Get-Prop $game 'Arena'
     overtime = [bool](Get-Prop $game 'bOvertime' $false)
@@ -316,6 +335,7 @@ function Save-Match($M, [string]$Result, $WinnerTeamNum) {
     players = @($rows)
     players_left = @($M.Left)
     replay_created = $M.Replay
+    kickoffs = $M.Kickoffs
   }
 
   if ($null -ne $myTeam) { foreach ($g in $M.Goals) { if ($null -ne $g.team) { $g.ours = ([int]$g.team -eq [int]$myTeam) } } }
@@ -445,6 +465,7 @@ function Invoke-Message($Msg) {
         assist_from = $(if ($assistHit) { $assistHit.location } else { $null })
         touches = @($m.Recent | ForEach-Object { [ordered]@{ player = $_.player; team = $_.team; location = $_.location; speed = $_.speed } })
         since_kickoff = $since
+        since_save = Get-Since $m.SaveAt[[int](Get-Prop (Get-Prop $data 'Scorer') 'TeamNum' -1)]
         ours = $null
       })
       $m.Recent.Clear()
@@ -476,6 +497,7 @@ function Invoke-Message($Msg) {
       if ($kind -match 'Save') {
         # The save's touch can arrive just before or just after this event.
         $sv = Get-Prop $data 'MainTarget'; $svName = [string](Get-Prop $sv 'Name')
+        if ($null -ne (Get-Prop $sv 'TeamNum')) { $m.SaveAt[[int](Get-Prop $sv 'TeamNum')] = Get-Date }
         if ($svName) {
           $m.PendingSave = @{ saver = $svName; team = Get-Prop $sv 'TeamNum'; kind = $kind; clock = $m.Clock }
           $hit = $m.LastHitBy[$svName]
@@ -483,6 +505,7 @@ function Invoke-Message($Msg) {
         }
       }
     }
+    'RoundStarted'  { $m.Kickoffs++; $m.SaveAt = @{} }
     'BoostPickup'   {
       $name = [string](Get-Prop (Get-Prop $data 'Player') 'Name')
       if (-not $name) { $name = [string](Get-Prop $data 'PlayerName') }

@@ -11,7 +11,23 @@ No dependencies: `npm start` runs `server.js` on Node 18+.
 | `VIEW_KEY` | Secret for the share link. Open `https://<site>/s/<VIEW_KEY>` once and the browser stays signed in. |
 | `UPLOAD_KEY` | Secret the recorder sends in the `X-Upload-Key` header. |
 | `DATA_DIR` | Folder for `store.json`. On Railway this is the volume, `/data`. |
-| `PLAYERS` | Tracked players, comma separated. Default `jay29ID,Kobra Kelvin`. |
+| `PLAYERS` | Players the dashboard shows, comma separated, up to four. Default `jay29ID,Kobra Kelvin`. |
+
+## Running your own copy
+
+To run the site on your own Windows PC, run `npm start` with no `VIEW_KEY` or `UPLOAD_KEY` set, or double-click `dashboard.bat`. PowerShell's default execution policy blocks `npm` itself, so in PowerShell use `npm.cmd start` or `.\dashboard.bat`.
+
+It sets up everything recording needs:
+
+- Asks for the players and the Rocket League folder (the one with `TAGame` in it). Enter keeps the saved answer.
+- Makes a random view key and upload key the first time. Keys, players and the folder are kept in `data\local.json`.
+- Points the recorder at this copy through `Documents\RLStats\upload.json`, asking first if matches currently go to another site.
+- Switches on the game's Stats API if it is off, asking for admin rights only if the folder needs them. Restart the game if it was open.
+- Starts the site on port 3000 and the RL Stats widget with the same players, then opens the dashboard, signed in.
+
+To start it with the game, set Rocket League's Steam launch options to `cmd /c start "rocketdash" "<repo>\dashboard.bat" -FromGame & %command%`. With `-FromGame` it keeps the saved answers without asking, and leaves `upload.json` alone if it points at another site. Close its window to stop the site. If the site is already running, it opens the dashboard and starts nothing new.
+
+Matches are kept in `data\store.json`. The sign-in cookie is `Secure`, so other devices need the site behind HTTPS. Every player's stats are saved for every match, so adding a regular teammate later also fills in their past games.
 
 ## Endpoints
 
