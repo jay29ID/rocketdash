@@ -10,7 +10,7 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
 <style>
 :root{
-  --bg:#eef1f5; --surface:#ffffff; --surface-2:#f6f8fb;
+  --bg:#eef1f5; --veil:rgba(238,241,245,.87); --arena:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1600 1000' preserveAspectRatio='xMidYMid slice'%3E%3Cg fill='none' stroke='rgba%2842%2C90%2C160%2C.10%29' stroke-width='3'%3E%3Cpath d='M100 240 L220 120 H1380 L1500 240 V380 H1560 V620 H1500 V760 L1380 880 H220 L100 760 V620 H40 V380 H100 Z'/%3E%3Cpath d='M800 120 V880'/%3E%3Ccircle cx='800' cy='500' r='120'/%3E%3Ccircle cx='800' cy='500' r='8'/%3E%3Cpath d='M100 330 H260 V670 H100 M1500 330 H1340 V670 H1500'/%3E%3C/g%3E%3Cg fill='rgba%28235%2C150%2C40%2C.16%29'%3E%3Ccircle cx='190' cy='190' r='16'/%3E%3Ccircle cx='190' cy='810' r='16'/%3E%3Ccircle cx='1410' cy='190' r='16'/%3E%3Ccircle cx='1410' cy='810' r='16'/%3E%3Ccircle cx='800' cy='150' r='16'/%3E%3Ccircle cx='800' cy='850' r='16'/%3E%3Ccircle cx='330' cy='300' r='5'/%3E%3Ccircle cx='330' cy='500' r='5'/%3E%3Ccircle cx='330' cy='700' r='5'/%3E%3Ccircle cx='520' cy='300' r='5'/%3E%3Ccircle cx='520' cy='500' r='5'/%3E%3Ccircle cx='520' cy='700' r='5'/%3E%3Ccircle cx='680' cy='300' r='5'/%3E%3Ccircle cx='680' cy='500' r='5'/%3E%3Ccircle cx='680' cy='700' r='5'/%3E%3Ccircle cx='920' cy='300' r='5'/%3E%3Ccircle cx='920' cy='500' r='5'/%3E%3Ccircle cx='920' cy='700' r='5'/%3E%3Ccircle cx='1080' cy='300' r='5'/%3E%3Ccircle cx='1080' cy='500' r='5'/%3E%3Ccircle cx='1080' cy='700' r='5'/%3E%3Ccircle cx='1270' cy='300' r='5'/%3E%3Ccircle cx='1270' cy='500' r='5'/%3E%3Ccircle cx='1270' cy='700' r='5'/%3E%3C/g%3E%3C/svg%3E"); --glow-a:.10; --surface:#ffffff; --surface-2:#f6f8fb;
   --ink:#0e1420; --ink-2:#465164; --muted:#768194;
   --line:#dbe0e8; --grid:#e9edf2;
   --p1:#2a78d6; --p2:#eb6834; --p3:#1baf7a; --p4:#eda100;
@@ -24,7 +24,7 @@
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
     color-scheme:dark;
-    --bg:#0b1017; --surface:#131a24; --surface-2:#18212d;
+    --bg:#0b1017; --veil:rgba(11,16,23,.76); --arena:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1600 1000' preserveAspectRatio='xMidYMid slice'%3E%3Cg fill='none' stroke='rgba%28150%2C180%2C220%2C.07%29' stroke-width='3'%3E%3Cpath d='M100 240 L220 120 H1380 L1500 240 V380 H1560 V620 H1500 V760 L1380 880 H220 L100 760 V620 H40 V380 H100 Z'/%3E%3Cpath d='M800 120 V880'/%3E%3Ccircle cx='800' cy='500' r='120'/%3E%3Ccircle cx='800' cy='500' r='8'/%3E%3Cpath d='M100 330 H260 V670 H100 M1500 330 H1340 V670 H1500'/%3E%3C/g%3E%3Cg fill='rgba%28255%2C170%2C60%2C.12%29'%3E%3Ccircle cx='190' cy='190' r='16'/%3E%3Ccircle cx='190' cy='810' r='16'/%3E%3Ccircle cx='1410' cy='190' r='16'/%3E%3Ccircle cx='1410' cy='810' r='16'/%3E%3Ccircle cx='800' cy='150' r='16'/%3E%3Ccircle cx='800' cy='850' r='16'/%3E%3Ccircle cx='330' cy='300' r='5'/%3E%3Ccircle cx='330' cy='500' r='5'/%3E%3Ccircle cx='330' cy='700' r='5'/%3E%3Ccircle cx='520' cy='300' r='5'/%3E%3Ccircle cx='520' cy='500' r='5'/%3E%3Ccircle cx='520' cy='700' r='5'/%3E%3Ccircle cx='680' cy='300' r='5'/%3E%3Ccircle cx='680' cy='500' r='5'/%3E%3Ccircle cx='680' cy='700' r='5'/%3E%3Ccircle cx='920' cy='300' r='5'/%3E%3Ccircle cx='920' cy='500' r='5'/%3E%3Ccircle cx='920' cy='700' r='5'/%3E%3Ccircle cx='1080' cy='300' r='5'/%3E%3Ccircle cx='1080' cy='500' r='5'/%3E%3Ccircle cx='1080' cy='700' r='5'/%3E%3Ccircle cx='1270' cy='300' r='5'/%3E%3Ccircle cx='1270' cy='500' r='5'/%3E%3Ccircle cx='1270' cy='700' r='5'/%3E%3C/g%3E%3C/svg%3E"); --glow-a:.16; --surface:#131a24; --surface-2:#18212d;
     --ink:#eef2f7; --ink-2:#aab4c3; --muted:#7c8899;
     --line:#233042; --grid:#1b2533;
     --p1:#3987e5; --p2:#d95926; --p3:#199e70; --p4:#c98500;
@@ -35,7 +35,7 @@
 }
 :root[data-theme="dark"]{
   color-scheme:dark;
-  --bg:#0b1017; --surface:#131a24; --surface-2:#18212d;
+  --bg:#0b1017; --veil:rgba(11,16,23,.76); --arena:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1600 1000' preserveAspectRatio='xMidYMid slice'%3E%3Cg fill='none' stroke='rgba%28150%2C180%2C220%2C.07%29' stroke-width='3'%3E%3Cpath d='M100 240 L220 120 H1380 L1500 240 V380 H1560 V620 H1500 V760 L1380 880 H220 L100 760 V620 H40 V380 H100 Z'/%3E%3Cpath d='M800 120 V880'/%3E%3Ccircle cx='800' cy='500' r='120'/%3E%3Ccircle cx='800' cy='500' r='8'/%3E%3Cpath d='M100 330 H260 V670 H100 M1500 330 H1340 V670 H1500'/%3E%3C/g%3E%3Cg fill='rgba%28255%2C170%2C60%2C.12%29'%3E%3Ccircle cx='190' cy='190' r='16'/%3E%3Ccircle cx='190' cy='810' r='16'/%3E%3Ccircle cx='1410' cy='190' r='16'/%3E%3Ccircle cx='1410' cy='810' r='16'/%3E%3Ccircle cx='800' cy='150' r='16'/%3E%3Ccircle cx='800' cy='850' r='16'/%3E%3Ccircle cx='330' cy='300' r='5'/%3E%3Ccircle cx='330' cy='500' r='5'/%3E%3Ccircle cx='330' cy='700' r='5'/%3E%3Ccircle cx='520' cy='300' r='5'/%3E%3Ccircle cx='520' cy='500' r='5'/%3E%3Ccircle cx='520' cy='700' r='5'/%3E%3Ccircle cx='680' cy='300' r='5'/%3E%3Ccircle cx='680' cy='500' r='5'/%3E%3Ccircle cx='680' cy='700' r='5'/%3E%3Ccircle cx='920' cy='300' r='5'/%3E%3Ccircle cx='920' cy='500' r='5'/%3E%3Ccircle cx='920' cy='700' r='5'/%3E%3Ccircle cx='1080' cy='300' r='5'/%3E%3Ccircle cx='1080' cy='500' r='5'/%3E%3Ccircle cx='1080' cy='700' r='5'/%3E%3Ccircle cx='1270' cy='300' r='5'/%3E%3Ccircle cx='1270' cy='500' r='5'/%3E%3Ccircle cx='1270' cy='700' r='5'/%3E%3C/g%3E%3C/svg%3E"); --glow-a:.16; --surface:#131a24; --surface-2:#18212d;
   --ink:#eef2f7; --ink-2:#aab4c3; --muted:#7c8899;
   --line:#233042; --grid:#1b2533;
   --p1:#3987e5; --p2:#d95926; --p3:#199e70; --p4:#c98500;
@@ -44,6 +44,18 @@
   --focus:#5fa0ee; --heat:#f0a62a; --opp:#9aa5b5; --pitch:#15201a; --pitch-line:#2e3d33;
 }
 *{box-sizing:border-box}
+/* Backdrop: the drawn pitch and end glows on top of a random wallpaper (veiled so panels stay readable). */
+body::before{content:"";position:fixed;inset:0;z-index:-1;pointer-events:none;
+  background:radial-gradient(60% 70% at 0% 50%,color-mix(in srgb,var(--p1) calc(var(--glow-a)*100%),transparent),transparent 70%),
+    radial-gradient(60% 70% at 100% 50%,color-mix(in srgb,var(--p2) calc(var(--glow-a)*100%),transparent),transparent 70%),
+    var(--arena) center/cover no-repeat,
+    linear-gradient(var(--veil),var(--veil)),var(--wall,none) center/cover no-repeat}
+.loader{display:none}
+body.is-loading .wrap,body.is-loading .ver{visibility:hidden}
+body.is-loading .loader{display:flex;position:fixed;inset:0;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:var(--ink-2);font-size:15px}
+.loader .spin{width:44px;height:44px;border-radius:50%;border:4px solid var(--line);border-top-color:var(--p1);border-right-color:var(--p2);animation:spin .9s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.loader .spin{animation-duration:3s}}
 body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:14px;line-height:1.45;padding-inline:16px;padding-block:20px 48px}
 .wrap{max-width:1180px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
 h1,h2,h3{font-family:var(--display);margin:0;text-wrap:balance;letter-spacing:.01em}
@@ -155,10 +167,23 @@ header.top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:spac
 .stack{display:flex;height:22px;gap:2px}
 .stack div{height:100%;display:flex;align-items:center;justify-content:center;font-size:11px;font-family:var(--mono);color:#fff;min-width:0;overflow:hidden}
 .stack div:first-child{border-radius:3px 0 0 3px}.stack div:last-child{border-radius:0 3px 3px 0}
+.garage{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;margin:14px 0 4px}
+.garage:empty{display:none}
+.car-card{margin:0;border:1px solid var(--line);border-radius:8px;padding:10px 12px 8px;
+  background-color:var(--surface);background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:12px 12px}
+.car-card figcaption{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px}
+.car-card figcaption .muted{margin-left:auto;font-size:11px;text-transform:uppercase;letter-spacing:.07em}
+.car-card .bp{display:block;width:100%;height:auto;margin-top:4px}
+.car-dims{font-family:var(--mono);font-size:11px;color:var(--muted);text-align:right}
 .play-kv{display:grid;grid-template-columns:minmax(0,1fr) repeat(var(--n,2),auto);gap:0 16px}
 .play-kv > div{padding:7px 0;border-bottom:1px solid var(--grid)}
 .play-kv .h{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted)}
 .play-kv .v{text-align:right;font-family:var(--mono)}
+.rec-kv .v small{display:block;font-family:var(--body);font-size:11px;color:var(--muted)}
+.rec-kv .v.best{font-weight:600}
+.rec-kv .v.best small{font-weight:400}
+.team-kv{grid-template-columns:minmax(0,1fr) auto;margin-top:14px}
+.team-kv small{font-family:var(--body);font-size:11px}
 .new{font-size:11px;color:var(--ink-2);border:1px solid var(--line);border-radius:4px;padding:1px 6px;font-weight:500}
 
 /* MMR form */
@@ -174,17 +199,59 @@ form.log button{background:var(--ink);color:var(--surface);border:0;border-radiu
 @media (max-width:760px){.maps{grid-template-columns:minmax(0,1fr)}}
 .map-col{display:flex;flex-direction:column;gap:8px;min-width:0}
 .map-col h3{font-size:13px;font-weight:600;color:var(--ink-2);letter-spacing:.04em}
+.replay{position:fixed;z-index:30;width:340px;height:210px;pointer-events:none;border:1px solid rgba(95,225,255,.55);border-radius:6px;overflow:hidden;
+  box-shadow:0 0 0 1px rgba(5,11,20,.6),0 0 24px rgba(95,225,255,.25),0 12px 30px rgba(0,0,0,.45);background:#050b14}
+.replay canvas{display:block;width:100%;height:100%}
+.map3d-stage{position:relative}
+.knob{position:absolute;top:10px;right:10px;width:104px;height:104px;z-index:2;touch-action:none;cursor:grab;user-select:none}
+.knob svg{width:100%;height:100%;display:block}
+.knob .k-bg{fill:var(--surface);fill-opacity:.85;stroke:var(--line)}
+.knob .k-ring{fill:none;stroke:var(--p1);stroke-opacity:.5;stroke-width:1.5}
+.knob .k-tick{stroke:var(--muted);stroke-width:1}
+.knob .k-n{font:700 8px var(--mono);fill:var(--p2);text-anchor:middle}
+.knob .k-hub{fill:var(--surface-2);stroke:var(--line)}
+.knob .k-tilt{stroke:var(--p1);stroke-width:2.5;stroke-linecap:round}
+.knob .kb{position:absolute;width:20px;height:20px;padding:0;border:0;border-radius:50%;background:transparent;color:var(--ink-2);font-size:9px;cursor:pointer;line-height:20px}
+.knob .kb:hover{background:var(--surface-2);color:var(--ink)}
+.knob .kb-n{top:21px;left:42px}.knob .kb-s{bottom:21px;left:42px}.knob .kb-w{left:21px;top:42px}.knob .kb-e{right:21px;top:42px}
+.knob .kz{position:absolute;right:-2px;top:108px;display:flex;flex-direction:column;gap:4px}
+.knob .kz button{width:26px;height:26px;border:1px solid var(--line);border-radius:6px;background:var(--surface);color:var(--ink-2);font-size:15px;cursor:pointer;line-height:1}
+#map3d:focus-visible{outline:2px solid var(--p1);outline-offset:2px}
+.map3d-wrap{margin-top:18px;border-top:1px solid var(--grid);padding-top:14px}
+.map3d-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.map3d-head h3{margin:0;font-size:13px;font-weight:600;color:var(--ink-2);letter-spacing:.04em}
+#map3d{display:block;width:100%;height:440px;cursor:grab;touch-action:none;border-radius:8px;background:var(--surface-2)}
+#map3d:active{cursor:grabbing}
+.chipbtn{border:1px solid var(--line);background:var(--surface);color:var(--ink-2);border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer}
+@media (max-width:600px){#map3d{height:320px}}
 .map-col svg{display:block;width:100%;height:auto}
 .map-col svg text{font-family:var(--body);font-size:11px;fill:var(--muted)}
+.map-col svg .dimt{font-family:var(--mono);font-size:9.5px;letter-spacing:.04em;fill:var(--muted)}
 .map-col svg .zone{font-family:var(--mono);font-size:15px;font-weight:500;fill:var(--ink)}
 .map-col svg .dot{cursor:default}
-.map-col svg .dot:hover{stroke-width:3}
+.map-col svg .dot{transition:opacity .12s}
+#fieldMap.linking .dot,#netMap.linking .dot{opacity:.2}
+#fieldMap.linking .dot.lit,#netMap.linking .dot.lit{opacity:1;filter:drop-shadow(0 0 2px #ffd23f) drop-shadow(0 0 5px #ffd23f) drop-shadow(0 0 9px #ffb300)}
+.log-table a.mlink{color:var(--ink);text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:3px}
+.log-table a.mlink:hover{text-decoration-color:var(--p1)}
+.match h3{font-size:12px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);margin:16px 0 6px}
+.match .mtable{width:100%;border-collapse:collapse}
+.match .mtable td,.match .mtable th{padding:5px 0;border-bottom:1px solid var(--grid);text-align:left;font-weight:400}
+.match .mtable .v{text-align:right;font-family:var(--mono)}
+.match .story{margin:0;padding-left:0;list-style:none;display:grid;gap:4px}
+.match .story li{padding:4px 8px;border-radius:6px;background:var(--surface-2);border-left:3px solid var(--p1)}
+.match .story li.them{border-left-color:var(--muted)}
+.match .story b{display:inline-block;min-width:34px}
+.match .mnotes{margin:4px 0 8px}
 .heat-key{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
 .heat-key .ramp{display:block;width:80px;height:10px;border-radius:3px;background:linear-gradient(90deg,rgb(47,111,214),rgb(124,77,196),rgb(214,51,57));opacity:.85}
 .map-note{font-size:12px;color:var(--muted)}
 
 .chip{display:inline-block;font-size:11px;font-weight:600;padding:1px 7px;border-radius:4px;border:1px solid var(--line);color:var(--ink-2);white-space:nowrap}
 td.notes{text-align:left}
+td.opps{text-align:left;white-space:nowrap;font-family:inherit}
+td.opps a{color:var(--ink-2);text-decoration:underline;text-decoration-color:var(--line);text-underline-offset:2px}
+td.opps a:hover{color:var(--ink);text-decoration-color:currentColor}
 
 .warm{display:flex;flex-direction:column;gap:10px}
 .warm-row{display:grid;grid-template-columns:150px minmax(0,1fr) 48px;gap:12px;align-items:center}
@@ -206,9 +273,19 @@ td.notes{text-align:left}
 .log-table td.p1c{box-shadow:inset 3px 0 0 var(--p1-soft)}
 footer{font-size:12px;color:var(--muted);max-width:70ch}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+.ver{position:fixed;right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));z-index:20;border:1px solid var(--line);background:var(--surface);color:var(--muted);font-family:var(--mono);font-size:11.5px;padding:4px 9px;border-radius:999px;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.ver:hover{color:var(--ink);border-color:var(--ink-2)}
+.changes{width:min(560px,calc(100vw - 32px));max-height:min(80vh,720px);border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--ink);padding:18px 20px}
+.changes::backdrop{background:rgba(8,12,18,.55)}
+.changes .x{border:0;background:none;color:var(--muted);font-size:22px;line-height:1;cursor:pointer;padding:0 4px}
+.changes .rel{padding:12px 0;border-top:1px solid var(--grid)}
+.changes .rel h3{margin:0 0 6px;font-size:14px;display:flex;gap:10px;align-items:baseline}
+.changes .rel h3 span{font-weight:400;font-size:12px;color:var(--muted)}
+.changes .rel ul{margin:0;padding-left:18px;color:var(--ink-2);font-size:13.5px;line-height:1.5}
 </style>
 </head>
-<body>
+<body class="is-loading">
+<div class="loader" id="loader" role="status" aria-live="polite"><div class="spin" aria-hidden="true"></div><span id="loaderText">Loading your stats…</span></div>
 
 <div class="wrap">
   <header class="top">
@@ -230,6 +307,10 @@ footer{font-size:12px;color:var(--muted);max-width:70ch}
       <button type="button" data-p="7">7 days</button>
       <button type="button" data-p="30" aria-pressed="true">30 days</button>
       <button type="button" data-p="all">All time</button>
+    </div>
+    <div class="seg" role="group" aria-label="Units" id="units">
+      <button type="button" data-u="metric" aria-pressed="true">km/h</button>
+      <button type="button" data-u="imperial">mph</button>
     </div>
     </div>
   </header>
@@ -350,6 +431,29 @@ footer{font-size:12px;color:var(--muted);max-width:70ch}
         <div class="map-note" id="mapNote"></div>
       </div>
     </div>
+    <div class="map3d-wrap">
+      <div class="map3d-head"><h3>In 3D: every goal from shot to net</h3><button type="button" class="chipbtn" id="map3dReset">Reset view</button></div>
+      <div class="map3d-stage">
+      <div class="knob" id="knob" aria-label="Camera controls">
+        <svg viewBox="0 0 100 100" aria-hidden="true">
+          <circle cx="50" cy="50" r="46" class="k-bg"/>
+          <g id="knobRing">
+            <circle cx="50" cy="50" r="40" class="k-ring"/>
+            <line x1="50" y1="12" x2="50" y2="17" transform="rotate(0 50 50)" class="k-tick"/><line x1="50" y1="13.5" x2="50" y2="17" transform="rotate(15 50 50)" class="k-tick"/><line x1="50" y1="13.5" x2="50" y2="17" transform="rotate(30 50 50)" class="k-tick"/><line x1="50" y1="13.5" x2="50" y2="17" transform="rotate(45 50 50)" class="k-tick"/><line x1="50" y1="13.5" x2="50" y2="17" transform="rotate(60 50 50)" class="k-tick"/><line x1="50" y1="13.5" x2="50" y2="17" transform="rotate(75 50 50)" class="k-tick"/><line x1="50" y1="12" x2="50" y2="17" transform="rotate(90 50 50)" class="k-tick"/><line x1="50" y1="13.5" x2="50" y2="17" transform="rotate(105 50 50)" class="k-tick"/><line x1="50" y1="13.5" x2="50" y2="17" transform="rotate(120 50 50)" class="k-tick"/><line x1="50" y1="13.5" x2="50" y2="17" transform="rotate(135 50 50)" class="k-tick"/><line x1="50" y1="13.5" x2="50" y2="17" transform="rotate(150 50 50)" class="k-tick"/><line x1="50" y1="13.5" x2="50" y2="17" transform="rotate(165 50 50)" class="k-tick"/><line x1="50" y1="12" x2="50" y2="17" transform="rotate(180 50 50)" class="k-tick"/><line x1="50" y1="13.5" x2="50" y2="17" transform="rotate(195 50 50)" class="k-tick"/><line x1="50" y1="13.5" x2="50" y2="17" transform="rotate(210 50 50)" class="k-tick"/><line x1="50" y1="13.5" x2="50" y2="17" transform="rotate(225 50 50)" class="k-tick"/><line x1="50" y1="13.5" x2="50" y2="17" transform="rotate(240 50 50)" class="k-tick"/><line x1="50" y1="13.5" x2="50" y2="17" transform="rotate(255 50 50)" class="k-tick"/><line x1="50" y1="12" x2="50" y2="17" transform="rotate(270 50 50)" class="k-tick"/><line x1="50" y1="13.5" x2="50" y2="17" transform="rotate(285 50 50)" class="k-tick"/><line x1="50" y1="13.5" x2="50" y2="17" transform="rotate(300 50 50)" class="k-tick"/><line x1="50" y1="13.5" x2="50" y2="17" transform="rotate(315 50 50)" class="k-tick"/><line x1="50" y1="13.5" x2="50" y2="17" transform="rotate(330 50 50)" class="k-tick"/><line x1="50" y1="13.5" x2="50" y2="17" transform="rotate(345 50 50)" class="k-tick"/><text x="50" y="11" class="k-n">N</text>
+          </g>
+          <circle cx="50" cy="50" r="22" class="k-hub"/>
+          <line x1="50" y1="50" x2="50" y2="38" id="knobTilt" class="k-tilt"/>
+        </svg>
+        <button type="button" id="kTiltUp" class="kb kb-n" aria-label="Tilt up">▲</button>
+        <button type="button" id="kTiltDn" class="kb kb-s" aria-label="Tilt down">▼</button>
+        <button type="button" id="kRotL" class="kb kb-w" aria-label="Turn left">◀</button>
+        <button type="button" id="kRotR" class="kb kb-e" aria-label="Turn right">▶</button>
+        <div class="kz"><button type="button" id="kZoomIn" aria-label="Zoom in">+</button><button type="button" id="kZoomOut" aria-label="Zoom out">−</button></div>
+      </div>
+      <canvas id="map3d" role="img" aria-label="3D view of the pitch with each goal drawn from where it was shot to where it hit the net"></canvas>
+      </div>
+      <div class="map-note" id="map3dNote"></div>
+    </div>
   </section>
 
   <section class="grid g-2b">
@@ -372,6 +476,9 @@ footer{font-size:12px;color:var(--muted);max-width:70ch}
       <div class="panel-head"><h2 id="playTitle">Playstyle</h2><span class="new">From the expanded recorder</span></div>
       <div class="split" id="split"></div>
       <div class="play-kv num" id="playKv"></div>
+      <div class="garage" id="garage"></div>
+      <div class="play-kv team-kv num" id="teamKv"></div>
+      <div class="note" id="koNote"></div>
     </div>
   </section>
 
@@ -387,6 +494,11 @@ footer{font-size:12px;color:var(--muted);max-width:70ch}
         <div id="drinkRows"></div>
       </div>
     </div>
+  </section>
+
+  <section class="panel" aria-labelledby="recTitle">
+    <div class="panel-head"><h2 id="recTitle">All-time records</h2><span class="muted">Every playlist, best single game or goal</span></div>
+    <div class="play-kv rec-kv num" id="recKv"></div>
   </section>
 
   <section class="panel" aria-labelledby="logTitle">
@@ -406,7 +518,17 @@ footer{font-size:12px;color:var(--muted);max-width:70ch}
     <div class="note" id="importNote"></div>
   </section>
 
-  <footer id="footer">Rank names use approximate MMR ranges for Ranked Doubles. Shot and net positions only exist for matches recorded with the latest recorder. Kickoff goals and counter goals are goals within 15 seconds of play after a kickoff, or after a save by the scorer's team, in matches recorded since they were added.</footer>
+  <button type="button" class="ver" id="verBtn" aria-haspopup="dialog">v–</button>
+  <dialog class="changes" id="changes" aria-labelledby="changesTitle">
+    <div class="panel-head"><h2 id="changesTitle">Update log</h2><button type="button" class="x" id="changesClose" aria-label="Close">&times;</button></div>
+    <div id="changesBody"></div>
+  </dialog>
+  <div class="replay" id="replay" hidden aria-hidden="true"><canvas id="replayCv"></canvas></div>
+  <dialog class="changes match" id="matchDlg" aria-labelledby="matchTitle">
+    <div class="panel-head"><h2 id="matchTitle">Match</h2><button type="button" class="x" id="matchClose" aria-label="Close">&times;</button></div>
+    <div id="matchBody"></div>
+  </dialog>
+  <footer id="footer">Rank names use approximate MMR ranges for Ranked Doubles. Shot and net positions only exist for matches recorded with the latest recorder.</footer>
 </div>
 
 <script src="/app.js"></script>

@@ -14,10 +14,12 @@ const co=(o,k)=>o==null?null:num(o[k]!=null?o[k]:o[k.toLowerCase()]);
 
 const ARENA_NAMES={stadium_p:'DFH Stadium',stadium_day_p:'DFH Stadium (Day)',stadium_foggy_p:'DFH Stadium (Stormy)',stadium_winter_p:'DFH Stadium (Snowy)',eurostadium_p:'Mannfield',eurostadium_night_p:'Mannfield (Night)',eurostadium_rainy_p:'Mannfield (Stormy)',eurostadium_snownight_p:'Mannfield (Snowy)',cs_p:'Champions Field',cs_day_p:'Champions Field (Day)',trainstation_p:'Urban Central',trainstation_night_p:'Urban Central (Night)',trainstation_dawn_p:'Urban Central (Dawn)',park_p:'Beckwith Park',park_night_p:'Beckwith Park (Midnight)',park_rainy_p:'Beckwith Park (Stormy)',utopiastadium_p:'Utopia Coliseum',utopiastadium_dusk_p:'Utopia Coliseum (Dusk)',utopiastadium_snow_p:'Utopia Coliseum (Snowy)',neotokyo_standard_p:'Neo Tokyo',underwater_p:'AquaDome',beach_p:'Salty Shores',beach_night_p:'Salty Shores (Night)',farm_p:'Farmstead',farm_night_p:'Farmstead (Night)',wasteland_s_p:'Wasteland',wasteland_night_s_p:'Wasteland (Night)',chn_stadium_p:'Forbidden Temple',chn_stadium_day_p:'Forbidden Temple (Day)',outlaw_p:'Deadeye Canyon',arc_standard_p:'Starbase ARC',street_p:'Sovereign Heights',music_p:'Neon Fields',hoopsstadium_p:'Dunk House',ff_dusk_p:'Estadio Vida',swoosh_p:'Champions Field (Nike FC)',cs_hw_p:'Rivals Arena',woods_p:'Drift Woods',woods_night_p:'Drift Woods (Night)',fni_stadium_p:'Futura Garden'};
 // Ball speeds from BallHit may arrive in game units per second; anything that high can't be km/h.
+// Car speed comes in game units per second (supersonic is 2200); the game's km/h is uu/s x 0.036.
+function carKmh(v){v=num(v);return v==null||v<=0?null:v>300?v*0.036:v;}
 function toKmh(v){return v==null?null:v>300?Math.round(v*0.036):v;}
 // The Stats API sends a loadout as a list of item codes with the car body first ("body_grain").
 // Codes we know the in-game name of go here; anything else is shown tidied up.
-const CAR_NAMES={};
+const CAR_NAMES={body_grain:'Fennec'};   // confirmed by Jason; add others as they turn up
 function carName(l){
   if(!l||typeof l!=='object')return null;
   let v=Array.isArray(l)?(l.find(x=>/^body_/i.test(x))||l[0]):l.Car!=null?l.Car:l.Body!=null?l.Body:l.car;
@@ -100,18 +102,24 @@ function makeSample(names){
       for(let g=0;g<us;g++){
         const who=Math.floor(rnd()*names.length);lines[who].goals++;
         const mate=names.length>1&&rnd()<.55?(who+1+Math.floor(rnd()*(names.length-1)))%names.length:-1;if(mate>=0)lines[mate].assists++;
-        goals.push({team:my,ours:true,scorer:names[who],assister:mate>=0?names[mate]:null,since_kickoff:+(rnd()<.12?3+rnd()*11:16+rnd()*70).toFixed(1),since_save:rnd()<.25?+(2+rnd()*20).toFixed(1):null,speed:Math.round(clamp(norm(prof[who].gs,18),35,140)),...pos(spot(who?.8:1),f)});
+        const af=mate>=0?{X:Math.round(clamp(norm(0,2200),-3900,3900)),Y:Math.round(f*clamp(norm(2600,900),400,4900)),Z:Math.round(clamp(norm(140,120),17,900))}:null;
+        goals.push({assist_from:af,team:my,ours:true,goal_time:rnd()<.08?9+Math.floor(rnd()*3):14+Math.floor(rnd()*120),since_save:rnd()<.25?+(2+rnd()*20).toFixed(1):null,scorer:names[who],assister:mate>=0?names[mate]:null,speed:Math.round(clamp(norm(prof[who].gs,18),35,140)),...pos(spot(who?.8:1),f)});
       }
-      for(let g=0;g<them;g++)goals.push({team:1-my,ours:false,scorer:'Opponent',speed:Math.round(clamp(norm(86,18),35,140)),...pos(spot(1.1),-f)});
-      for(let g=goals.length-1;g>0;g--){const k=Math.floor(rnd()*(g+1));[goals[g],goals[k]]=[goals[k],goals[g]];}
+      for(let g=0;g<them;g++)goals.push({team:1-my,ours:false,goal_time:rnd()<.08?9+Math.floor(rnd()*3):14+Math.floor(rnd()*120),scorer:'Opponent',speed:Math.round(clamp(norm(86,18),35,140)),...pos(spot(1.1),-f)});
+      for(let i=goals.length-1;i>0;i--){const k=Math.floor(rnd()*(i+1));[goals[i],goals[k]]=[goals[k],goals[i]];}   // in match order
       const players=prof.map((p,j)=>{
         const L=lines[j],shots=L.goals+pois(Math.max(.4,p.sh-p.g)),saves=pois(p.sv*(them>2?1.25:1)),demos=pois(p.d),touches=Math.max(8,Math.round(norm(p.t,5)));
         const air=+clamp(norm(p.air,1.8),1,20).toFixed(1),wall=+clamp(norm(p.wall,2.5),3,25).toFixed(1);
         return {name:names[j],team:my,tracked:true,goals:L.goals,assists:L.assists,shots,saves,demos,touches,
           score:100*L.goals+50*L.assists+50*saves+20*shots+15*demos+2*touches+Math.floor(rnd()*40),
           car_touches:pois(p.bump),boost_pickups:Math.round(clamp(norm(j?34:29,6),8,70)),loadout:{Car:j?'Fennec':'Octane'},avg_boost:Math.round(clamp(norm(p.boost,5),20,70)),pct_supersonic:+clamp(norm(p.ss,3),3,35).toFixed(1),pct_zero_boost:+clamp(norm(j?9:7,3),1,25).toFixed(1),zero_boost_fixed:true,
-          pct_air:air,pct_wall:wall,pct_ground:+(100-air-wall).toFixed(1),hardest_hit:Math.round(clamp(norm(p.gs+25,15),60,160))};
+          avg_speed:Math.round(clamp(norm(j?1380:1320,60),1100,1600)),max_speed:2300,pct_air:air,pct_wall:wall,pct_ground:+(100-air-wall).toFixed(1),hardest_hit:Math.round(clamp(norm(p.gs+25,15),60,160))};
       });
+      // Two opponents, and now and then one of them redirects one of our shots on its way in.
+      const foes=[pick(['Zephyr','BallChaser99','nxtLvl','Mochi','RocketRalph','ghostpepper']),pick(['Tidal','Vex','sir_flips','Kiwi','B0ost','Nova'])];
+      foes.forEach(n=>players.push({name:n,team:1-my,tracked:false,platform:'Epic'}));
+      goals.forEach(g=>{if(g.ours&&rnd()<.14){const s=g.shot_from,ix=g.impact.X,f=Math.sign(g.impact.Y)||1;
+        g.scorer_from=s;g.last_touch=pick(foes);g.shot_from={X:Math.round(s.X+(ix-s.X)*.6+norm(0,250)),Y:Math.round(s.Y+(f*5120-s.Y)*.6),Z:Math.round(clamp(norm(260,140),60,700))};}});
       matches.push({match_guid:'sample-'+si+'-'+k,started_at:new Date(t).toISOString(),duration_seconds:dur,playlist:warm?'Casual Doubles':'Ranked Doubles',arena:pick(arenas),
         overtime:ot,my_team:my,result:win?'Win':'Loss',team_score:us,opponent_score:them,goals,players,
         replay_created:rnd()<.2?new Date(t+dur*1000).toISOString():null,
@@ -124,28 +132,68 @@ function makeSample(names){
   return {matches,mmr};
 }
 
+// ---------- units ----------
+// Everything is stored metric; the Units toggle converts only when it's shown.
+const IMP=()=>units==='imperial';
+const fSpd=(kmh,d=0)=>kmh==null?'–':IMP()?(kmh*0.621371).toFixed(d)+' mph':kmh.toFixed(d)+' km/h';
+const fDist=(km,d=1)=>km==null?'–':IMP()?(km*0.621371).toFixed(d)+' mi':km.toFixed(d)+' km';
+const fLen=m=>m==null?'–':IMP()?(m*1.09361).toFixed(0)+' yd':m.toFixed(0)+' m';
+
+// ---------- wallpaper ----------
+// Wallpapers Jason picked, in public/bg/. One is chosen at random on each visit, behind the drawn pitch.
+const WALLPAPERS=['stadium.webp','octane.jpg','fennec.webp'];
+document.documentElement.style.setProperty('--wall',`url(/bg/${WALLPAPERS[Math.floor(Math.random()*WALLPAPERS.length)]})`);
+
 // ---------- model ----------
 let PLAYERS=[], RAW={matches:[],mmr:[]}, SAMPLE=false;
 let ALL=[], DONE=[], sessions=[], NOW=Date.now();
 const SPECTATORS=['Morgan','Chance','Nick'];
-let period='30', mode='avg', metric='winpct', playlist=null, mapSide='us', mapWho='all';
-try{const s=JSON.parse(localStorage.getItem('rl-duo-ui')||'{}');if(s.period)period=s.period;if(s.mode)mode=s.mode;if(s.metric)metric=s.metric;if(s.playlist)playlist=s.playlist;}catch(e){}
-const saveUi=()=>{try{localStorage.setItem('rl-duo-ui',JSON.stringify({period,mode,metric,playlist}))}catch(e){}};
+let period='30', mode='avg', metric='winpct', playlist=null, units='metric', mapSide='us', mapWho='all';
+try{const s=JSON.parse(localStorage.getItem('rl-duo-ui')||'{}');if(s.period)period=s.period;if(s.mode)mode=s.mode;if(s.metric)metric=s.metric;if(s.playlist)playlist=s.playlist;if(s.units)units=s.units;}catch(e){}
+const saveUi=()=>{try{localStorage.setItem('rl-duo-ui',JSON.stringify({period,mode,metric,playlist,units}))}catch(e){}};
 
-// Goals within this many seconds of play after a kickoff, or after a save by the scoring team.
-const QUICK=15;
+// A forfeit never sends the game's "match ended" event, so the recorder saves it as Incomplete.
+// When one side was ahead, that side won (the team behind forfeited, or quit, which is a loss too).
+// Level or 0-0 games that never finished stay out.
+function forfeit(r){
+  if(!r||r.result!=='Incomplete'||num(r.my_team)==null)return r;
+  const us=num(r.team_score),them=num(r.opponent_score);
+  if(us==null||them==null||us===them)return r;
+  return {...r,result:us>them?'Win':'Loss',ff:true};
+}
+// A goal within this many seconds of play after a kickoff counts as a kickoff goal.
+// Newer recordings carry since_kickoff, read off the game clock. Older ones only have the game's
+// goal_time, which never goes below 9 in our games: it seems to include the countdown and
+// a few seconds more, so up to 11 there is roughly the same as 6 seconds of play.
+const KICKOFF_SECS=6, KICKOFF_GOAL_TIME=11;
+function isKickoffGoal(g){
+  const s=num(g.since_kickoff);if(s!=null)return s<=KICKOFF_SECS;
+  const t=num(g.goal_time);return t!=null&&t>0&&t<=KICKOFF_GOAL_TIME;
+}
+// A counter goal is scored within this many seconds of play after a save by the scoring team.
+const COUNTER_SECS=15;
+// Biggest gap we were behind (or ahead) by at any point, from the goals in the order they were scored.
+function maxDeficit(goals,sign=1){let d=0,worst=0;goals.forEach(g=>{d+=g.ours?-sign:sign;if(d>worst)worst=d;});return worst;}
+// The game never fills duration_seconds in our records, so fall back to the time between the
+// recorder's start and end stamps. Average speed is sampled over that same stretch.
+function matchSecs(r){
+  const d=num(r.duration_seconds);if(d)return d;
+  const s=(new Date(r.ended_at)-new Date(r.started_at))/1000;
+  return s>=60&&s<=2400?s:null;
+}
 function toMatch(r){
   const rows=r.players||[];
-  // Only matches recorded with kickoff timing can say how quick a goal was.
-  const kicks=num(r.kickoffs)>0;
-  const quick=(p,k)=>kicks?(r.goals||[]).filter(g=>g&&g.scorer===p.name&&num(g[k])!=null&&+g[k]<=QUICK).length:null;
+  // Only matches recorded with save timing can count counter goals.
+  const counters=p=>num(r.kickoffs)>0?(r.goals||[]).filter(g=>g&&g.scorer===p.name&&num(g.since_save)!=null&&+g.since_save<=COUNTER_SECS).length:null;
   const lines=PLAYERS.map(p=>{
     const row=rows.find(x=>x&&x.name===p.name);if(!row)return null;
     return {score:num(row.score)||0,goals:num(row.goals)||0,assists:num(row.assists)||0,shots:num(row.shots)||0,saves:num(row.saves)||0,
       demos:num(row.demos)||0,touches:num(row.touches)||0,bumps:num(row.car_touches),boost:num(row.avg_boost),ss:num(row.pct_supersonic),
       air:num(row.pct_air),wall:num(row.pct_wall),ground:num(row.pct_ground),hardest:toKmh(num(row.hardest_hit)),
-      pickups:num(row.boost_pickups),car:carName(row.loadout),
-      kickoffGoals:quick(p,'since_kickoff'),saveGoals:quick(p,'since_save'),
+      pickups:num(row.boost_pickups),car:carName(row.loadout),speed:carKmh(row.avg_speed),topSpeed:carKmh(row.max_speed),
+      // No odometer in the Stats API: distance is average speed x time in the match (km).
+      dist:carKmh(row.avg_speed)!=null&&matchSecs(r)?carKmh(row.avg_speed)*matchSecs(r)/3600:null,
+      saveGoals:counters(p),
       noBoost:row.zero_boost_fixed&&num(row.pct_zero_boost)!=null?num(row.pct_zero_boost)/100*(num(r.duration_seconds)||300):null,
       goalSpeeds:(r.goals||[]).filter(g=>g&&!(+g.goal_time<=0&&(r.goals||[]).some(x=>x&&+x.goal_time>0))&&g.scorer===p.name&&num(g.speed)!=null).map(g=>+g.speed)};
   });
@@ -153,31 +201,40 @@ function toMatch(r){
   // The game sends a second, empty GoalScored for most goals (no goal time, no scorer), so a match
   // stored twice as many goals as were scored. Real goals always have a goal time.
   const rawGoals=(r.goals||[]).filter(Boolean), timed=rawGoals.some(g=>+g.goal_time>0);
+  const teamOf={};(r.players||[]).forEach(p=>{if(p&&p.name)teamOf[p.name]=num(p.team);});
   const goals=rawGoals.filter(g=>!timed||+g.goal_time>0).map(g=>{
-    const team=num(g.team), f=team===1?-1:1, s=g.shot_from, i=g.impact;
+    const team=num(g.team), f=team===1?-1:1, i=g.impact;
+    // Redirect: the game's last touch belongs to the other team from the scorer. Then shot_from is
+    // where that player touched it, and scorer_from (newer recorders) is where the scorer hit it.
+    const lt=g.last_touch, defl=lt&&g.scorer&&lt!==g.scorer&&teamOf[lt]!=null&&team!=null&&teamOf[lt]!==team?String(lt):null;
+    const s=defl&&g.scorer_from?g.scorer_from:g.shot_from, dp=defl?g.shot_from:null;
     const ours=g.ours!=null?!!g.ours:(myTeam!=null&&team===myTeam);
     // Credit the goal to whoever the game credits; the last hit can be an opponent's deflection.
     const who=ours?PLAYERS.findIndex(p=>p.name===(PLAYERS.some(q=>q.name===g.scorer)?g.scorer:g.shot_from_player)):-1;
-    return {ours,who,spd:num(g.speed)!=null?Math.round(+g.speed):null,
-      x:co(s,'X')!=null?f*co(s,'X'):null,y:co(s,'Y')!=null?f*co(s,'Y'):null,
-      ix:co(i,'X')!=null?f*co(i,'X'):null,iz:co(i,'Z')};
+    return {ours,who,scorer:g.scorer||null,assister:g.assister||null,ko:isKickoffGoal(g),spd:num(g.speed)!=null?Math.round(+g.speed):null,
+      z:co(s,'Z'),x:co(s,'X')!=null?f*co(s,'X'):null,y:co(s,'Y')!=null?f*co(s,'Y'):null,
+      ix:co(i,'X')!=null?f*co(i,'X'):null,iz:co(i,'Z'),
+      ax:co(g.assist_from,'X')!=null?f*co(g.assist_from,'X'):null,ay:co(g.assist_from,'Y')!=null?f*co(g.assist_from,'Y'):null,az:co(g.assist_from,'Z'),
+      defl,dx:co(dp,'X')!=null?f*co(dp,'X'):null,dy:co(dp,'Y')!=null?f*co(dp,'Y'):null,dz:co(dp,'Z'),deflOnly:!!defl&&!g.scorer_from};
   });
   const dur=num(r.duration_seconds)||300;
   // Lowest and highest goal margin during the match, replayed from the goals in scoring order.
   // Skipped when the goals don't add up to the final score.
   let mg=0,lo=0,hi=0;goals.forEach(g=>{mg+=g.ours?1:-1;lo=Math.min(lo,mg);hi=Math.max(hi,mg);});
   const swing=goals.length&&mg===(num(r.team_score)||0)-(num(r.opponent_score)||0)?{lo,hi}:null;
+  const opps=(r.players||[]).filter(p=>p&&p.name&&!p.tracked&&myTeam!=null&&num(p.team)!==myTeam).map(p=>({name:String(p.name),url:trackerUrl(p)}));
   const left=(r.players_left||[]).filter(Boolean).map(x=>({name:x.name,ours:myTeam!=null&&num(x.team)===myTeam}));
   return {guid:r.match_guid,when:new Date(r.started_at),win:r.result==='Win',us:num(r.team_score)||0,them:num(r.opponent_score)||0,
     ot:!!r.overtime,dur,swing,arena:arenaName(r.arena),playlist:r.playlist||'Unknown playlist',lines,
+    first:goals.length?(goals[0].ours?'us':'them'):null,goals,secs:matchSecs(r),deficit:maxDeficit(goals),lead:maxDeficit(goals,-1),
     ourGoals:goals.filter(g=>g.ours),theirGoals:goals.filter(g=>!g.ours),
-    replay:!!r.replay_created,forfeit:!!r.forfeit,left,
+    replay:!!r.replay_created,left,opps,ff:!!r.ff,
     spectators:Array.isArray(r.spectators)?r.spectators.map(String):null,
     drinks:r.drinks&&num(r.drinks[PLAYERS[0].name])!=null?num(r.drinks[PLAYERS[0].name]):null};
 }
 
 function build(){
-  const done=RAW.matches.filter(r=>r&&(r.result==='Win'||r.result==='Loss')&&r.started_at).map(toMatch).filter(m=>!isNaN(m.when));
+  const done=RAW.matches.map(forfeit).filter(r=>r&&(r.result==='Win'||r.result==='Loss')&&r.started_at).map(toMatch).filter(m=>!isNaN(m.when));
   done.sort((a,b)=>a.when-b.when);
   const counts={};done.forEach(m=>counts[m.playlist]=(counts[m.playlist]||0)+1);
   const lists=Object.keys(counts).sort((a,b)=>counts[b]-counts[a]);
@@ -221,9 +278,8 @@ function agg(list){
     const t={games:L.length,mvp:0,both:0};
     ['score','goals','assists','shots','saves','demos','touches'].forEach(k=>t[k]=L.reduce((s,l)=>s+l[k],0));
     const avg=k=>{const v=L.map(l=>l[k]).filter(v=>v!=null);return v.length?v.reduce((a,b)=>a+b,0)/v.length:null;};
-    ['boost','ss','air','wall','ground','bumps','pickups'].forEach(k=>t[k]=avg(k));
-    const tl=L.filter(l=>l.kickoffGoals!=null);t.timed=tl.length;
-    ['kickoffGoals','saveGoals'].forEach(k=>t[k]=tl.reduce((s,l)=>s+l[k],0));
+    ['boost','ss','air','wall','ground','bumps','pickups','speed'].forEach(k=>t[k]=avg(k));
+    const tl=L.filter(l=>l.saveGoals!=null);t.timed=tl.length;t.saveGoals=tl.reduce((s,l)=>s+l.saveGoals,0);
     const cars={};L.forEach(l=>{if(l.car)cars[l.car]=(cars[l.car]||0)+1;});
     t.car=Object.keys(cars).sort((a,b)=>cars[b]-cars[a])[0]||null;
     t.shotpct=t.shots?100*t.goals/t.shots:null;
@@ -231,6 +287,12 @@ function agg(list){
     t.gsAvg=sp.length?sp.reduce((a,b)=>a+b,0)/sp.length:null;t.gsMax=sp.length?Math.max(...sp):null;
     const nb=L.map(l=>l.noBoost).filter(v=>v!=null);t.noBoost=nb.length?nb.reduce((a,b)=>a+b,0):null;t.noBoostGames=nb.length;
     const hh=L.map(l=>l.hardest).filter(v=>v!=null);t.hardest=hh.length?Math.max(...hh):null;
+    const ht=list.filter(m=>m.lines[j]&&m.lines[j].goals>=3);t.hat=ht.length;t.hatWins=ht.filter(m=>m.win).length;
+    // Win record by how many goals this player scored in the game (index 5 = 5 or more).
+    t.byGoals=[1,2,3,4,5].map(n=>{const g=list.filter(m=>m.lines[j]&&(n<5?m.lines[j].goals===n:m.lines[j].goals>=5));return {n:g.length,w:g.filter(m=>m.win).length};});
+    t.kickoff=list.reduce((s,m)=>s+m.ourGoals.filter(g=>g.ko&&g.who===j).length,0);
+    const dd=L.map(l=>l.dist).filter(v=>v!=null);t.dist=dd.length?dd.reduce((a,b)=>a+b,0):null;t.distGames=dd.length;
+    const ts=L.map(l=>l.topSpeed).filter(v=>v!=null);t.topSpeed=ts.length?Math.max(...ts):null;
     list.forEach(m=>{const a=m.lines[j],o=m.lines.filter((l,k)=>l&&k!==j);if(a&&o.length){t.both++;if(o.every(l=>a.score>l.score))t.mvp++;}});
     return t;
   });
@@ -294,20 +356,19 @@ function renderStrip(){
 }
 
 // ---------- comparison ----------
-const STATS=[{k:'score',label:'Score'},{k:'goals',label:'Goals'},{k:'assists',label:'Assists'},{k:'shots',label:'Shots'},{k:'shotpct',label:'Shooting %',pct:true},{k:'saves',label:'Saves'},{k:'demos',label:'Demos'},{k:'touches',label:'Touches'},{k:'kickoffGoals',label:'Kickoff goals',n:'timed',tip:`Goals within ${QUICK}s of play after a kickoff`},{k:'saveGoals',label:'Counter goals',n:'timed',tip:`Goals within ${QUICK}s of play after a save by your team`},{k:'mvp',label:'Top scorer',count:true}];
+const STATS=[{k:'score',label:'Score'},{k:'goals',label:'Goals'},{k:'assists',label:'Assists'},{k:'shots',label:'Shots'},{k:'shotpct',label:'Shooting %',pct:true},{k:'saves',label:'Saves'},{k:'demos',label:'Demos'},{k:'touches',label:'Touches'},{k:'mvp',label:'Top scorer',count:true}];
 function renderCmp(list){
   const A=agg(list);
   const rows=STATS.map(s=>{
     const vals=A.map(a=>{
       if(s.pct)return a[s.k];
       if(s.count)return mode==='avg'?(a.both?100*a.mvp/a.both:null):a.mvp;
-      const g=s.n?a[s.n]:a.games;
-      return g?(mode==='avg'?a[s.k]/g:a[s.k]):null;
+      return a.games?(mode==='avg'?a[s.k]/a.games:a[s.k]):null;
     });
     const mx=Math.max(1e-9,...vals.filter(v=>v!=null));
     const fmt=v=>v==null?'–':s.pct||(s.count&&mode==='avg')?v.toFixed(0)+'%':mode==='avg'?(s.k==='score'||s.k==='touches'?v.toFixed(0):v.toFixed(2)):Math.round(v).toLocaleString();
     const label=s.count&&mode==='avg'?'Top scorer %':s.label;
-    return `<div class="cmp-row"><span class="stat"${s.tip?` title="${s.tip}"`:''}>${label}</span>`+vals.map((v,j)=>`<div class="bar"><span class="val ${leads(vals,j)?'lead':''}">${fmt(v)}</span><div class="track"><div class="fill" style="width:${v==null?0:(100*v/mx).toFixed(1)}%;background:${PLAYERS[j].color}"></div></div></div>`).join('')+'</div>';
+    return `<div class="cmp-row"><span class="stat">${label}</span>`+vals.map((v,j)=>`<div class="bar"><span class="val ${leads(vals,j)?'lead':''}">${fmt(v)}</span><div class="track"><div class="fill" style="width:${v==null?0:(100*v/mx).toFixed(1)}%;background:${PLAYERS[j].color}"></div></div></div>`).join('')+'</div>';
   });
   $('cmp').innerHTML=`<div class="cmp-row head"><span>${list.length} games</span>`+PLAYERS.map((p,j)=>`<span class="tag ${p.tag}" style="justify-self:start"><i></i>${esc(p.name)} · ${A[j].games}</span>`).join('')+'</div>'+rows.join('');
 }
@@ -394,13 +455,25 @@ function heatColor(t){
   const c=HEAT[i].map((v,k)=>Math.round(v+(HEAT[i+1][k]-v)*f));
   return `rgb(${c[0]},${c[1]},${c[2]})`;
 }
+// Goal-map markers drawn as little Rocket League balls: a grey sphere with the hex panel
+// seams, ringed in the scorer's colour (neutral on the field view, where the heat carries colour).
+function rlBallDefs(id){return `<defs><radialGradient id="${id}" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#f4f6f8"/><stop offset=".6" stop-color="#c3cad2"/><stop offset="1" stop-color="#7d8692"/></radialGradient></defs>`;}
+function rlBall(x,y,r,ring,rw,id,tip,gid){
+  const hex=[0,1,2,3,4,5].map(k=>{const a=Math.PI/3*k-Math.PI/2;return [Math.cos(a),Math.sin(a)];});
+  const seam=hex.map(([c,s])=>`${(.38*c).toFixed(3)},${(.38*s).toFixed(3)}`).join(' ');
+  const spokes=hex.map(([c,s])=>`M${(.38*c).toFixed(3)} ${(.38*s).toFixed(3)}L${(.92*c).toFixed(3)} ${(.92*s).toFixed(3)}`).join('');
+  return `<g class="dot" data-g="${gid}" transform="translate(${x.toFixed(1)} ${y.toFixed(1)}) scale(${r})"><title>${esc(tip)}</title>`+
+    `<circle r="1" fill="url(#${id})"/><g fill="none" stroke="#3a424c" stroke-opacity=".55" stroke-width=".5" vector-effect="non-scaling-stroke"><polygon points="${seam}"/><path d="${spokes}"/></g>`+
+    `<circle r="1" fill="none" stroke="${ring}" stroke-width="${rw}" vector-effect="non-scaling-stroke"/></g>`;
+}
 function renderMaps(list){
   let goals=list.flatMap(m=>(mapSide==='us'?m.ourGoals:m.theirGoals).map(g=>({...g,m})));
   if(mapSide==='us'&&mapWho!=='all')goals=goals.filter(g=>g.who===+mapWho);
+  goals.forEach((g,k)=>g.k=k);
   const shots=goals.filter(g=>g.x!=null&&g.y!=null), hits=goals.filter(g=>g.ix!=null&&g.iz!=null);
   $('mapWho').style.visibility=mapSide==='us'&&PLAYERS.length>1?'visible':'hidden';
   const col=g=>g.who>=0?PLAYERS[g.who].color:'var(--opp)';
-  const tip=g=>`${g.who>=0?PLAYERS[g.who].short:mapSide==='us'?'Us':'Opponent'}${g.spd!=null?' · '+g.spd+' km/h':''} · ${g.m.us}–${g.m.them} ${g.m.win?'win':'loss'}, ${fmtDate(g.m.when)}`;
+  const tip=g=>`${g.who>=0?PLAYERS[g.who].short:mapSide==='us'?'Us':'Opponent'}${g.assister?' (assist '+(PLAYERS.find(q=>q.name===g.assister)?.short||g.assister)+')':''}${g.defl?' · redirected by '+g.defl:''}${g.spd!=null?' · '+fSpd(g.spd):''} · ${g.m.us}–${g.m.them} ${g.m.win?'win':'loss'}, ${fmtDate(g.m.when)}`;
   // Whole pitch, their goal at the top. Goal lines at Y=±5120, nets 880 deep, corners cut 1152.
   const W=480,Y0=-6000,Y1=6000,H=Math.round(W*(Y1-Y0)/8192);
   const sx=x=>(x+4096)/8192*W,sy=y=>(Y1-y)/(Y1-Y0)*H,su=u=>u/8192*W;
@@ -418,11 +491,15 @@ function renderMaps(list){
   f+=`<rect x="${sx(-1800)}" y="${sy(5120)}" width="${su(3600)}" height="${su(1100)}" ${ln}/><rect x="${sx(-1800)}" y="${sy(-4020)}" width="${su(3600)}" height="${su(1100)}" ${ln}/>`;
   f+=`<text x="${W/2}" y="${sy(6000)-6}" text-anchor="middle">${mapSide==='us'?'Their goal':'Our goal'}</text><text x="${W/2}" y="${sy(-6000)+14}" text-anchor="middle">${mapSide==='us'?'Our goal':'Their goal'}</text>`;
   // Dots stay neutral here so they don't fight the blue-to-red heat; the net view carries who scored.
-  shots.forEach(g=>{f+=`<circle class="dot" cx="${sx(clamp(g.x,-4096,4096))}" cy="${sy(clamp(g.y,-5120,5120))}" r="2.5" fill="#fff" fill-opacity=".9" stroke="#0b1017" stroke-opacity=".6" stroke-width="1"><title>${esc(tip(g))}</title></circle>`;});
-  $('fieldMap').innerHTML=`<svg viewBox="0 -18 ${W} ${H+36}" role="img" aria-label="Top-down field with ${shots.length} shot locations">${f}</svg>`;
-  const NW=440,m=24,NH=Math.round((NW-2*m)*642/1786)+m+22;
-  const nx=x=>m+(clamp(x,-893,893)+893)/1786*(NW-2*m),nz=z=>m+(642-clamp(z,0,642))/642*(NH-m-22);
-  let n=`<rect x="${nx(-893)}" y="${nz(642)}" width="${nx(893)-nx(-893)}" height="${nz(0)-nz(642)}" fill="var(--surface-2)"/>`;
+  shots.forEach(g=>{f+=rlBall(sx(clamp(g.x,-4096,4096)),sy(clamp(g.y,-5120,5120)),4.5,'#0b1017',1,'rlbF',tip(g),g.k);});
+  $('fieldMap').innerHTML=`<svg viewBox="0 -18 ${W} ${H+36}" role="img" aria-label="Top-down field with ${shots.length} shot locations">${rlBallDefs('rlbF')}${f}</svg>`;
+  // Front elevation of the goal, drawn like a technical drawing. Mouth 1786 x 642 uu, 880 deep (1 uu = 1 cm).
+  const NW=460,ml=30,mr=58,mt=46,mb=66,iw=NW-ml-mr,ih=Math.round(iw*642/1786),NH=mt+ih+mb;
+  const nx=x=>ml+(clamp(x,-893,893)+893)/1786*iw,nz=z=>mt+(642-clamp(z,0,642))/642*ih;
+  const fM=uu=>IMP()?(uu/100*3.28084).toFixed(1)+' ft':(uu/100).toFixed(2)+' m';
+  const dim='stroke="var(--muted)" stroke-width="1" fill="none"',fr=su=>su*iw/1786;   // fr: uu to px
+  let n=`<defs><pattern id="netMesh" width="8" height="8" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0V8M0 0H8" stroke="var(--line)" stroke-width=".7"/></pattern></defs>`;
+  n+=`<rect x="${nx(-893)}" y="${nz(642)}" width="${iw}" height="${ih}" fill="var(--surface-2)"/><rect x="${nx(-893)}" y="${nz(642)}" width="${iw}" height="${ih}" fill="url(#netMesh)"/>`;
   for(let i=1;i<3;i++)n+=`<line x1="${nx(-893+i*1786/3)}" x2="${nx(-893+i*1786/3)}" y1="${nz(642)}" y2="${nz(0)}" stroke="var(--line)" stroke-dasharray="3 4"/><line x1="${nx(-893)}" x2="${nx(893)}" y1="${nz(i*214)}" y2="${nz(i*214)}" stroke="var(--line)" stroke-dasharray="3 4"/>`;
   const zones={};hits.forEach(g=>{const zc=clamp(Math.floor((g.ix+893)/(1786/3)),0,2),zr=clamp(Math.floor(g.iz/214),0,2);zones[zc+','+zr]=(zones[zc+','+zr]||0)+1;});
   const zmax=Math.max(1,...Object.values(zones)),labels=[];
@@ -430,12 +507,23 @@ function renderMaps(list){
     const x0=nx(-893+c*1786/3),y0=nz((r+1)*214),zw=nx(-893+1786/3)-nx(-893),zh=nz(0)-nz(214);
     n+=`<rect x="${x0+1}" y="${y0+1}" width="${zw-2}" height="${zh-2}" fill="${heatColor(v/zmax)}" opacity="${hits.length?.6:0}"><title>${v} goals (${pct}%)</title></rect>`;
     if(hits.length)labels.push(`<text class="zone" x="${x0+zw/2}" y="${y0+zh/2+5}" text-anchor="middle" paint-order="stroke" stroke="rgba(11,16,23,.55)" stroke-width="3" fill="#fff" style="fill:#fff">${pct}%</text>`);}
-  n+=`<path d="M${nx(-893)},${nz(0)} L${nx(-893)},${nz(642)} L${nx(893)},${nz(642)} L${nx(893)},${nz(0)}" stroke="var(--ink-2)" stroke-width="4" fill="none" stroke-linejoin="round"/>`;
-  n+=`<line x1="4" x2="${NW-4}" y1="${nz(0)}" y2="${nz(0)}" stroke="var(--line)" stroke-width="2"/>`;
-  n+=`<text x="${nx(-893)}" y="${NH-4}">Left post</text><text x="${nx(893)}" y="${NH-4}" text-anchor="end">Right post</text><text x="${NW/2}" y="${nz(642)-8}" text-anchor="middle">Crossbar</text>`;
-  hits.forEach(g=>{n+=`<circle class="dot" cx="${nx(g.ix)}" cy="${nz(g.iz)}" r="3.5" fill="${col(g)}" stroke="#fff" stroke-width="1.5"><title>${esc(tip(g))}</title></circle>`;});
+  // Frame: posts and crossbar as hollow members outside the mouth, centreline, ground.
+  const t=fr(34),L=nx(-893),R=nx(893),T=nz(642),G=nz(0);
+  n+=`<path d="M${L-t},${G} V${T-t} H${R+t} V${G} H${R} V${T} H${L} V${G} Z" fill="var(--surface)" stroke="var(--ink-2)" stroke-width="1.5" stroke-linejoin="miter"/>`;
+  n+=`<line x1="${NW/2}" x2="${NW/2}" y1="${T-t-12}" y2="${G+8}" stroke="var(--muted)" stroke-width=".8" stroke-dasharray="10 3 2 3"/><text x="${NW/2+4}" y="${T-t-14}" class="dimt">CL</text>`;
+  n+=`<line x1="6" x2="${NW-6}" y1="${G}" y2="${G}" stroke="var(--ink-2)" stroke-width="1.5"/>`;
+  for(let x=10;x<NW-6;x+=8)n+=`<line x1="${x}" x2="${x-5}" y1="${G+1}" y2="${G+6}" stroke="var(--line)" stroke-width=".8"/>`;
+  // Width dimension under the goal, height dimension to the right, depth as a note.
+  const wy=G+34,hx=R+t+26,tick=(x,y)=>`M${x-4},${y+4} L${x+4},${y-4}`;
+  n+=`<path d="M${L},${G+10} V${wy+5} M${R},${G+10} V${wy+5} M${L},${wy} H${R} ${tick(L,wy)} ${tick(R,wy)}" ${dim}/>`;
+  n+=`<text x="${NW/2}" y="${wy-5}" text-anchor="middle" class="dimt">${fM(1786)}  ·  1786 uu</text>`;
+  n+=`<path d="M${R+t+6},${T} H${hx+5} M${R+t+6},${G} H${hx+5} M${hx},${T} V${G} ${tick(hx,T)} ${tick(hx,G)}" ${dim}/>`;
+  n+=`<text transform="translate(${hx+13} ${(T+G)/2}) rotate(-90)" text-anchor="middle" class="dimt">${fM(642)} · 642 uu</text>`;
+  n+=`<text x="${L-t}" y="${T-t-14}" class="dimt">CROSSBAR</text><text x="${R+t}" y="${T-t-14}" text-anchor="end" class="dimt">DEPTH ${fM(880)} · 880 uu</text>`;
+  n+=`<text x="${L}" y="${NH-8}" class="dimt">L. POST</text><text x="${NW/2}" y="${NH-8}" text-anchor="middle" class="dimt">FRONT ELEVATION · GOAL MOUTH</text><text x="${R}" y="${NH-8}" text-anchor="end" class="dimt">R. POST</text>`;
+  hits.forEach(g=>{n+=rlBall(nx(g.ix),nz(g.iz),6,col(g),2.2,'rlbN',tip(g),g.k);});
   n+=labels.join('');
-  $('netMap').innerHTML=`<svg viewBox="0 0 ${NW} ${NH}" role="img" aria-label="Goal mouth with ${hits.length} impact points">${n}</svg>`;
+  $('netMap').innerHTML=`<svg viewBox="0 0 ${NW} ${NH}" role="img" aria-label="Goal mouth with ${hits.length} impact points">${rlBallDefs('rlbN')}${n}</svg>`;
   $('fieldTitle').textContent=mapSide==='us'?'Where our goals were shot from':'Where their goals were shot from';
   $('netTitle').textContent=mapSide==='us'?'Where our goals hit the net':'Where their goals beat us';
   $('mapLegend').innerHTML=mapSide==='us'?PLAYERS.filter((p,j)=>mapWho==='all'||+mapWho===j).map(p=>`<span><i style="background:${p.color};height:8px;width:8px"></i>${esc(p.name)}</span>`).join(''):'<span><i style="background:var(--opp);height:8px;width:8px"></i>Opponents</span>';
@@ -444,9 +532,167 @@ function renderMaps(list){
   const sp=goals.filter(g=>g.spd!=null),avgSpd=sp.length?Math.round(sp.reduce((a,g)=>a+g.spd,0)/sp.length):null;
   const missing=goals.length-hits.length;
   $('mapNote').textContent=!goals.length?'No goals in this period.':
-    `${goals.length} goals${avgSpd!=null?', average '+avgSpd+' km/h':''}.`+(top?` Most went in ${zname(top[0])} (${Math.round(100*top[1]/hits.length)}%).`:'')+
+    `${goals.length} goals${avgSpd!=null?', average '+fSpd(avgSpd):''}.`+(top?` Most went in ${zname(top[0])} (${Math.round(100*top[1]/hits.length)}%).`:'')+
     (missing?` ${missing} goal${missing>1?'s were':' was'} recorded before positions were saved.`:'')+' The net is drawn as you would see it facing the goal.';
+  G3.goals=goals.filter(g=>g.x!=null&&g.y!=null&&g.ix!=null&&g.iz!=null);G3.side=mapSide;draw3D();
 }
+
+// ---------- 3D goal map ----------
+// A hand-rolled perspective view of the pitch (uu, z up). Each goal is an arc from where it was shot
+// to where it crossed the goal line. The big view orbits on drag; hovering a ball on the flat maps
+// plays that goal back in a small "replay" view and highlights it in the big one.
+const G3={T:[0,3300,300],goals:[],side:'us',yaw:-0.5,pitch:0.42,zoom:1,auto:true,t0:performance.now(),focus:null,ft:0};
+const RP={k:null,t:0};
+const REDIR='#ff4d6d';   // redirect marker and the ball's path after it
+function bez(a,b,n){const d=Math.hypot(b[0]-a[0],b[1]-a[1]),lift=Math.max(a[2],b[2])+Math.min(900,d*.09);
+  return Array.from({length:n},(_,i)=>{const t=i/(n-1),u=1-t;return [u*a[0]+t*b[0],u*a[1]+t*b[1],u*u*a[2]+2*u*t*lift+t*t*b[2]];});}
+// 41 points from shot to net. A redirected goal with both points known bends at index 15 (pts.kink).
+function arcOf(g){
+  const a=[g.x,g.y,g.z!=null?g.z:93],b=[g.ix,5120,g.iz];
+  if(g.defl&&!g.deflOnly&&g.dx!=null&&g.dy!=null){const k=[g.dx,g.dy,g.dz!=null?g.dz:93];const pts=bez(a,k,16).concat(bez(k,b,26).slice(1));pts.kink=15;return pts;}
+  const pts=bez(a,b,41);if(g.defl)pts.kink=0;return pts;
+}
+// Flight time for the replay: real distance over the goal's speed, squeezed into 0.9 to 2.2 s.
+function flightMs(g,pts){let d=0;for(let i=1;i<pts.length;i++)d+=Math.hypot(pts[i][0]-pts[i-1][0],pts[i][1]-pts[i-1][1],pts[i][2]-pts[i-1][2]);
+  const v=g.spd?g.spd/0.036:2000;return Math.max(900,Math.min(2200,d/v*1000*1.6));}
+function render3D(cv,V){
+  const W=cv.clientWidth,H=cv.clientHeight,dpr=window.devicePixelRatio||1;if(!W||!H)return;
+  if(cv.width!==Math.round(W*dpr)||cv.height!==Math.round(H*dpr)){cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);}
+  const c=cv.getContext('2d');c.setTransform(dpr,0,0,dpr,0,0);c.clearRect(0,0,W,H);
+  const css=getComputedStyle(document.documentElement),tok=n=>css.getPropertyValue(n).trim();
+  const ink=V.hud?'#8fdcff':tok('--ink-2'),muted=V.hud?'rgba(120,200,255,.55)':tok('--muted'),line=V.hud?'rgba(90,180,255,.28)':tok('--line'),pcol=[tok('--p1'),tok('--p2')],opp=tok('--opp')||muted;
+  const T=V.T,D=V.D,F=V.F,ca=Math.cos(V.yaw),sa=Math.sin(V.yaw),cb=Math.cos(V.pitch),sb=Math.sin(V.pitch);
+  const P=([x,y,z])=>{x-=T[0];y-=T[1];z-=T[2];const x1=x*ca-y*sa,y1=x*sa+y*ca;const up=z*cb+y1*sb,dp=Math.max(300,y1*cb-z*sb+D);return [W/2+F*x1/dp,H*.55-F*up/dp,dp];};
+  const path=(pts,close)=>{c.beginPath();pts.forEach((p,i)=>{const q=P(p);i?c.lineTo(q[0],q[1]):c.moveTo(q[0],q[1]);});if(close)c.closePath();};
+  const ch=1152,floor=[[-4096,-5120+ch],[-4096+ch,-5120],[4096-ch,-5120],[4096,-5120+ch],[4096,5120-ch],[4096-ch,5120],[-4096+ch,5120],[-4096,5120-ch]].map(([x,y])=>[x,y,0]);
+  if(V.hud){c.fillStyle='#050b14';c.fillRect(0,0,W,H);}
+  path(floor,true);c.fillStyle=V.hud?'rgba(20,60,110,.35)':(tok('--pitch')||'rgba(40,80,50,.3)');c.globalAlpha=V.hud?1:.55;c.fill();c.globalAlpha=1;c.strokeStyle=line;c.lineWidth=1.2;c.stroke();
+  if(V.hud){c.lineWidth=.6;for(let x=-4096;x<=4096;x+=512){path([[x,-5120,0],[x,5120,0]]);c.stroke();}for(let y=-5120;y<=5120;y+=512){path([[-4096,y,0],[4096,y,0]]);c.stroke();}c.lineWidth=1.2;}
+  path([[-4096,0,0],[4096,0,0]]);c.stroke();
+  path(Array.from({length:49},(_,i)=>{const a=i/48*Math.PI*2;return [1000*Math.cos(a),1000*Math.sin(a),0];}));c.stroke();
+  c.globalAlpha=.5;path([[-4096+ch,5120,0],[-4096+ch,5120,2044],[4096-ch,5120,2044],[4096-ch,5120,0]]);c.stroke();c.globalAlpha=1;
+  [1,-1].forEach(sd=>{const g=5120*sd,b=6000*sd;c.strokeStyle=sd>0?ink:muted;c.lineWidth=sd>0?2:1.2;
+    path([[-893,g,0],[-893,g,642],[893,g,642],[893,g,0]]);c.stroke();
+    c.lineWidth=.8;path([[-893,g,642],[-893,b,642],[893,b,642],[893,g,642]]);c.stroke();path([[-893,b,0],[-893,b,642]]);c.stroke();path([[893,b,0],[893,b,642]]);c.stroke();path([[-893,b,0],[893,b,0]]);c.stroke();});
+  c.font='11px '+(tok('--mono')||'monospace');c.textAlign='center';c.fillStyle=muted;
+  if(!V.hud){const q=P([0,5120,800]);c.fillText(V.side==='us'?'Their goal':'Our goal',q[0],q[1]);}
+  const ball=(x,y,r,col)=>{const gr=c.createRadialGradient(x-r*.35,y-r*.4,r*.1,x,y,r);gr.addColorStop(0,'#f4f6f8');gr.addColorStop(.6,'#c3cad2');gr.addColorStop(1,'#7d8692');
+    c.fillStyle=gr;c.beginPath();c.arc(x,y,r,0,7);c.fill();c.strokeStyle=col;c.lineWidth=1.5;c.stroke();};
+  const list=V.goals.map(g=>{const pts=arcOf(g);return {g,pts,depth:P(pts[20])[2]};}).sort((p,q)=>q.depth-p.depth);
+  const fk=V.focus;
+  list.forEach(({g,pts})=>{if(g.k===fk)return;const col=g.who>=0?pcol[g.who]:opp;
+    c.globalAlpha=fk==null?.55:.1;c.strokeStyle=col;c.lineWidth=1.3;path(pts);c.stroke();
+    const s=P(pts[0]);c.fillStyle=col;c.beginPath();c.arc(s[0],s[1],2,0,7);c.fill();
+    if(pts.kink!=null){const q=P(pts[pts.kink]);c.strokeStyle=REDIR;c.lineWidth=1.2;c.beginPath();c.moveTo(q[0]-3,q[1]-3);c.lineTo(q[0]+3,q[1]+3);c.moveTo(q[0]+3,q[1]-3);c.lineTo(q[0]-3,q[1]+3);c.stroke();}
+    const e=P(pts[40]);c.globalAlpha=fk==null?1:.15;ball(e[0],e[1],Math.max(2.5,F*92/e[2]*.6),col);c.globalAlpha=1;});
+  const it=fk==null?null:list.find(a=>a.g.k===fk);
+  if(it){
+    // Replay of one goal: dashed ghost path, glowing trail, ball at the head, drop line to the floor,
+    // a crosshair where it was struck and a ring pulse where it went in.
+    const {g,pts}=it,col=g.who>=0?pcol[g.who]:opp,dur=flightMs(g,pts);
+    // Assist first (when the recorder caught where the assister hit it), then the shot.
+    const ap=g.ax!=null&&g.ay!=null?bez([g.ax,g.ay,g.az!=null?g.az:93],pts[0],21):null,AD=ap?900:0;
+    const aw=g.assister?PLAYERS.findIndex(q=>q.name===g.assister):-1,acol=aw>=0?pcol[aw]:col;
+    const tl=(performance.now()-V.ft)%(AD+dur+900),inA=tl<AD,el=inA?0:tl-AD,p=inA?0:Math.min(1,el/dur),n=Math.max(1,Math.round(p*40));
+    if(ap){c.setLineDash([3,4]);c.strokeStyle=acol;c.globalAlpha=.5;c.lineWidth=1;path(ap);c.stroke();c.setLineDash([]);c.globalAlpha=1;
+      const an=inA?Math.max(1,Math.round(tl/AD*20)):20;c.save();c.lineCap='round';c.shadowColor=acol;c.shadowBlur=10;
+      for(let i=1;i<=an;i++){const a=P(ap[i-1]),b=P(ap[i]);c.globalAlpha=inA?.2+.8*(i/an):.45;c.strokeStyle=acol;c.lineWidth=inA?1+2.5*(i/an):1.5;c.beginPath();c.moveTo(a[0],a[1]);c.lineTo(b[0],b[1]);c.stroke();}
+      c.restore();c.globalAlpha=1;
+      const a0=P(ap[0]);c.strokeStyle=acol;c.lineWidth=1.2;c.beginPath();c.arc(a0[0],a0[1],5,0,7);c.stroke();
+      c.font='bold 10px '+(tok('--mono')||'monospace');c.textAlign='left';c.fillStyle=acol;c.fillText('ASSIST · '+(aw>=0?PLAYERS[aw].short:g.assister).toUpperCase(),a0[0]+8,a0[1]-8);
+      if(inA){const hp=ap[Math.min(20,Math.round(tl/AD*20))],h=P(hp);c.save();c.shadowColor='#5fe1ff';c.shadowBlur=18;ball(h[0],h[1],Math.max(4,F*92/h[2]*.75),acol);c.restore();}}
+    c.setLineDash([4,5]);c.strokeStyle=V.hud?'rgba(140,220,255,.45)':muted;c.lineWidth=1;path(pts);c.stroke();c.setLineDash([]);
+    const s0=P(pts[0]),sp=P([pts[0][0],pts[0][1],0]);c.strokeStyle='#5fe1ff';c.lineWidth=1.2;
+    c.beginPath();c.arc(sp[0],sp[1],9,0,7);c.moveTo(sp[0]-14,sp[1]);c.lineTo(sp[0]+14,sp[1]);c.moveTo(sp[0],sp[1]-8);c.lineTo(sp[0],sp[1]+8);c.stroke();
+    c.save();c.shadowColor=col;c.shadowBlur=14;c.lineCap='round';
+    const kk=pts.kink;if(inA)c.globalAlpha=0;
+    for(let i=1;i<=n;i++){const a=P(pts[i-1]),b=P(pts[i]);c.globalAlpha=.25+.75*(i/n);c.strokeStyle=kk!=null&&i>kk?REDIR:col;c.shadowColor=c.strokeStyle;c.lineWidth=1+3*(i/n);c.beginPath();c.moveTo(a[0],a[1]);c.lineTo(b[0],b[1]);c.stroke();}
+    c.restore();c.globalAlpha=1;
+    const fi=p*40,i0=Math.floor(fi),i1=Math.min(40,i0+1),tt=fi-i0,hp=[0,1,2].map(d=>pts[i0][d]*(1-tt)+pts[i1][d]*tt),h=P(hp),fl=P([hp[0],hp[1],0]);
+    c.setLineDash([2,3]);c.strokeStyle='rgba(95,225,255,.6)';c.beginPath();c.moveTo(h[0],h[1]);c.lineTo(fl[0],fl[1]);c.stroke();c.setLineDash([]);
+    c.strokeStyle='rgba(95,225,255,.7)';c.beginPath();c.ellipse(fl[0],fl[1],7,3,0,0,7);c.stroke();
+    if(!inA){c.save();c.shadowColor='#5fe1ff';c.shadowBlur=18;ball(h[0],h[1],Math.max(4,F*92/h[2]*.75),col);c.restore();}
+    if(kk!=null&&!inA&&p*40>=kk){
+      // Redirect: a diamond and a pulse where the other team touched it, with their name.
+      const q=P(pts[kk]),age=Math.min(1,(p*40-kk)/8),rr=6+age*14;c.strokeStyle=REDIR;c.lineWidth=1.6;
+      c.beginPath();c.moveTo(q[0],q[1]-7);c.lineTo(q[0]+7,q[1]);c.lineTo(q[0],q[1]+7);c.lineTo(q[0]-7,q[1]);c.closePath();c.stroke();
+      c.globalAlpha=1-age;c.beginPath();c.arc(q[0],q[1],rr,0,7);c.stroke();c.globalAlpha=1;
+      c.font='bold 10px '+(tok('--mono')||'monospace');c.textAlign='left';c.fillStyle=REDIR;
+      c.fillText((kk===0?'REDIRECTED BY ':'REDIRECT · ')+g.defl.toUpperCase(),q[0]+10,q[1]-8);
+    }
+    if(!inA&&p>=1){const e=P(pts[40]),q=(el-dur)/900;c.strokeStyle=col;c.globalAlpha=1-q;c.lineWidth=2;c.beginPath();c.arc(e[0],e[1],6+q*28,0,7);c.stroke();c.globalAlpha=1;}
+    if(V.hud){
+      const kmh=g.spd,d=Math.hypot(g.ix-g.x,5120-g.y)/100,lbl=g.who>=0?PLAYERS[g.who].short.toUpperCase():(V.side==='us'?'US':'OPPONENT');
+      const rows=[[`GOAL`,lbl],...(g.assister?[['ASSIST',(PLAYERS.find(q=>q.name===g.assister)?.short||g.assister).toUpperCase()]]:[]),...(g.defl?[['REDIRECT',g.defl.toUpperCase()]]:[]),['SPEED',kmh!=null?fSpd(kmh).toUpperCase():'—'],['RANGE',fLen(d).toUpperCase()],['IMPACT H',IMP()?(g.iz/100*3.28084).toFixed(1)+' FT':(g.iz/100).toFixed(2)+' M'],['T',(Math.min(el,dur)/1000).toFixed(2)+' S']];
+      c.textAlign='left';c.font='10px '+(tok('--mono')||'monospace');
+      rows.forEach(([k,v],i)=>{c.fillStyle='rgba(95,225,255,.6)';c.fillText(k,12,20+i*14);c.fillStyle='#d8f6ff';c.fillText(v,78,20+i*14);});
+      c.strokeStyle='rgba(95,225,255,.7)';c.lineWidth=1.5;const br=(x,y,dx,dy)=>{c.beginPath();c.moveTo(x+dx*12,y);c.lineTo(x,y);c.lineTo(x,y+dy*12);c.stroke();};
+      br(4,4,1,1);br(W-4,4,-1,1);br(4,H-4,1,-1);br(W-4,H-4,-1,-1);
+      c.fillStyle='rgba(95,225,255,.07)';const sy=(performance.now()/12)%H;c.fillRect(0,sy,W,2);
+      c.textAlign='right';c.fillStyle='rgba(95,225,255,.6)';c.fillText(fmtDate(g.m.when)+' · '+g.m.us+'–'+g.m.them+(g.m.win?' W':' L'),W-12,H-10);
+    }
+  }
+}
+function draw3D(){const cv=$('map3d');if(!cv)return;
+  render3D(cv,{goals:G3.goals,side:G3.side,T:G3.T,D:11500,F:Math.min(cv.clientWidth,cv.clientHeight*1.6)*1.45*G3.zoom,yaw:G3.yaw,pitch:G3.pitch,focus:G3.focus,ft:G3.ft});
+  $('map3dNote').textContent=G3.goals.length?`${G3.goals.length} goals with a shot and net position. Drag or use the knob to turn it, arrow keys to move, scroll to zoom. Hover a ball on the flat maps for a replay.`:'No goals with positions in this period.';
+  syncKnob();
+}
+// The knob: its ring turns with the camera (N = looking at the attacked goal), the needle shows tilt.
+function syncKnob(){const r=$('knobRing');if(!r)return;r.setAttribute('transform',`rotate(${(-G3.yaw*180/Math.PI).toFixed(1)} 50 50)`);
+  const t=$('knobTilt');if(t)t.setAttribute('y2',(50-30*Math.sin(G3.pitch)).toFixed(1));}
+function nudge3D(f){G3.auto=false;f();G3.pitch=Math.max(.05,Math.min(1.45,G3.pitch));G3.zoom=Math.max(.6,Math.min(3,G3.zoom));
+  G3.T[0]=Math.max(-4096,Math.min(4096,G3.T[0]));G3.T[1]=Math.max(-5120,Math.min(6000,G3.T[1]));draw3D();}
+function drawReplay(){
+  const cv=$('replayCv'),g=G3.goals.find(x=>x.k===RP.k);if(!g)return;
+  const xs=[g.x,g.ix].concat(g.ax!=null?[g.ax]:[]),ys=[g.y,5120].concat(g.ay!=null?[g.ay]:[]);
+  const mid=[(Math.min(...xs)+Math.max(...xs))/2,(Math.min(...ys)+Math.max(...ys))/2,300],dx=g.ix-g.x,dy=5120-g.y,span=Math.hypot(Math.max(...xs)-Math.min(...xs),Math.max(...ys)-Math.min(...ys))+1800;
+  const yaw=Math.atan2(dx,dy)+0.75+Math.sin((performance.now()-RP.t)/2500)*.12;
+  render3D(cv,{hud:true,goals:[g],side:G3.side,T:mid,D:span*1.25,F:cv.clientWidth*1.05,yaw,pitch:.38,focus:g.k,ft:RP.t});
+}
+function showReplay(k,ev){
+  if(!G3.goals.some(x=>x.k===+k))return;
+  if(RP.k===+k){placeReplay(ev);return;}
+  RP.k=+k;RP.t=performance.now();G3.focus=+k;G3.ft=RP.t;
+  const r=$('replay');r.hidden=false;placeReplay(ev);loop3D();
+}
+function placeReplay(ev){const r=$('replay'),w=r.offsetWidth,h=r.offsetHeight;let x=ev.clientX+18,y=ev.clientY+18;
+  if(x+w>innerWidth-8)x=ev.clientX-w-18;if(y+h>innerHeight-8)y=ev.clientY-h-18;r.style.left=Math.max(8,x)+'px';r.style.top=Math.max(8,y)+'px';}
+function hideReplay(){RP.k=null;G3.focus=null;$('replay').hidden=true;draw3D();}
+let looping=false;
+function loop3D(){if(looping)return;looping=true;const step=()=>{if(RP.k==null&&!G3.auto){looping=false;return;}
+  if(RP.k!=null)drawReplay();if(G3.seen&&document.visibilityState==='visible')draw3D();requestAnimationFrame(step);};requestAnimationFrame(step);}
+(function(){
+  const cv=$('map3d');if(!cv)return;let drag=null;
+  if(matchMedia('(prefers-reduced-motion: reduce)').matches)G3.auto=false;
+  cv.addEventListener('pointerdown',e=>{drag={x:e.clientX,y:e.clientY,yaw:G3.yaw,pitch:G3.pitch};G3.auto=false;cv.setPointerCapture(e.pointerId);});
+  cv.addEventListener('pointermove',e=>{if(!drag)return;G3.yaw=drag.yaw-(e.clientX-drag.x)*.008;G3.pitch=Math.max(.05,Math.min(1.45,drag.pitch+(e.clientY-drag.y)*.006));draw3D();});
+  ['pointerup','pointercancel'].forEach(t=>cv.addEventListener(t,()=>{drag=null;}));
+  cv.addEventListener('wheel',e=>{e.preventDefault();G3.auto=false;G3.zoom=Math.max(.6,Math.min(3,G3.zoom*Math.exp(-e.deltaY*.0015)));draw3D();},{passive:false});
+  $('map3dReset').addEventListener('click',()=>{G3.yaw=-.5;G3.pitch=.42;G3.zoom=1;G3.T=[0,3300,300];draw3D();});
+  // Arrow keys move the point the camera looks at, relative to where it's facing (Shift: faster).
+  // The canvas takes focus on click or hover so the page doesn't scroll instead.
+  cv.tabIndex=0;cv.addEventListener('pointerenter',()=>cv.focus({preventScroll:true}));
+  cv.addEventListener('keydown',e=>{const st=e.shiftKey?900:300,fw=[Math.sin(G3.yaw),Math.cos(G3.yaw)],rt=[fw[1],-fw[0]];
+    const mv={ArrowUp:[fw,1],ArrowDown:[fw,-1],ArrowRight:[rt,1],ArrowLeft:[rt,-1]}[e.key];
+    if(mv){e.preventDefault();nudge3D(()=>{G3.T[0]+=mv[0][0]*mv[1]*st;G3.T[1]+=mv[0][1]*mv[1]*st;});return;}
+    if(e.key==='+'||e.key==='='){e.preventDefault();nudge3D(()=>G3.zoom*=1.15);}
+    if(e.key==='-'||e.key==='_'){e.preventDefault();nudge3D(()=>G3.zoom/=1.15);}});
+  // Knob: drag the ring to orbit; buttons tilt and zoom.
+  const kn=$('knob');let kd=null;const ang=e=>{const r=kn.getBoundingClientRect();return Math.atan2(e.clientX-(r.left+r.width/2),-(e.clientY-(r.top+r.height/2)));};
+  kn.addEventListener('pointerdown',e=>{if(e.target.closest('button'))return;kd={a:ang(e),yaw:G3.yaw};kn.setPointerCapture(e.pointerId);G3.auto=false;});
+  kn.addEventListener('pointermove',e=>{if(!kd)return;G3.yaw=kd.yaw-(ang(e)-kd.a);draw3D();});
+  ['pointerup','pointercancel'].forEach(t=>kn.addEventListener(t,()=>{kd=null;}));
+  const hold=(id,f)=>{let tm=null;const go=()=>{nudge3D(f);tm=setTimeout(go,90);};const stop=()=>{clearTimeout(tm);tm=null;};
+    $(id).addEventListener('pointerdown',e=>{e.preventDefault();go();});['pointerup','pointerleave','pointercancel'].forEach(t=>$(id).addEventListener(t,stop));};
+  hold('kTiltUp',()=>G3.pitch+=.06);hold('kTiltDn',()=>G3.pitch-=.06);hold('kRotL',()=>G3.yaw+=.08);hold('kRotR',()=>G3.yaw-=.08);
+  hold('kZoomIn',()=>G3.zoom*=1.06);hold('kZoomOut',()=>G3.zoom/=1.06);
+  window.addEventListener('resize',()=>draw3D());
+  G3.seen=false;new IntersectionObserver(es=>{G3.seen=es[0].isIntersecting;if(G3.seen&&G3.auto)loop3D();}).observe(cv);
+  // Slow sway until someone grabs it.
+  const sway=t=>{if(!G3.auto)return;G3.yaw=-.5+Math.sin((t-G3.t0)/6000)*.6;requestAnimationFrame(sway);};
+  requestAnimationFrame(sway);
+})();
 
 // ---------- playstyle ----------
 function renderPlay(list){
@@ -455,8 +701,90 @@ function renderPlay(list){
     PLAYERS.map((p,j)=>{const a=A[j];if(a.ground==null)return `<div class="split-row"><span class="tag ${p.tag}" style="padding:1px 8px"><i></i>${esc(p.short)}</span><span class="note">No movement data yet</span></div>`;
       return `<div class="split-row"><span class="tag ${p.tag}" style="padding:1px 8px"><i></i>${esc(p.short)}</span><div class="stack" title="Ground ${f(a.ground)}%, wall ${f(a.wall)}%, air ${f(a.air)}%">
       <div style="width:${a.ground}%;background:var(--ink-2)">${f(a.ground)}%</div><div style="width:${a.wall}%;background:var(--muted)">${f(a.wall)}%</div><div style="width:${a.air}%;background:${p.color}">${f(a.air)}%</div></div></div>`;}).join('');
-  const rows=[['Avg boost held',a=>f(a.boost)],['Time supersonic',a=>f(a.ss,1,'%')],['Avg goal speed',a=>f(a.gsAvg,0,' km/h')],['Hardest goal',a=>f(a.gsMax,0,' km/h')],['Hardest hit',a=>f(a.hardest,0,' km/h')],['Bumps / game',a=>f(a.bumps,1)],['Boost pads / game',a=>f(a.pickups,1)],['Main car',a=>a.car?esc(a.car):'–'],['I Got No Boost',a=>a.noBoost==null?'–':`<span title="${fmtDur(a.noBoost/a.noBoostGames)} a game">${fmtDur(a.noBoost)}</span>`]];
+  const rows=[['Hat tricks',a=>a.games?String(a.hat):'–'],['Win % with a hat trick',a=>a.hat?`<span title="${a.hatWins} won of ${a.hat}">${Math.round(100*a.hatWins/a.hat)}%</span>`:'–'],['Kickoff goals',a=>a.games?String(a.kickoff):'–'],['Counter goals',a=>a.timed?String(a.saveGoals):'–'],
+    ...[1,2,3,4,5].map((n,i)=>[`Win % scoring ${n}${n<5?'':'+'} goal${n>1?'s':''}`,a=>{const b=a.byGoals&&a.byGoals[i];return b&&b.n?`<span title="${b.w} won of ${b.n}">${Math.round(100*b.w/b.n)}%</span> <small class="muted">${b.n}</small>`:'–';}]),['Avg speed',a=>fSpd(a.speed)],['Top speed',a=>fSpd(a.topSpeed)],['Distance driven',a=>fDist(a.dist,a.dist>=100?0:1)],['Distance / game',a=>a.dist==null?'–':fDist(a.dist/a.distGames,2)],['Avg boost held',a=>f(a.boost)],['Time supersonic',a=>f(a.ss,1,'%')],['Avg goal speed',a=>fSpd(a.gsAvg)],['Hardest goal',a=>fSpd(a.gsMax)],['Hardest hit',a=>fSpd(a.hardest)],['Bumps / game',a=>f(a.bumps,1)],['Boost pads / game',a=>f(a.pickups,1)],['Main car',a=>a.car?esc(a.car):'–'],['I Got No Boost',a=>a.noBoost==null?'–':`<span title="${fmtDur(a.noBoost/a.noBoostGames)} a game">${fmtDur(a.noBoost)}</span>`]];
+  const koFor=list.reduce((s,m)=>s+m.ourGoals.filter(g=>g.ko).length,0),koAgainst=list.reduce((s,m)=>s+m.theirGoals.filter(g=>g.ko).length,0);
+  const pct=ms=>ms.length?`<span title="${ms.filter(m=>m.win).length} won of ${ms.length}">${Math.round(100*ms.filter(m=>m.win).length/ms.length)}%</span> <small class="muted">${ms.length} games</small>`:'–';
+  const teamRows=[['Win % when we score first',pct(list.filter(m=>m.first==='us'))],['Win % when they score first',pct(list.filter(m=>m.first==='them'))],
+    ['Kickoff goals for',String(koFor)],['Kickoff goals against',String(koAgainst)],
+    ...[1,2,3,4].map(n=>{const down=list.filter(m=>n<4?m.deficit===n:m.deficit>=4),won=down.filter(m=>m.win).length;
+      return [`Comebacks from ${n}${n<4?'':'+'} goal${n>1?'s':''} down`,down.length?`<span title="Won ${won} of ${down.length} games where the biggest deficit was ${n}${n<4?'':' or more'}">${won}</span> <small class="muted">of ${down.length}</small>`:'0'];}),
+    ...[1,2,3,4].map(n=>{const up=list.filter(m=>n<4?m.lead===n:m.lead>=4),lost=up.filter(m=>!m.win).length;
+      return [`Blown ${n}${n<4?'':'+'} goal lead${n>1?'s':''}`,up.length?`<span title="Lost ${lost} of ${up.length} games where the biggest lead was ${n}${n<4?'':' or more'}">${lost}</span> <small class="muted">of ${up.length}</small>`:'0'];})];
+  $('teamKv').innerHTML=list.length?'<div class="h">Team</div><div class="h v"></div>'+teamRows.map(r=>`<div>${r[0]}</div><div class="v">${r[1]}</div>`).join(''):'';
+  $('koNote').textContent=list.length?`A kickoff goal is scored within about ${KICKOFF_SECS}s of play after the kickoff. A counter goal is scored within ${COUNTER_SECS}s of play after a save by the scoring team, in matches recorded since saves were timed.`:'';
   $('playKv').innerHTML='<div class="h">Stat</div>'+PLAYERS.map(p=>`<div class="h v">${esc(p.short)}</div>`).join('')+rows.map(r=>`<div>${r[0]}</div>`+A.map(a=>`<div class="v">${r[1](a)}</div>`).join('')).join('');
+  renderGarage(A);
+}
+
+// ---------- car blueprints ----------
+// Hand-drawn side profiles (not game art), facing right, ground at y=96. x0/x1/top are the body's
+// extent for the dimension lines; hb is the in-game hitbox the body uses (length, width, height in uu).
+const HITBOX={Octane:[118.0,84.2,36.2],Dominus:[127.9,83.3,31.3]};
+const CAR_ART={
+  Fennec:{hb:'Octane',x0:34,x1:226,top:33,wheels:[[66,80,16],[186,80,16]],
+    body:'M36 80 L34 60 L40 44 L58 34 L150 33 L172 50 L218 55 Q226 57 226 66 L224 80 L206 80 A20 20 0 0 0 166 80 L86 80 A20 20 0 0 0 46 80 Z',
+    lines:'M50 52 L60 39 L146 38 L164 52 Z M104 38 L104 52 L102 76 M164 52 L164 76 M58 34 L32 32 L34 38 L42 42 M86 77 L166 77 M178 53 L198 55 M214 60 L225 62 M34 50 L40 50 L40 56'},
+  Octane:{hb:'Octane',x0:30,x1:228,top:23,wheels:[[70,78,18],[184,81,15]],
+    body:'M36 80 C30 66 34 52 48 46 C64 38 76 26 104 24 C132 22 146 34 158 46 L206 52 C222 54 228 62 226 74 L222 80 L203 80 A19 19 0 0 0 165 80 L92 80 A22 22 0 0 0 48 80 Z',
+    lines:'M66 46 C76 34 90 30 106 30 C126 30 138 38 148 47 Z M114 30 L114 47 L112 76 M92 77 L165 77 M214 58 L225 62 M34 60 L42 58 M30 76 L38 76'},
+  Dominus:{hb:'Dominus',x0:26,x1:236,top:36,wheels:[[68,80,16],[196,80,16]],
+    body:'M30 80 L28 62 L34 56 L80 52 C96 40 104 36 124 36 L146 36 C158 38 168 46 176 52 L230 58 Q236 60 236 70 L234 80 L216 80 A20 20 0 0 0 176 80 L88 80 A20 20 0 0 0 48 80 Z',
+    lines:'M92 52 C102 42 110 40 124 40 L144 40 C154 42 160 47 166 52 Z M132 40 L132 52 L130 76 M88 77 L176 77 M28 56 L26 49 L46 49 L42 55 M226 62 L236 64 M186 56 L214 58'}
+};
+function carBlueprint(car,color){
+  const c=CAR_ART[car];if(!c)return '';
+  const [L,,H]=HITBOX[c.hb],R=c.x1+12,dim='stroke="var(--muted)" stroke-width=".8"';
+  const wheels=c.wheels.map(([x,y,r])=>`<circle cx="${x}" cy="${y}" r="${r}"/><circle cx="${x}" cy="${y}" r="${r*.6}"/><circle cx="${x}" cy="${y}" r="2.5"/>`+
+    `<path d="M${x} ${y-r-4}V${y+r+4}M${x-r-4} ${y}H${x+r+4}" ${dim} stroke-dasharray="4 2 1 2"/>`).join('');
+  return `<svg class="bp" viewBox="0 0 270 124" role="img" aria-label="Side view line drawing of the ${esc(car)}">
+  <path d="M8 96H262" ${dim} stroke-dasharray="6 3"/>
+  <g fill="none" stroke="var(--ink-2)" stroke-width="1" stroke-linejoin="round" stroke-linecap="round">
+    <path d="${c.lines}"/>${wheels}
+  </g>
+  <path d="${c.body}" fill="${color}" fill-opacity=".08" stroke="${color}" stroke-width="1.6" stroke-linejoin="round"/>
+  <g ${dim} fill="none">
+    <path d="M${c.x0} 100V114M${c.x1} 100V114M${c.x0} 110H${c.x1}M${c.x0-3} 113l6-6M${c.x1-3} 113l6-6"/>
+    <path d="M${c.x1+4} 96H${R+4}M${c.x1+4-30} ${c.top}H${R+4}M${R} 96V${c.top}M${R-3} ${c.top+3}l6-6M${R-3} 99l6-6"/>
+  </g>
+  <g fill="var(--muted)" font-family="var(--mono)" font-size="8">
+    <text x="${(c.x0+c.x1)/2}" y="107" text-anchor="middle">L ${L.toFixed(1)}</text>
+    <text transform="translate(${R+9} ${(96+c.top)/2}) rotate(-90)" text-anchor="middle">H ${H.toFixed(1)}</text>
+  </g>
+</svg>`;
+}
+function renderGarage(A){
+  $('garage').innerHTML=PLAYERS.map((p,j)=>{const car=A[j].car;if(!car)return '';
+    const art=CAR_ART[car],hb=art&&HITBOX[art.hb];
+    return `<figure class="car-card"><figcaption><span class="tag p${j+1}" style="padding:1px 8px"><i></i>${esc(p.short)}</span><b>${esc(car)}</b>`+
+      (art?`<span class="muted">${art.hb} hitbox</span>`:'')+`</figcaption>`+
+      (art?carBlueprint(car,p.color)+`<div class="car-dims num">L ${hb[0].toFixed(1)} · W ${hb[1].toFixed(1)} · H ${hb[2].toFixed(1)} uu</div>`
+          :`<div class="note">No drawing for the ${esc(car)} yet.</div>`)+`</figure>`;}).join('');
+}
+
+// ---------- all-time records ----------
+// Best single game or goal per player, across every playlist and the whole history.
+function renderRecords(){
+  const ms=DONE;
+  const best=(j,val)=>{let b=null;ms.forEach(m=>{const v=val(m,j);if(v!=null&&(!b||v>b.v))b={v,m};});return b;};
+  const goalBest=(j,val)=>{let b=null;ms.forEach(m=>m.ourGoals.filter(g=>g.who===j).forEach(g=>{const v=val(g);if(v!=null&&(!b||v>b.v))b={v,m};}));return b;};
+  const line=k=>(m,j)=>m.lines[j]?m.lines[j][k]:null;
+  const recs=[
+    ['Longest goal',j=>goalBest(j,g=>g.x!=null&&g.y!=null?Math.hypot(g.x,5120-g.y)/100:null),v=>fLen(v)],
+    ['Hardest goal',j=>goalBest(j,g=>g.spd),v=>fSpd(v)],
+    ['Hardest hit',j=>best(j,line('hardest')),v=>fSpd(v)],
+    ['Top speed',j=>best(j,line('topSpeed')),v=>fSpd(v)],
+    ['Most goals',j=>best(j,line('goals')),v=>v],
+    ['Most assists',j=>best(j,line('assists')),v=>v],
+    ['Most saves',j=>best(j,line('saves')),v=>v],
+    ['Most shots',j=>best(j,line('shots')),v=>v],
+    ['Most demos',j=>best(j,line('demos')),v=>v],
+    ['Most bumps',j=>best(j,line('bumps')),v=>v],
+    ['Highest score',j=>best(j,line('score')),v=>v]];
+  const cell=(rs,j,fmt)=>{const r=rs[j];return !r||!r.v?'<div class="v">–</div>':
+    `<div class="v${leads(rs.map(x=>x&&x.v),j)?' best':''}" title="${esc(r.m.arena)}, ${r.m.us}–${r.m.them} ${r.m.win?'win':'loss'}">${fmt(r.v)}<small>${fmtDate(r.m.when)}</small></div>`;};
+  $('recKv').innerHTML='<div class="h">Record</div>'+PLAYERS.map(p=>`<div class="h v">${esc(p.short)}</div>`).join('')+
+    recs.map(([name,get,fmt])=>{const rs=PLAYERS.map((p,j)=>get(j));return `<div>${name}</div>`+rs.map((r,j)=>cell(rs,j,fmt)).join('');}).join('');
 }
 
 // Seconds as 45s, 12m 05s or 3h 04m.
@@ -499,18 +827,30 @@ function renderSwing(list){
 }
 
 // ---------- match log ----------
+// Opponent ranks aren't in the game's data, so link each opponent to their tracker.gg profile.
+// PrimaryId looks like "Epic|<id>|0" or "Steam|<steamid>|0"; Steam profiles go by id, the rest by name.
+function trackerUrl(p){
+  const [plat,id]=String(p.primary_id||'').split('|'),k=(plat||'').toLowerCase();
+  const base='https://rocketleague.tracker.network/rocket-league/profile/';
+  const by=(seg,v)=>base+seg+'/'+encodeURIComponent(v)+'/overview';
+  if(k==='steam'&&id&&id!=='0')return by('steam',id);
+  if(k.startsWith('ps'))return by('psn',p.name);
+  if(k.startsWith('xbox'))return by('xbl',p.name);
+  if(k==='switch')return by('switch',p.name);
+  return by('epic',p.name);
+}
 function renderLog(list){
   const rows=[...list].reverse().slice(0,15);
   $('logCount').textContent=list.length?'Latest '+rows.length+' of '+list.length:'';
   const line=L=>L?`${L.goals}·${L.assists}·${L.saves}`:'–';
-  $('matchLog').innerHTML=`<thead><tr><th>When</th><th>Result</th><th>Score</th><th>Arena</th>`+PLAYERS.map(p=>`<th>${esc(p.short)} G·A·Sv</th>`).join('')+`<th>Top score</th><th>Notes</th></tr></thead><tbody>`+
+  $('matchLog').innerHTML=`<thead><tr><th>When</th><th>Result</th><th>Score</th><th>Arena</th>`+PLAYERS.map(p=>`<th>${esc(p.short)} G·A·Sv</th>`).join('')+`<th>Top score</th><th>Opponents</th><th>Notes</th></tr></thead><tbody>`+
     rows.map(m=>{const L=m.lines;const top=L.reduce((b,l,j)=>l&&(b<0||l.score>L[b].score)?j:b,-1);
-      return `<tr><td>${fmtDate(m.when)} ${fmtTime(m.when)}</td><td><span class="pill ${m.win?'w':'l'}">${m.win?'W':'L'}</span></td><td>${m.us}–${m.them}${m.ot?' <span class="muted">OT</span>':''}</td><td>${esc(m.arena)}</td>${L.map(l=>`<td>${line(l)}</td>`).join('')}<td>${top<0?'–':`<span class="tag ${PLAYERS[top].tag}" style="padding:0 7px"><i></i>${esc(PLAYERS[top].short)} ${L[top].score}</span>`}</td><td class="notes">${notes(m)}</td></tr>`;}).join('')+'</tbody>';
+      return `<tr><td><a href="#m-${esc(m.guid)}" class="mlink" title="Open this match">${fmtDate(m.when)} ${fmtTime(m.when)}</a></td><td><span class="pill ${m.win?'w':'l'}">${m.win?'W':'L'}</span></td><td>${m.us}–${m.them}${m.ot?' <span class="muted">OT</span>':''}</td><td>${esc(m.arena)}</td>${L.map(l=>`<td>${line(l)}</td>`).join('')}<td>${top<0?'–':`<span class="tag ${PLAYERS[top].tag}" style="padding:0 7px"><i></i>${esc(PLAYERS[top].short)} ${L[top].score}</span>`}</td><td class="opps">${m.opps.length?m.opps.map(o=>`<a href="${esc(o.url)}" target="_blank" rel="noopener" title="View ${esc(o.name)} on tracker.gg">${esc(o.name)}</a>`).join('<br>'):'–'}</td><td class="notes">${notes(m)}</td></tr>`;}).join('')+'</tbody>';
 }
 
 function notes(m){
   const out=[];
-  if(m.forfeit)out.push('<span class="chip" title="Ended early while behind">Forfeit</span>');
+  if(m.ff)out.push(`<span class="chip" title="Ended early: ${m.win?'they':'we'} forfeited or quit">${m.win?'They forfeited':'Forfeit'}</span>`);
   if(m.replay)out.push('<span class="chip">Replay</span>');
   const us=m.left.filter(x=>x.ours).length,them=m.left.length-us;
   if(them)out.push(`<span class="chip" title="${esc(m.left.filter(x=>!x.ours).map(x=>x.name).join(', '))}">Opponent quit</span>`);
@@ -524,7 +864,7 @@ function syncButtons(){
   document.querySelectorAll('#mode button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.m===mode));
   document.querySelectorAll('#metric button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.k===metric));
 }
-function renderPeriod(){const list=inPeriod();renderSummary(list);renderCmp(list);renderMaps(list);renderPlay(list);renderCrowd(list);renderSwing(list);renderLog(list);syncButtons();}
+function renderPeriod(){renderRecords();const list=inPeriod();renderSummary(list);renderCmp(list);renderMaps(list);renderPlay(list);renderCrowd(list);renderSwing(list);renderLog(list);syncButtons();}
 // ---------- warm-ups ----------
 // A night is every match with gaps under 90 minutes. Its warm-ups are the Casual Doubles games
 // played before the first Ranked Doubles game; the ranked games that night are what follows.
@@ -567,6 +907,9 @@ function renderAll(){
   if(!ALL.length){$('banner').hidden=false;$('banner').textContent='No finished matches for this playlist yet.';return;}
   renderPeriod();renderLastSession();renderStrip();renderTrend();renderMMR();renderWarmups();
 }
+$('units').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;units=b.dataset.u;saveUi();syncUnits();renderAll();});
+function syncUnits(){$('units').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.u===units)));}
+syncUnits();
 $('period').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;period=b.dataset.p;saveUi();renderPeriod();});
 $('mode').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;mode=b.dataset.m;saveUi();renderCmp(inPeriod());syncButtons();});
 $('metric').innerHTML=METRICS.map(m=>`<button type="button" data-k="${m.k}">${m.label}</button>`).join('');
@@ -624,6 +967,12 @@ let rt;window.addEventListener('resize',()=>{clearTimeout(rt);rt=setTimeout(()=>
 async function load(){
   let data=null;
   try{const r=await fetch('/api/data',{cache:'no-store'});if(r.ok)data=await r.json();}catch(e){}
+  // Never swap real stats for sample data because a request failed: keep what's on screen,
+  // or on first load keep the loading screen up and retry.
+  if(!data){
+    if(document.body.classList.contains('is-loading')){$('loaderText').textContent='Can\'t reach the stats server yet. Retrying…';setTimeout(load,5000);}
+    return;
+  }
   // Up to four players, one fixed colour each (--p1 to --p4).
   const names=(data&&data.players&&data.players.length?data.players:['jay29ID','Kobra Kelvin']).slice(0,4);
   PLAYERS=names.map((n,j)=>({name:n,short:(s=>s?s[0].toUpperCase()+s.slice(1):n)(n.split(/\s+/)[0].replace(/\d+.*$/,'')),color:`var(--p${j+1})`,tag:'p'+(j+1)}));
@@ -647,7 +996,105 @@ async function load(){
   $('banner').hidden=!SAMPLE;
   $('banner').textContent=SAMPLE?'No matches have been uploaded yet, so this shows sample data. It switches to your real stats as soon as the recorder sends the first finished match.':'';
   renderAll();
+  const first=document.body.classList.contains('is-loading');
+  document.body.classList.remove('is-loading');
+  if(first)matchFromHash();
 }
+// ---------- match detail ----------
+// Opened from the match log (or a #m-<guid> link): the whole scoreboard and goal-by-goal story.
+function openMatch(guid){
+  const m=DONE.find(x=>String(x.guid)===guid)||ALL.find(x=>String(x.guid)===guid);if(!m)return false;
+  const L=m.lines,cols=[['Score','score',0],['Goals','goals',0],['Assists','assists',0],['Saves','saves',0],['Shots','shots',0],['Demos','demos',0],['Touches','touches',0]];
+  const extra=[['Avg speed',l=>fSpd(l.speed)],['Top speed',l=>fSpd(l.topSpeed)],['Avg boost',l=>l.boost==null?'–':Math.round(l.boost)],['Supersonic',l=>l.ss==null?'–':l.ss.toFixed(1)+'%'],['Distance',l=>fDist(l.dist,2)],['Car',l=>l.car?esc(l.car):'–']];
+  const head=`<tr><th></th>${PLAYERS.map((p,j)=>`<th class="v"><span class="tag p${j+1}" style="padding:0 7px"><i></i>${esc(p.short)}</span></th>`).join('')}</tr>`;
+  const body=cols.map(([lab,k])=>`<tr><td>${lab}</td>${L.map(l=>`<td class="v">${l?l[k]:'–'}</td>`).join('')}</tr>`).join('')+
+    extra.map(([lab,f])=>`<tr><td>${lab}</td>${L.map(l=>`<td class="v">${l?f(l):'–'}</td>`).join('')}</tr>`).join('');
+  let a=0,b=0;
+  const story=m.goals.map(g=>{g.ours?a++:b++;const who=g.who>=0?PLAYERS[g.who].short:g.ours?'Us':esc(g.scorer&&g.scorer!=='Opponent'?g.scorer:'Opponent');
+    const as=g.assister?` <span class="muted">(assist ${esc(PLAYERS.find(p=>p.name===g.assister)?.short||g.assister)})</span>`:'';
+    return `<li class="${g.ours?'us':'them'}"><b class="num">${a}–${b}</b> ${who}${as}${g.spd!=null?` <span class="muted">· ${fSpd(g.spd)}</span>`:''}${g.ko?' <span class="chip">Kickoff</span>':''}${g.defl?` <span class="chip" title="Last touched by ${esc(g.defl)} before it went in">Redirected by ${esc(g.defl)}</span>`:''}</li>`;}).join('');
+  $('matchTitle').innerHTML=`<span class="pill ${m.win?'w':'l'}">${m.win?'W':'L'}</span> ${m.us}–${m.them}${m.ot?' <span class="muted">OT</span>':''} on ${esc(m.arena)}`;
+  $('matchBody').innerHTML=`<p class="muted">${fmtDate(m.when)} ${fmtTime(m.when)} · ${esc(m.playlist)}${m.secs?' · '+fmtDur(m.secs):''}</p>`+
+    (m.ff||m.replay||m.left.length?`<div class="mnotes">${notes(m)}</div>`:'')+
+    `<table class="lines mtable num"><thead>${head}</thead><tbody>${body}</tbody></table>`+
+    `<h3>Goals</h3>${story?`<ol class="story">${story}</ol>`:'<p class="muted">No goal details for this match.</p>'}`+
+    `<h3>Opponents</h3><p>${m.opps.length?m.opps.map(o=>`<a href="${esc(o.url)}" target="_blank" rel="noopener">${esc(o.name)}</a>`).join(' · '):'<span class="muted">Not recorded</span>'}</p>`;
+  const d=$('matchDlg');if(!d.open){if(d.showModal)d.showModal();else d.setAttribute('open','');}
+  return true;
+}
+function matchFromHash(){const h=location.hash;if(h.startsWith('#m-'))openMatch(decodeURIComponent(h.slice(3)));}
+window.addEventListener('hashchange',matchFromHash);
+$('matchClose').addEventListener('click',()=>$('matchDlg').close());
+$('matchDlg').addEventListener('click',e=>{if(e.target===$('matchDlg'))$('matchDlg').close();});
+$('matchDlg').addEventListener('close',()=>{if(location.hash.startsWith('#m-'))history.replaceState(null,'',location.pathname+location.search);});
+$('matchLog').addEventListener('click',e=>{const a=e.target.closest('a.mlink');if(!a)return;e.preventDefault();history.replaceState(null,'',a.getAttribute('href'));matchFromHash();});
+// Hovering a ball on one goal map lights up the same goal on the other.
+['fieldMap','netMap'].forEach(id=>{
+  $(id).addEventListener('mouseover',e=>{const d=e.target.closest('.dot');if(!d)return;const k=d.dataset.g;
+    document.querySelectorAll('#fieldMap,#netMap').forEach(el=>el.classList.add('linking'));
+    document.querySelectorAll(`#fieldMap .dot[data-g="${k}"],#netMap .dot[data-g="${k}"]`).forEach(el=>{el.classList.add('lit');if(el!==d)el.parentNode.appendChild(el);});
+    if(matchMedia('(hover: hover)').matches)showReplay(k,e);});
+  $(id).addEventListener('mousemove',e=>{if(RP.k!=null&&e.target.closest('.dot'))placeReplay(e);});
+  $(id).addEventListener('mouseout',e=>{const d=e.target.closest('.dot');if(!d)return;const to=e.relatedTarget&&e.relatedTarget.closest?e.relatedTarget.closest('.dot'):null;if(to===d)return;
+    document.querySelectorAll('#fieldMap,#netMap').forEach(el=>el.classList.remove('linking'));
+    document.querySelectorAll('.dot.lit').forEach(el=>el.classList.remove('lit'));hideReplay();});
+});
+
+// ---------- version and update log ----------
+// Add a release at the top whenever something visible changes (dashboard or widget).
+const CHANGELOG=[
+  {v:'1.6',date:'2026-10-14',items:[
+    'Arena background: a drawn pitch with boost pads over a random wallpaper on each visit',
+    'Goal map pins are now little Rocket League balls',
+    'Loading screen while your stats load, instead of briefly showing sample data',
+    'Goal mouth on the goal map drawn as a technical diagram with real dimensions',
+    'Assisted goals replay the pass first, then the shot',
+    'Goals the other team redirected are marked, with a red redirect point in the 3D replay',
+    'Hover a ball on the goal map for a 3D replay of that goal',
+    '3D goal map: arrow keys move the camera, and a control knob turns, tilts and zooms it',
+    '3D goal map you can drag to rotate, showing every goal from shot to net',
+    'Click a match in the match log to see its full stats and goal-by-goal story',
+    'Hover a ball on either goal map to light up the same goal on the other one',
+    'Win % for each of you by goals scored in the game: 1, 2, 3, 4 and 5+',
+    'Comebacks: wins after being 1, 2, 3 or 4+ goals down',
+    'Blown leads: losses after being 1, 2, 3 or 4+ goals up',
+    'km/h or mph toggle at the top switches every unit: speeds to mph, distances to miles, lengths to yards',
+    'Distance driven, in total and per game',
+    'Technical drawing of each of your main cars under Playstyle, with its hitbox size',
+    'Version number and this update log',
+    'Main car shows Fennec instead of the game\'s internal name "Grain"',
+    'Kickoff goals fixed: they showed 0 because the game\'s goal timer includes the countdown. New games are timed from the kickoff exactly',
+    'Win % when we score first vs when they score first',
+    'Hat tricks and win % with a hat trick',
+    'Kickoff goals per player, and for and against as a team',
+    'All-time records: longest and hardest goal, hardest hit, top speed and single-game highs',
+    'Average speed and top speed in Playstyle',
+    'Forfeited games now count as wins and losses (tagged in the match log)']},
+  {v:'1.5',date:'2026-10-09',items:['Opponents column in the match log, each linking to their tracker.gg profile']},
+  {v:'1.4',date:'2026-10-03',items:['Goals against sometimes show the Mortal Kombat "oops" GIF']},
+  {v:'1.3',date:'2026-09-30',items:['Long team names fit inside the widget\'s match box']},
+  {v:'1.2',date:'2026-09-28',items:[
+    'Widget themes: Cyber, Rocket League and Classic',
+    'Watching and drinks are shared live between both widgets',
+    'Goal map fixes: no more doubled goals, and goals are credited to the scorer',
+    'Main car, I Got No Boost and Boost pads per game now work',
+    'Bumps column, live boost meters and speedometer on the widget']},
+  {v:'1.1',date:'2026-09-28',items:[
+    'Widget: session record, GIF on every goal, Check updates, tray icon, spectators and drinks',
+    'Type MMR pop-up, Last game period, Warm-Ups panel, rank badges',
+    'Whole-pitch goal map and I Got No Boost stat',
+    'Script-based setup replaces the exe']},
+  {v:'1.0',date:'2026-09-27',items:['Dashboard goes live: recorder uploads, player stats, trends, MMR, goal map and match log','Widget updates itself from the site']}];
+function renderChanges(){
+  $('verBtn').textContent='v'+CHANGELOG[0].v;
+  $('verBtn').title='What\'s new in v'+CHANGELOG[0].v;
+  $('changesBody').innerHTML=CHANGELOG.map(r=>`<section class="rel"><h3>v${esc(r.v)}<span>${fmtDate(new Date(r.date+'T12:00:00'))}</span></h3><ul>${r.items.map(i=>`<li>${esc(i)}</li>`).join('')}</ul></section>`).join('');
+}
+$('verBtn').addEventListener('click',()=>{const d=$('changes');if(d.showModal)d.showModal();else d.setAttribute('open','');});
+$('changesClose').addEventListener('click',()=>$('changes').close());
+$('changes').addEventListener('click',e=>{if(e.target===$('changes'))$('changes').close();});
+renderChanges();
+
 load();
 // New matches arrive from the recorder a few seconds after each game; pick them up without a reload.
 setInterval(()=>{if(document.visibilityState==='visible')load();},60000);
