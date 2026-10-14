@@ -284,6 +284,7 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(`rocketdash listening on ${PORT}, data in ${DATA_DIR}`);
+  try{const c={};for(const r of Object.values(store.matches))for(const g of (r.goals||[])){if(!g||!(+g.goal_time>0)||!g.impact)continue;const k='t'+g.team+(g.ours?'us':'them')+'_impY'+(g.impact.Y>0?'+':'-')+'_shotY'+(g.shot_from&&g.shot_from.Y>0?'+':'-');c[k]=(c[k]||0)+1;}console.log('DIAG axes '+JSON.stringify(c));}catch(e){console.log('DIAG err '+e.message);}
   if (process.env.GIPHY_KEY) {
     gifList(GIF_QUERY, 3, 0).then(l => console.log(l.length ? `goal GIFs ready: ${l.length} for "${GIF_QUERY}"` : 'goal GIFs: GIPHY returned nothing (check GIPHY_KEY)'));
     gifList(AGAINST_GIF_QUERY, 1, 6, WHOOPS).then(l => console.log(`goals-against GIFs: ${l.map(g => g.title).join(' | ') || 'none'}`));
