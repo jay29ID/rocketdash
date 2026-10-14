@@ -104,6 +104,7 @@ function makeSample(names){
         goals.push({team:my,ours:true,goal_time:rnd()<.08?9+Math.floor(rnd()*3):14+Math.floor(rnd()*120),scorer:names[who],assister:as?names[1-who]:null,speed:Math.round(clamp(norm(prof[who].gs,18),35,140)),...pos(spot(who?.8:1),f)});
       }
       for(let g=0;g<them;g++)goals.push({team:1-my,ours:false,goal_time:rnd()<.08?9+Math.floor(rnd()*3):14+Math.floor(rnd()*120),scorer:'Opponent',speed:Math.round(clamp(norm(86,18),35,140)),...pos(spot(1.1),-f)});
+      for(let i=goals.length-1;i>0;i--){const k=Math.floor(rnd()*(i+1));[goals[i],goals[k]]=[goals[k],goals[i]];}   // in match order
       const players=prof.map((p,j)=>{
         const L=lines[j],shots=L.goals+pois(Math.max(.4,p.sh-p.g)),saves=pois(p.sv*(them>2?1.25:1)),demos=pois(p.d),touches=Math.max(8,Math.round(norm(p.t,5)));
         const air=+clamp(norm(p.air,1.8),1,20).toFixed(1),wall=+clamp(norm(p.wall,2.5),3,25).toFixed(1);
@@ -157,6 +158,8 @@ function isKickoffGoal(g){
   const s=num(g.since_kickoff);if(s!=null)return s<=KICKOFF_SECS;
   const t=num(g.goal_time);return t!=null&&t>0&&t<=KICKOFF_GOAL_TIME;
 }
+// Biggest gap we were behind by at any point, from the goals in the order they were scored.
+function maxDeficit(goals){let d=0,worst=0;goals.forEach(g=>{d+=g.ours?-1:1;if(d>worst)worst=d;});return worst;}
 function toMatch(r){
   const rows=r.players||[];
   const lines=PLAYERS.map(p=>{
@@ -188,7 +191,7 @@ function toMatch(r){
   const left=(r.players_left||[]).filter(Boolean).map(x=>({name:x.name,ours:myTeam!=null&&num(x.team)===myTeam}));
   return {guid:r.match_guid,when:new Date(r.started_at),win:r.result==='Win',us:num(r.team_score)||0,them:num(r.opponent_score)||0,
     ot:!!r.overtime,dur,arena:arenaName(r.arena),playlist:r.playlist||'Unknown playlist',lines,
-    first:goals.length?(goals[0].ours?'us':'them'):null,
+    first:goals.length?(goals[0].ours?'us':'them'):null,deficit:maxDeficit(goals),
     ourGoals:goals.filter(g=>g.ours),theirGoals:goals.filter(g=>!g.ours),
     replay:!!r.replay_created,left,opps,ff:!!r.ff,
     spectators:Array.isArray(r.spectators)?r.spectators.map(String):null,
@@ -476,7 +479,9 @@ function renderPlay(list){
   const koFor=list.reduce((s,m)=>s+m.ourGoals.filter(g=>g.ko).length,0),koAgainst=list.reduce((s,m)=>s+m.theirGoals.filter(g=>g.ko).length,0);
   const pct=ms=>ms.length?`<span title="${ms.filter(m=>m.win).length} won of ${ms.length}">${Math.round(100*ms.filter(m=>m.win).length/ms.length)}%</span> <small class="muted">${ms.length} games</small>`:'–';
   const teamRows=[['Win % when we score first',pct(list.filter(m=>m.first==='us'))],['Win % when they score first',pct(list.filter(m=>m.first==='them'))],
-    ['Kickoff goals for',String(koFor)],['Kickoff goals against',String(koAgainst)]];
+    ['Kickoff goals for',String(koFor)],['Kickoff goals against',String(koAgainst)],
+    ...[1,2,3,4].map(n=>{const down=list.filter(m=>n<4?m.deficit===n:m.deficit>=4),won=down.filter(m=>m.win).length;
+      return [`Comebacks from ${n}${n<4?'':'+'} goal${n>1?'s':''} down`,down.length?`<span title="Won ${won} of ${down.length} games where the biggest deficit was ${n}${n<4?'':' or more'}">${won}</span> <small class="muted">of ${down.length}</small>`:'0'];})];
   $('teamKv').innerHTML=list.length?'<div class="h">Team</div><div class="h v"></div>'+teamRows.map(r=>`<div>${r[0]}</div><div class="v">${r[1]}</div>`).join(''):'';
   $('koNote').textContent=list.length?`A kickoff goal is scored within about ${KICKOFF_SECS}s of play after the kickoff.`:'';
   $('playKv').innerHTML=`<div class="h">Stat</div><div class="h v">${esc(PLAYERS[0].short)}</div><div class="h v">${esc(PLAYERS[1].short)}</div>`+rows.map(r=>`<div>${r[0]}</div><div class="v">${r[1](A[0])}</div><div class="v">${r[1](A[1])}</div>`).join('');
@@ -744,6 +749,7 @@ async function load(){
 // Add a release at the top whenever something visible changes (dashboard or widget).
 const CHANGELOG=[
   {v:'1.6',date:'2026-10-14',items:[
+    'Comebacks: wins after being 1, 2, 3 or 4+ goals down',
     'km/h or mph toggle at the top switches every unit: speeds to mph, distances to miles, lengths to yards',
     'Distance driven, in total and per game',
     'Technical drawing of each of your main cars under Playstyle, with its hitbox size',
