@@ -5,9 +5,19 @@ const $=id=>document.getElementById(id);
 const DAY=864e5;
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const fmtDate=d=>d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
-const fmtDay=d=>d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
-const fmtTime=d=>d.toLocaleTimeString('en-US',{hour:'numeric',minute:'2-digit'});
+// Every date and time is shown in US Eastern (with daylight saving), whatever the viewer's PC is
+// set to, so Jay and Kobra see the same days, sessions and time-of-day blocks.
+const ETZ='America/New_York';
+const fmtDate=d=>d.toLocaleDateString('en-US',{timeZone:ETZ,month:'short',day:'numeric'});
+const fmtDay=d=>d.toLocaleDateString('en-US',{timeZone:ETZ,weekday:'short',month:'short',day:'numeric'});
+const fmtTime=d=>d.toLocaleTimeString('en-US',{timeZone:ETZ,hour:'numeric',minute:'2-digit'})+' ET';
+// A Date whose local fields read as the Eastern wall clock for d, for day keys and hour buckets.
+// Format these with wDate/wDay, not fmtDate/fmtDay (they would shift them a second time).
+const _etf=new Intl.DateTimeFormat('en-US',{timeZone:ETZ,year:'numeric',month:'numeric',day:'numeric',hour:'numeric',minute:'numeric',hourCycle:'h23'});
+const etWall=d=>{const p={};_etf.formatToParts(d).forEach(x=>p[x.type]=x.value);return new Date(+p.year,p.month-1,+p.day,(+p.hour)%24,+p.minute);};
+const etDay=d=>etWall(d).toDateString();
+const wDate=d=>d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+const wDay=d=>d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
 const sign=v=>(v>=0?'+':'')+v;
 const num=v=>v==null||v===''||isNaN(+v)?null:+v;
 const co=(o,k)=>o==null?null:num(o[k]!=null?o[k]:o[k.toLowerCase()]);
@@ -496,10 +506,10 @@ function renderMMR(){
   const rows=PLAYERS.map((p,j)=>mmrRows(j));
   if(rows.every(r=>!r.length)){$('mmrChart').innerHTML='<p class="note">No MMR logged for '+esc(mmrPlaylist())+' yet.</p>';return;}
   // One point per day that has a value, carrying the latest value logged that day.
-  const days=[...new Set(rows.flat().map(r=>r.at.toDateString()))].map(d=>new Date(d)).sort((a,b)=>a-b);
-  const labels=days.map(fmtDate);
-  const series=PLAYERS.map((p,j)=>({name:p.short,color:p.color,values:days.map(d=>{const inDay=rows[j].filter(r=>r.at.toDateString()===d.toDateString());return inDay.length?inDay[inDay.length-1].v:null;})}));
-  series.tipTitle=i=>fmtDay(days[i]);
+  const days=[...new Set(rows.flat().map(r=>etDay(r.at)))].map(d=>new Date(d)).sort((a,b)=>a-b);
+  const labels=days.map(wDate);
+  const series=PLAYERS.map((p,j)=>({name:p.short,color:p.color,values:days.map(d=>{const inDay=rows[j].filter(r=>etDay(r.at)===d.toDateString());return inDay.length?inDay[inDay.length-1].v:null;})}));
+  series.tipTitle=i=>wDay(days[i]);
   lineChart($('mmrChart'),{labels,series,fmt:v=>Math.round(v),height:210});
 }
 
@@ -986,7 +996,7 @@ function renderRecords(){
 }
 // Days played in a row, and the longest break, across every playlist.
 function renderDayStreaks(){const el=$('dayStreaks');if(!el)return;
-  const key=d=>new Date(d.getFullYear(),d.getMonth(),d.getDate()).getTime();
+  const key=d=>{const w=etWall(d);return new Date(w.getFullYear(),w.getMonth(),w.getDate()).getTime();};
   const days=[...new Set(DONE.map(m=>key(m.when)))].sort((a,b)=>a-b);
   if(!days.length){el.innerHTML='';return;}
   const diff=(a,b)=>Math.round((b-a)/DAY);   // whole days (rounding absorbs daylight-saving hours)
@@ -996,7 +1006,7 @@ function renderDayStreaks(){const el=$('dayStreaks');if(!el)return;
     if(run>best.n)best={n:run,a:s,b:days[i]};}
   const today=key(new Date(NOW)),last=days[days.length-1],since=diff(last,today);
   let cur=0;if(since<=1){cur=1;for(let i=days.length-1;i>0&&diff(days[i-1],days[i])===1;i--)cur++;}
-  const f=t=>fmtDate(new Date(t)),pl=n=>n+' day'+(n===1?'':'s');
+  const f=t=>wDate(new Date(t)),pl=n=>n+' day'+(n===1?'':'s');
   el.innerHTML=[['Most days in a row',pl(best.n),best.n>1?`${f(best.a)} to ${f(best.b)}`:f(best.a)],
     ['Longest break',gap.n?pl(gap.n):'–',gap.n?`${f(gap.a)} to ${f(gap.b)}`:'never missed a day'],
     since<=1?['Current run',pl(cur),since===0?'played today':'played yesterday']:['Days since we played',pl(since),'last on '+f(last)]]
@@ -1122,11 +1132,11 @@ function renderWarmups(){
 }
 
 // Header calendar: this month, Monday first, days with a game lit. No numbers, just the marks.
-function renderCal(){const el=$('hcal');if(!el)return;const now=new Date(NOW),y=now.getFullYear(),mo=now.getMonth();
-  const played={};DONE.forEach(m=>{const k=m.when.toDateString();played[k]=(played[k]||0)+1;});
+function renderCal(){const el=$('hcal');if(!el)return;const now=etWall(new Date(NOW)),y=now.getFullYear(),mo=now.getMonth();
+  const played={};DONE.forEach(m=>{const k=etDay(m.when);played[k]=(played[k]||0)+1;});
   const first=(new Date(y,mo,1).getDay()+6)%7,days=new Date(y,mo+1,0).getDate();let h='<i class="x"></i>'.repeat(first);
   for(let d=1;d<=days;d++){const dt=new Date(y,mo,d),n=played[dt.toDateString()];
-    h+=`<i class="${n?'on':''}${dt.toDateString()===now.toDateString()?' today':''}"${n?` title="${esc(fmtDay(dt))}: ${n} game${n>1?'s':''}"`:''}></i>`;}
+    h+=`<i class="${n?'on':''}${dt.toDateString()===now.toDateString()?' today':''}"${n?` title="${esc(wDay(dt))}: ${n} game${n>1?'s':''}"`:''}></i>`;}
   el.innerHTML=h;el.setAttribute('aria-label',`${now.toLocaleDateString('en-US',{month:'long'})}: played on ${Object.keys(played).filter(k=>{const d=new Date(k);return d.getMonth()===mo&&d.getFullYear()===y;}).length} days`);}
 function renderAll(){
   build();
@@ -1248,7 +1258,7 @@ function tickSince(){const now=Date.now();
     let s=Math.max(0,Math.floor((now-t)/1000));const d=Math.floor(s/86400);s%=86400;const h=Math.floor(s/3600);s%=3600;const m=Math.floor(s/60);s%=60;
     const pad=n=>String(n).padStart(2,'0');
     sinceSet(el,(d?d+'d ':'')+(d||h?pad(h)+'h ':'')+pad(m)+'m '+pad(s)+'s');
-    el.title='Last goal '+new Date(t).toLocaleString();});}
+    el.title='Last goal '+new Date(t).toLocaleString('en-US',{timeZone:ETZ,month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})+' ET';});}
 // Two lines the width of the name card: the time in a green pill, "since last goal" under it
 // in purple digital type stretched to the same width. Sizes are refit only when the length changes.
 function sinceSet(el,txt){
@@ -1690,7 +1700,7 @@ function renderFastest(list){
 // 12. Time of day: 3-hour blocks starting at 4am, by the game's start in the viewer's time zone ---
 const TOD=['4–7am','7–10am','10am–1pm','1–4pm','4–7pm','7–10pm','10pm–1am','1–4am'];
 const TOD_AT=['4am','7am','10am','1pm','4pm','7pm','10pm','1am'];   // bar labels: when each block starts
-const todOf=m=>Math.floor(((m.when.getHours()-4+24)%24)/3);
+const todOf=m=>Math.floor(((etWall(m.when).getHours()-4+24)%24)/3);
 function renderTod(list){
   const el=$('todBody');if(!el)return;
   const ok=list.filter(m=>m.when&&!isNaN(m.when));
@@ -1847,6 +1857,7 @@ $('matchLog').addEventListener('click',e=>{const a=e.target.closest('a.mlink');i
 // Add a release at the top whenever something visible changes (dashboard or widget).
 const CHANGELOG=[
   {v:'1.8',date:'2026-10-17',items:[
+    'All dates and times now use Eastern time (ET) on every computer, so Jay and Kobra see the same days, calendar, day streaks and time-of-day blocks; times show an ET label.',
     'Time of day panel: win rate, record and per-game stats in 3-hour blocks (4–7am through 1–4am) by when each game started, with best and worst times; follows the period, playlist and Duo/Solo filters.']},
   {v:'1.7',date:'2026-10-14',items:[
     'Widget sends replays you save in the game to the dashboard, which reads the ball\'s full path from them for new stats to come (arrives with Check updates).',
