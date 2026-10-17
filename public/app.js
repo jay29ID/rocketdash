@@ -1268,11 +1268,12 @@ function sinceSet(el,txt){
   const fit=(node,max)=>{node.style.fontSize='20px';const cs=getComputedStyle(node),padX=parseFloat(cs.paddingLeft)+parseFloat(cs.paddingRight);
     const r=document.createRange();r.selectNodeContents(node);const w=r.getBoundingClientRect().width;const room=el.clientWidth-padX;
     if(w&&room>0)node.style.fontSize=Math.min(max,20*room/w).toFixed(2)+'px';};
-  fit(sp,14);
+  sl.style.fontSize='1px';fit(sp,14);
   // The caption matches the time's text width, not the pill's.
   const r=document.createRange();r.selectNodeContents(sp);const tw=r.getBoundingClientRect().width;
   sl.style.fontSize='20px';sl.style.padding='0';const r2=document.createRange();r2.selectNodeContents(sl);const cw=r2.getBoundingClientRect().width;
-  if(tw&&cw)sl.style.fontSize=(20*tw/cw).toFixed(2)+'px';}
+  // Twice the time's text width (Jason found it too small); the column widens past the name card if it must.
+  if(tw&&cw)sl.style.fontSize=(20*2*tw/cw).toFixed(2)+'px';}
 setInterval(tickSince,1000);
 if(document.fonts)document.fonts.ready.then(()=>{document.querySelectorAll('#playerTags .since').forEach(el=>el._len=null);tickSince();});
 
@@ -1701,6 +1702,16 @@ function renderFastest(list){
 const TOD=['4–7am','7–10am','10am–1pm','1–4pm','4–7pm','7–10pm','10pm–1am','1–4am'];
 const TOD_AT=['4am','7am','10am','1pm','4pm','7pm','10pm','1am'];   // bar labels: when each block starts
 const todOf=m=>Math.floor(((etWall(m.when).getHours()-4+24)%24)/3);
+// Day of week x block grid. A game counts on the ET calendar day it started (12:30am Saturday is Saturday).
+const WD=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+function todWeek(ok,MIN){
+  const cell=g=>{const n=g.length,w=g.filter(m=>m.win).length;if(!n)return '<td class="e">·</td>';const r=w/n,k=Math.round(Math.abs(r-.5)*2*70+12);
+    return `<td style="background:color-mix(in srgb,var(${r>=.5?'--win':'--loss'}) ${k}%,transparent)${n<MIN?';opacity:.5':''}" title="${w}–${n-w} (${iPct(w,n)}) in ${n} game${n>1?'s':''}"><b>${iPct(w,n)}</b><span>${n}</span></td>`;};
+  const dayOf=m=>(etWall(m.when).getDay()+6)%7,rows=WD.map((d,i)=>ok.filter(m=>dayOf(m)===i));
+  return `<h3 class="todh">By day of the week</h3><div class="todwrap"><table class="todgrid num"><thead><tr><th></th>${TOD_AT.map(a=>`<th>${a}</th>`).join('')}<th class="all">All day</th></tr></thead><tbody>${
+    rows.map((g,i)=>`<tr><th>${WD[i]}</th>${TOD.map((x,j)=>cell(g.filter(m=>todOf(m)===j))).join('')}${cell(g).replace('<td','<td class="all"')}</tr>`).join('')}</tbody></table></div>
+    <p class="note">Each cell is the win rate, with games played underneath; greener is better, redder is worse, faded means fewer than ${MIN} games. Hover a cell for the record. A game counts on the day it started in ET, so a 12:30am Saturday game is Saturday.</p>`;
+}
 function renderTod(list){
   const el=$('todBody');if(!el)return;
   const ok=list.filter(m=>m.when&&!isNaN(m.when));
@@ -1715,6 +1726,7 @@ function renderTod(list){
       <b class="num">${b.n?iPct(b.w,b.n):'–'}</b><i class="${b.n?(b.wr>=.5?'':'lo'):'none'}" style="height:${b.n?Math.max(4,b.wr*100):0}%;opacity:${b.n?(b.n>=MIN?1:.45):1}"></i><span>${TOD_AT[TOD.indexOf(b.lbl)]}</span></div>`).join('')}</div>`+
     `<div class="todwrap"><table class="lines num"><thead><tr><th>Block</th><th>Games</th><th>Record</th><th>Win rate</th><th>Goals for</th><th>Against</th><th>Shots</th><th>Saves</th>${PLAYERS.map(p=>`<th>${esc(p.short)} score</th>`).join('')}</tr></thead><tbody>${B.map(b=>`<tr${b.n?'':' class="muted"'}><td>${esc(b.lbl)}</td><td>${b.n||'–'}</td><td>${b.n?`${b.w}–${b.n-b.w}`:'–'}</td><td>${b.n?`<span class="wr" style="--w:${100*b.wr}%">${iPct(b.w,b.n)}</span>`:'–'}</td><td>${f1(b.gf)}</td><td>${f1(b.ga)}</td><td>${f1(b.sh)}</td><td>${f1(b.sv)}</td>${b.sc.map(v=>`<td>${v==null?'–':v}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`+
     `<p class="note">Goals, shots and saves are per game for our team; score is each player's average. Blocks with fewer than ${MIN} games are faded and left out of best and worst.</p>`+
+    todWeek(ok,MIN)+
     (best?callouts([['Best time',best.lbl,`${iPct(best.w,best.n)} over ${best.n} games`],['Worst time',worst?worst.lbl:'–',worst?`${iPct(worst.w,worst.n)} over ${worst.n} games`:'needs two blocks'],['Most played',most.lbl,`${most.n} games`]]):'');
 }
 
@@ -1857,6 +1869,7 @@ $('matchLog').addEventListener('click',e=>{const a=e.target.closest('a.mlink');i
 // Add a release at the top whenever something visible changes (dashboard or widget).
 const CHANGELOG=[
   {v:'1.8',date:'2026-10-17',items:[
+    'Time of day adds a day-of-week grid: win rate and games for every weekday and 3-hour block, plus an all-day column; the "since last goal" caption is twice as big.',
     'All dates and times now use Eastern time (ET) on every computer, so Jay and Kobra see the same days, calendar, day streaks and time-of-day blocks; times show an ET label.',
     'Time of day panel: win rate, record and per-game stats in 3-hour blocks (4–7am through 1–4am) by when each game started, with best and worst times; follows the period, playlist and Duo/Solo filters.']},
   {v:'1.7',date:'2026-10-14',items:[
