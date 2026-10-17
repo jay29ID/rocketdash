@@ -1687,11 +1687,32 @@ function renderFastest(list){
     if(hit){RP.k=null;showReplay(hit.k);}});
 }
 
+// 12. Time of day: 3-hour blocks starting at 4am, by the game's start in the viewer's time zone ---
+const TOD=['4–7am','7–10am','10am–1pm','1–4pm','4–7pm','7–10pm','10pm–1am','1–4am'];
+const TOD_AT=['4am','7am','10am','1pm','4pm','7pm','10pm','1am'];   // bar labels: when each block starts
+const todOf=m=>Math.floor(((m.when.getHours()-4+24)%24)/3);
+function renderTod(list){
+  const el=$('todBody');if(!el)return;
+  const ok=list.filter(m=>m.when&&!isNaN(m.when));
+  if(!ok.length){el.innerHTML='<p class="note">No games in this period.</p>';return;}
+  const sum=(g,f)=>g.reduce((a,m)=>a+f(m),0),our=(m,k)=>m.lines.reduce((a,l)=>a+(l?l[k]||0:0),0);
+  const B=TOD.map((lbl,i)=>{const g=ok.filter(m=>todOf(m)===i),w=g.filter(m=>m.win).length,n=g.length;
+    return {lbl,n,w,wr:n?w/n:null,gf:n?sum(g,m=>m.us)/n:null,ga:n?sum(g,m=>m.them)/n:null,sh:n?sum(g,m=>our(m,'shots'))/n:null,sv:n?sum(g,m=>our(m,'saves'))/n:null,
+      sc:PLAYERS.map((p,j)=>{const h=g.filter(m=>m.lines[j]);return h.length?Math.round(sum(h,m=>m.lines[j].score)/h.length):null;})};});
+  const MIN=3,ranked=B.filter(b=>b.n>=MIN).sort((a,b)=>b.wr-a.wr||b.n-a.n),best=ranked[0],worst=ranked.length>1?ranked[ranked.length-1]:null,most=B.slice().sort((a,b)=>b.n-a.n)[0];
+  const f1=v=>v==null?'–':v.toFixed(1);
+  el.innerHTML=`<div class="todbars" role="img" aria-label="Win rate by time of day">${B.map(b=>`<div class="b${b===best?' best':''}" title="${esc(b.lbl)}: ${b.n?`${b.w}–${b.n-b.w}, ${iPct(b.w,b.n)}`:'no games'}">
+      <b class="num">${b.n?iPct(b.w,b.n):'–'}</b><i class="${b.n?(b.wr>=.5?'':'lo'):'none'}" style="height:${b.n?Math.max(4,b.wr*100):0}%;opacity:${b.n?(b.n>=MIN?1:.45):1}"></i><span>${TOD_AT[TOD.indexOf(b.lbl)]}</span></div>`).join('')}</div>`+
+    `<div class="todwrap"><table class="lines num"><thead><tr><th>Block</th><th>Games</th><th>Record</th><th>Win rate</th><th>Goals for</th><th>Against</th><th>Shots</th><th>Saves</th>${PLAYERS.map(p=>`<th>${esc(p.short)} score</th>`).join('')}</tr></thead><tbody>${B.map(b=>`<tr${b.n?'':' class="muted"'}><td>${esc(b.lbl)}</td><td>${b.n||'–'}</td><td>${b.n?`${b.w}–${b.n-b.w}`:'–'}</td><td>${b.n?`<span class="wr" style="--w:${100*b.wr}%">${iPct(b.w,b.n)}</span>`:'–'}</td><td>${f1(b.gf)}</td><td>${f1(b.ga)}</td><td>${f1(b.sh)}</td><td>${f1(b.sv)}</td>${b.sc.map(v=>`<td>${v==null?'–':v}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`+
+    `<p class="note">Goals, shots and saves are per game for our team; score is each player's average. Blocks with fewer than ${MIN} games are faded and left out of best and worst.</p>`+
+    (best?callouts([['Best time',best.lbl,`${iPct(best.w,best.n)} over ${best.n} games`],['Worst time',worst?worst.lbl:'–',worst?`${iPct(worst.w,worst.n)} over ${worst.n} games`:'needs two blocks'],['Most played',most.lbl,`${most.n} games`]]):'');
+}
+
 // Wiring ---------------------------------------------------------------------------------
 function renderInsights(list){
   const run=f=>{try{f();}catch(e){console.error(e);}};run(syncShotWho);
   run(()=>renderShots(list));run(()=>renderDemos(list));run(()=>renderKicks(list));run(()=>renderTouches(list));run(()=>renderMomentum(list));
-  run(()=>renderTrophies());run(()=>renderPosts(list));run(()=>renderMmrSessions());run(()=>renderStarve(list));run(()=>renderSynergy(list));run(()=>renderFastest(list));
+  run(()=>renderTrophies());run(()=>renderPosts(list));run(()=>renderMmrSessions());run(()=>renderStarve(list));run(()=>renderSynergy(list));run(()=>renderFastest(list));run(()=>renderTod(list));
 }
 document.addEventListener('click',e=>{const b=e.target.closest('#shotWho button,#touchWho button,#postSide button');if(!b)return;const id=b.parentElement.id,v=b.dataset.v;
   if(id==='shotWho')IN.shotWho=v;if(id==='touchWho')IN.touchWho=+v;if(id==='postSide')IN.postSide=v;
@@ -1825,6 +1846,8 @@ $('matchLog').addEventListener('click',e=>{const a=e.target.closest('a.mlink');i
 // ---------- version and update log ----------
 // Add a release at the top whenever something visible changes (dashboard or widget).
 const CHANGELOG=[
+  {v:'1.8',date:'2026-10-17',items:[
+    'Time of day panel: win rate, record and per-game stats in 3-hour blocks (4–7am through 1–4am) by when each game started, with best and worst times; follows the period, playlist and Duo/Solo filters.']},
   {v:'1.7',date:'2026-10-14',items:[
     'Widget sends replays you save in the game to the dashboard, which reads the ball\'s full path from them for new stats to come (arrives with Check updates).',
     'Widget gets the dashboard themes: Neon, Night and Midnight join Cyber, Rocket League and Classic in the widget theme menu (arrives with Check updates).',

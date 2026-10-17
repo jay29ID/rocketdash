@@ -425,6 +425,15 @@ body.g3-dark .mini3d span{color:#595959}
 .fastlist .rk{width:18px;color:var(--muted)}.fastlist .chipbtn{margin-left:auto}
 .momg{font-size:11px;font-weight:600}
 .skey{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--muted);margin-top:6px}.skey span{display:inline-flex;align-items:center;gap:5px}.skey i{width:9px;height:9px;border-radius:50%;border:1.5px solid var(--ink-2)}.skey i.g{background:var(--ink-2)}
+.todbars{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:8px;align-items:end;height:150px;margin:4px 0 14px}
+.todbars .b{display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:4px;height:100%;min-width:0}
+.todbars .b i{display:block;width:100%;max-width:46px;border-radius:4px 4px 0 0;background:var(--win)}
+.todbars .b i.lo{background:var(--loss)}
+.todbars .b i.none{background:var(--grid);height:3px!important}
+.todbars .b b{font-size:12px}.todbars .b span{font-size:11px;color:var(--muted);white-space:nowrap}
+.todbars .b.best b{color:var(--win)}
+.todwrap{overflow-x:auto}
+@media (max-width:560px){.todbars{gap:3px}.todbars .b span{font-size:9px}}
 .wr{display:inline-block;min-width:56px;text-align:right;background:linear-gradient(90deg,color-mix(in srgb,var(--win) 30%,transparent) var(--w),transparent var(--w));padding:1px 6px;border-radius:4px}
 @media (max-width:520px){.two{grid-template-columns:1fr}.bar{grid-template-columns:70px 1fr 40px}}
 .mpick{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:5px 8px;color:var(--ink);font-size:13px;max-width:100%;min-width:0}
@@ -696,6 +705,11 @@ body.g3-dark .mini3d span{color:#595959}
       <div class="panel-head"><h2 id="fastTitle">Hardest shots</h2><span class="muted">Fastest goals, period above</span></div>
       <div id="fastBody"></div>
     </div>
+  </section>
+
+  <section class="panel" aria-labelledby="todTitle">
+    <div class="panel-head"><h2 id="todTitle">Time of day</h2><span class="muted">3-hour blocks by when each game started, your local time</span></div>
+    <div id="todBody"></div>
   </section>
 
   <section class="grid g-2">
