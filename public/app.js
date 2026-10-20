@@ -1623,12 +1623,35 @@ function renderPosts(list){
   for(let i=1;i<8;i++){g+=`<line x1="${sx(893-i*223)}" x2="${sx(893-i*223)}" y1="${sz(642)}" y2="${sz(0)}" stroke="var(--grid)"/>`;}
   for(let i=1;i<4;i++){g+=`<line x1="${sx(893)}" x2="${sx(-893)}" y1="${sz(i*160)}" y2="${sz(i*160)}" stroke="var(--grid)"/>`;}
   g+=`<path d="M${sx(893)},${sz(0)} L${sx(893)},${sz(642)} L${sx(-893)},${sz(642)} L${sx(-893)},${sz(0)}" fill="none" stroke="var(--ink)" stroke-width="6" stroke-linejoin="round"/><line x1="0" x2="${W}" y1="${sz(0)}" y2="${sz(0)}" stroke="var(--pitch-line)" stroke-width="2"/>`;
-  g+=hits.map(h=>{const c=h.who>=0?PLAYERS[h.who].color:'var(--loss)';return `<circle cx="${sx(clamp(h.x,-1100,1100)).toFixed(1)}" cy="${sz(clamp(h.z,0,760)).toFixed(1)}" r="6" fill="${c}" stroke="var(--surface)" stroke-width="1.5" opacity=".9"><title>${h.who>=0?esc(PLAYERS[h.who].short):'Opponent'} · ${fmtDate(h.m.when)}</title></circle>`;}).join('');
+  g+=hits.map(h=>{const c=h.who>=0?PLAYERS[h.who].color:'var(--loss)';return `<circle cx="${sx(clamp(h.x,-1100,1100)).toFixed(1)}" cy="${sz(clamp(h.z,0,760)).toFixed(1)}" r="6" fill="${c}" stroke="var(--surface)" stroke-width="1.5" opacity=".9" data-spd="${num(h.spd)!=null?Math.round(+h.spd):''}" style="cursor:pointer"><title>${h.who>=0?esc(PLAYERS[h.who].short):'Opponent'} · ${fmtDate(h.m.when)}</title></circle>`;}).join('');
   // Every game: post/crossbar counts per player from the scoreboard rows.
   const per=PLAYERS.map((p,j)=>({j,n:list.reduce((a,m)=>{const r=(m.raw.players||[]).find(x=>x&&x.name===p.name);return a+(r?num(r.crossbar_hits)||0:0);},0)}));
-  el.innerHTML=`<div class="panel-tools">${segHtml('postSide',[['us','Our shots'],['them','Their shots']],side)}</div><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Goal frame with post and crossbar hits">${g}</svg>`+
+  el.innerHTML=`<div class="panel-tools">${segHtml('postSide',[['us','Our shots'],['them','Their shots']],side)}<button type="button" class="chipbtn" id="postMute" aria-pressed="${!CLANG.on}" title="Post-hit sound when you hover a marker">${CLANG.on?'🔊 Sound on':'🔇 Sound off'}</button></div><svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Goal frame with post and crossbar hits">${g}</svg>`+
     `<p class="map-note">${pl.length?`${hits.length} so-close hit${hits.length===1?'':'s'} on the frame, seen from the front. `:''}Every game: ${per.map(r=>`${esc(PLAYERS[r.j].short)} ${r.n}`).join(', ')} post or crossbar hits.</p>`+(pl.length?'':needNote('Where they hit'));
 }
+
+// Hovering a marker plays a goal-post clang, synthesized (no game audio): a few inharmonic metal
+// partials plus a short noise thunk. Harder hits ring louder and a touch lower. Browsers only allow
+// sound after the first click or key press on the page. The mute choice is remembered.
+const CLANG={on:true,ctx:null};
+try{CLANG.on=localStorage.getItem('rl-post-sound')!=='off';}catch(e){}
+function postClang(spd){
+  if(!CLANG.on)return;const AC=window.AudioContext||window.webkitAudioContext;if(!AC)return;
+  const c=CLANG.ctx||(CLANG.ctx=new AC());if(c.state==='suspended')c.resume().catch(()=>{});if(c.state!=='running')return;
+  const k=spd>0?clamp(spd/4500,0,1):.5,t=c.currentTime,vol=.10+.16*k,base=640-120*k+(Math.random()-.5)*30;
+  const out=c.createGain();out.gain.value=vol;out.connect(c.destination);
+  [[1,1,1.1],[2.76,.55,.7],[5.4,.32,.45],[8.93,.2,.28],[13.3,.1,.18]].forEach(([r,a,d])=>{
+    const o=c.createOscillator(),g=c.createGain();o.type='sine';o.frequency.value=base*r;
+    g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(a,t+.003);g.gain.exponentialRampToValueAtTime(.0005,t+d*(.7+.5*k));
+    o.connect(g);g.connect(out);o.start(t);o.stop(t+d*1.3+.05);});
+  const n=Math.floor(c.sampleRate*.05),buf=c.createBuffer(1,n,c.sampleRate),ch=buf.getChannelData(0);
+  for(let i=0;i<n;i++)ch[i]=(Math.random()*2-1)*Math.pow(1-i/n,3);
+  const src=c.createBufferSource(),bp=c.createBiquadFilter(),ng=c.createGain();src.buffer=buf;bp.type='bandpass';bp.frequency.value=1800;bp.Q.value=.8;ng.gain.value=.9;
+  src.connect(bp);bp.connect(ng);ng.connect(out);src.start(t);}
+document.addEventListener('pointerdown',()=>{if(CLANG.ctx&&CLANG.ctx.state==='suspended')CLANG.ctx.resume().catch(()=>{});},{passive:true});
+document.addEventListener('mouseover',e=>{const m=e.target.closest&&e.target.closest('#postBody circle[data-spd]');if(!m||(e.relatedTarget&&m.contains(e.relatedTarget)))return;postClang(+m.dataset.spd||0);});
+document.addEventListener('click',e=>{const b=e.target.closest('#postMute');if(!b)return;CLANG.on=!CLANG.on;try{localStorage.setItem('rl-post-sound',CLANG.on?'on':'off');}catch(err){}
+  b.setAttribute('aria-pressed',!CLANG.on);b.textContent=CLANG.on?'🔊 Sound on':'🔇 Sound off';if(CLANG.on){CLANG.ctx=CLANG.ctx||null;postClang(2500);}});
 
 // 8. MMR per session ---------------------------------------------------------------------
 function renderMmrSessions(){
@@ -1868,6 +1891,8 @@ $('matchLog').addEventListener('click',e=>{const a=e.target.closest('a.mlink');i
 // ---------- version and update log ----------
 // Add a release at the top whenever something visible changes (dashboard or widget).
 const CHANGELOG=[
+  {v:'1.9',date:'2026-10-20',items:[
+    'So close: hovering a marker plays a goal-post clang (louder for harder hits), with a Sound on/off button that is remembered.']},
   {v:'1.8',date:'2026-10-17',items:[
     'Time of day adds a day-of-week grid: win rate and games for every weekday and 3-hour block, plus an all-day column; the "since last goal" caption is twice as big.',
     'All dates and times now use Eastern time (ET) on every computer, so Jay and Kobra see the same days, calendar, day streaks and time-of-day blocks; times show an ET label.',
