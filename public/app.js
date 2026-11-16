@@ -297,7 +297,7 @@ function build(){
   done.sort((a,b)=>a.when-b.when);
   // Duo: at least two of us in the game. Solo: just one of us (solo queue, 1v1, or with someone else).
   const withUs=m=>m.lines.filter(Boolean).length;
-  const kept=party==='all'?done:done.filter(m=>party==='solo'?withUs(m)===1:withUs(m)>=2);
+  const kept=party==='all'?done.slice():done.filter(m=>party==='solo'?withUs(m)===1:withUs(m)>=2);
   done.length=0;kept.forEach(m=>done.push(m));
   document.querySelectorAll('#party button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.p===party)));
   const counts={};done.forEach(m=>counts[m.playlist]=(counts[m.playlist]||0)+1);
@@ -1461,7 +1461,7 @@ function artRun(){cancelAnimationFrame(ART.raf);ART.raf=0;if(!ART.m||!ART.seen)r
 // session, boost at goals against, duo synergy and hardest shots. Each is its own panel in
 // index.html, so the layout system makes them movable.
 
-const IN={shotWho:'all',touchWho:0,postSide:'us',momG:null,mmrS:null,fastSide:'us'};
+const IN={repSide:'opp',repSort:'n',repAll:false,shotWho:'all',touchWho:0,postSide:'us',momG:null,mmrS:null,fastSide:'us'};
 const pIx=n=>PLAYERS.findIndex(p=>p.name===n);
 const pShort=n=>{const j=pIx(n);return j>=0?PLAYERS[j].short:n;};
 const ourTeam=m=>num(m.raw&&m.raw.my_team);
@@ -1753,11 +1753,72 @@ function renderTod(list){
     (best?callouts([['Best time',best.lbl,`${iPct(best.w,best.n)} over ${best.n} games`],['Worst time',worst?worst.lbl:'–',worst?`${iPct(worst.w,worst.n)} over ${worst.n} games`:'needs two blocks'],['Most played',most.lbl,`${most.n} games`]]):'');
 }
 
+// 15. Repeat players ----------------------------------------------------------------------
+// Everyone outside our group we've met at least twice: opponents, or randoms on our team. Grouped
+// by platform id when the game sends one (survives name changes), else by name. The game never
+// sends anyone else's rank, so "Lobby MMR" is our own MMR when we queued into those games, which
+// is what matchmaking paired them against; their real rank is one click away on tracker.gg.
+function lobbyMmr(m){
+  const q=num(m.raw.mmr_at_queue);if(q)return q;
+  if(!/^Ranked /.test(m.playlist))return null;
+  const t=m.when.getTime(),v=[];
+  PLAYERS.forEach((p,j)=>{if(!m.lines[j])return;let best=null;
+    RAW.mmr.forEach(r=>{if(!r||r.player!==p.name||r.playlist!==m.playlist||num(r.mmr)==null)return;const at=new Date(r.logged_at).getTime();
+      if(at<=t+6e4&&t-at<DAY&&(!best||at>best.at))best={at,v:+r.mmr};});
+    if(best)v.push(best.v);});
+  return v.length?Math.round(v.reduce((a,b)=>a+b,0)/v.length):null;
+}
+function repeatPlayers(list){
+  const ours=new Set(PLAYERS.map(p=>p.name.toLowerCase())),by={opp:{},mate:{}};
+  list.forEach(m=>{const my=ourTeam(m);if(my==null)return;const seen=new Set();
+    (m.raw.players||[]).forEach(p=>{if(!p||!p.name||p.tracked||ours.has(String(p.name).toLowerCase())||num(p.team)==null)return;
+      const [plat,id]=String(p.primary_id||'').split('|'),key=id&&id!=='0'?(plat+'|'+id).toLowerCase():'n|'+String(p.name).toLowerCase();
+      const side=num(p.team)===my?'mate':'opp';if(seen.has(side+key))return;seen.add(side+key);
+      const r=by[side][key]||(by[side][key]={key,name:String(p.name),url:trackerUrl(p),games:[]});
+      r.name=String(p.name);r.url=trackerUrl(p);r.games.push(m);});});
+  const fin=r=>{const w=r.games.filter(m=>m.win).length,mm=r.games.map(lobbyMmr).filter(v=>v!=null);
+    return {...r,n:r.games.length,w,l:r.games.length-w,wr:w/r.games.length,last:r.games[r.games.length-1],
+      mmr:mm.length?Math.round(mm.reduce((a,b)=>a+b,0)/mm.length):null};};
+  const out={};['opp','mate'].forEach(s=>out[s]=Object.values(by[s]).map(fin));
+  out.cross={opp:{},mate:{}};out.opp.forEach(r=>out.cross.opp[r.key]=r);out.mate.forEach(r=>out.cross.mate[r.key]=r);
+  return out;
+}
+const callouts4=rows=>callouts(rows).replace('class="callouts"','class="callouts c4"');
+function renderRepeat(){
+  const el=$('repBody');if(!el)return;
+  const wrap=$('repSideWrap');if(wrap)wrap.innerHTML=segHtml('repSide',[['opp','Opponents'],['mate','Teammates']],IN.repSide);
+const R=repeatPlayers(ALL),side=IN.repSide,other=side==='opp'?'mate':'opp';
+  const rows=R[side].filter(r=>r.n>=2);
+  const srt={n:(a,b)=>b.n-a.n||b.last.when-a.last.when,best:(a,b)=>b.wr-a.wr||b.n-a.n,worst:(a,b)=>a.wr-b.wr||b.n-a.n,recent:(a,b)=>b.last.when-a.last.when};
+  rows.sort(srt[IN.repSort]||srt.n);
+  const who=side==='opp'?'opponent':'teammate',Who=side==='opp'?'Opponents':'Random teammates';
+  if(!rows.length){el.innerHTML=`<p class="note">${ALL.length?`No ${who} has shown up in more than one of these ${ALL.length} games yet.`:'No games yet.'}${side==='mate'&&party==='duo'?' In Duo, randoms only join us in 3v3; try Solo or All above.':''}</p>`;return;}
+  const MIN=3,q=rows.filter(r=>r.n>=MIN),best=q.slice().sort(srt.best)[0],worst=q.slice().sort(srt.worst)[0],most=rows.slice().sort(srt.n)[0];
+  const cap=IN.repAll?rows.length:15,shown=rows.slice(0,cap);
+  const form=r=>r.games.slice(-5).map(m=>`<span class="pill ${m.win?'w':'l'}" title="${m.us}–${m.them}, ${esc(fmtDate(m.when))}">${m.win?'W':'L'}</span>`).join('');
+  const rec=r=>`<span class="${r.w>r.l?'win':r.w<r.l?'loss':''}">${r.w}–${r.l}</span>`;
+  const xr=r=>{const x=R.cross[other][r.key];return x?`<span title="${x.n} game${x.n===1?'':'s'} ${side==='opp'?'on our team':'against us'}">${x.n}× ${x.w}–${x.l}</span>`:'<span class="muted">–</span>';};
+  el.innerHTML=callouts4([[`Repeat ${who}s`,rows.length,`of ${R[side].length} different ${who}s`],
+      ['Most played',`${esc(most.name)}`,`${most.n} games, ${most.w}–${most.l}`],
+      [side==='opp'?'Easiest':'Best random',best?esc(best.name):'–',best?`${best.w}–${best.l} (${iPct(best.w,best.n)})`:`needs ${MIN}+ games`],
+      [side==='opp'?'Toughest':'Worst random',worst&&worst!==best?esc(worst.name):'–',worst&&worst!==best?`${worst.w}–${worst.l} (${iPct(worst.w,worst.n)})`:`needs two with ${MIN}+ games`]])+
+    `<div class="rep-tools">${segHtml('repSort',[['n','Most played'],['best',side==='opp'?'Best record':'Best'],['worst',side==='opp'?'Worst record':'Worst'],['recent','Recent']],IN.repSort)}</div>`+
+    `<div class="scroll"><table class="lines num rep-table"><thead><tr><th>#</th><th>${side==='opp'?'Opponent':'Teammate'}</th><th>Games</th><th>${side==='opp'?'Our record':'Record together'}</th><th>Win %</th><th title="Our MMR when we queued into those games: the level matchmaking put them at. Click a name for their actual rank.">Lobby MMR</th><th>${side==='opp'?'Also with us':'Also against us'}</th><th>Last 5</th><th>Last met</th></tr></thead><tbody>`+
+    shown.map((r,i)=>`<tr><td class="muted">${i+1}</td><td class="rep-name"><a href="${esc(r.url)}" target="_blank" rel="noopener" title="Rank and profile on tracker.gg">${esc(r.name)}</a></td><td>${r.n}</td><td>${rec(r)}</td><td>${iPct(r.w,r.n)}</td><td>${r.mmr!=null?'~'+r.mmr:'<span class="muted">–</span>'}</td><td>${xr(r)}</td><td class="rep-form">${form(r)}</td><td><a href="#m-${esc(r.last.guid)}" class="mlink" title="Open this match">${esc(fmtDate(r.last.when))}</a></td></tr>`).join('')+
+    `</tbody></table></div>`+
+    (rows.length>15?`<p class="map-note"><button type="button" class="linkbtn" id="repMore">${IN.repAll?'Show top 15':`Show all ${rows.length}`}</button></p>`:'')+
+    `<p class="map-note">${Who} we've met at least twice, all time, in the party and playlist picked above. Names link to tracker.gg for their real rank; the game doesn't send anyone else's. Lobby MMR is ours when we queued into those games.</p>`;
+}
+document.addEventListener('click',e=>{
+  const b=e.target.closest('#repSide button,#repSort button,#repMore');if(!b)return;
+  if(b.id==='repMore')IN.repAll=!IN.repAll;else if(b.parentElement.id==='repSide'){IN.repSide=b.dataset.v;IN.repAll=false;}else IN.repSort=b.dataset.v;
+  renderRepeat();});
+
 // Wiring ---------------------------------------------------------------------------------
 function renderInsights(list){
   const run=f=>{try{f();}catch(e){console.error(e);}};run(syncShotWho);
   run(()=>renderShots(list));run(()=>renderDemos(list));run(()=>renderKicks(list));run(()=>renderTouches(list));run(()=>renderMomentum(list));
-  run(()=>renderTrophies());run(()=>renderPosts(list));run(()=>renderMmrSessions());run(()=>renderStarve(list));run(()=>renderSynergy(list));run(()=>renderFastest(list));run(()=>renderTod(list));
+  run(()=>renderTrophies());run(()=>renderPosts(list));run(()=>renderMmrSessions());run(()=>renderStarve(list));run(()=>renderSynergy(list));run(()=>renderFastest(list));run(()=>renderTod(list));run(()=>renderRepeat());
 }
 document.addEventListener('click',e=>{const b=e.target.closest('#shotWho button,#touchWho button,#postSide button');if(!b)return;const id=b.parentElement.id,v=b.dataset.v;
   if(id==='shotWho')IN.shotWho=v;if(id==='touchWho')IN.touchWho=+v;if(id==='postSide')IN.postSide=v;
@@ -1891,6 +1952,9 @@ $('matchLog').addEventListener('click',e=>{const a=e.target.closest('a.mlink');i
 // ---------- version and update log ----------
 // Add a release at the top whenever something visible changes (dashboard or widget).
 const CHANGELOG=[
+  {v:'1.10',date:'2026-11-16',items:[
+    'Repeat players: everyone we have played more than once, with how many games, our record against them, win %, last 5 results, lobby MMR and a tracker.gg link for their rank. Switch to Teammates to see randoms we have queued with more than once.',
+    'Fixed: the All button (next to Duo and Solo) showed no games.']},
   {v:'1.9',date:'2026-10-20',items:[
     'So close: hovering a marker plays a goal-post clang (louder for harder hits), with a Sound on/off button that is remembered.']},
   {v:'1.8',date:'2026-10-17',items:[

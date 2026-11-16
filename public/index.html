@@ -99,6 +99,7 @@ header.top{position:relative;display:flex;flex-wrap:wrap;align-items:flex-end;ju
 .kpi{gap:8px}
 .pill{display:inline-flex;align-items:center;gap:4px;font-family:var(--display);font-weight:700;font-size:12px;letter-spacing:.04em;padding:2px 8px;border-radius:4px}
 .pill.w{background:var(--win-soft);color:var(--win)} .pill.l{background:var(--loss-soft);color:var(--loss)}
+.rep-tools{margin:12px 0 8px}.rep-table .win{color:var(--win);font-weight:600}.rep-table .loss{color:var(--loss);font-weight:600}.rep-form{white-space:nowrap}.rep-form .pill{padding:1px 5px;margin-right:2px;font-size:11px}.rep-name{max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.rep-table td.rep-name,.rep-table th:nth-child(2){text-align:left}.callouts.c4{grid-template-columns:repeat(4,minmax(0,1fr))}@media (max-width:900px){.callouts.c4{grid-template-columns:repeat(2,minmax(0,1fr))}}@media (max-width:560px){.callouts.c4{grid-template-columns:minmax(0,1fr)}}.linkbtn{border:0;background:none;padding:0;color:var(--ink);text-decoration:underline;cursor:pointer}
 .big.w{color:var(--win)} .big.l{color:var(--loss)}
 .rankrow{display:grid;grid-template-columns:auto 1fr auto;gap:4px 10px;align-items:baseline}
 .rankrow .who{font-size:12px;font-weight:600;display:flex;align-items:center;gap:6px}
@@ -682,6 +683,11 @@ body.g3-dark .mini3d span{color:#595959}
       <div class="panel-head"><h2 id="kickTitle">Kickoff battles</h2><span class="muted">Period above</span></div>
       <div id="kickBody"></div>
     </div>
+  </section>
+
+  <section class="panel" aria-labelledby="repTitle">
+    <div class="panel-head"><h2 id="repTitle">Repeat players</h2><div id="repSideWrap"></div></div>
+    <div id="repBody"></div>
   </section>
 
   <section class="grid g-2">
